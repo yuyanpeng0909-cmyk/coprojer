@@ -70,7 +70,7 @@ async function main() {
     await dialog.getByLabel('API Key', { exact: false }).fill('coprojer-fixture-secret')
     await dialog.getByRole('button', { name: '获取列表' }).click()
     await dialog.getByText('获取到 2 个模型，可在模型标识中选择。').waitFor()
-    await dialog.locator('input[list]').fill('fixture-coder')
+    await dialog.locator('input[list]').fill('glm-5.3-flash')
     await dialog.getByRole('button', { name: '测试连接' }).click()
     await dialog.getByText(/连接成功 · 连接成功/).waitFor()
     assert.ok(!(await dialog.innerText()).includes('coprojer-fixture-secret'))
@@ -95,7 +95,7 @@ async function main() {
       id: '',
       name: 'test',
       baseUrl: provider.baseUrl,
-      model: 'fixture-coder',
+      model: 'glm-5.3-flash',
       protocol: 'chat',
       apiKey: 'invalid-test-key',
     }
@@ -437,6 +437,18 @@ async function main() {
     })
     assert.ok(agentRequests.length > 0, 'expected real developer/reviewer requests')
     assert.ok(agentRequests.every(({ body }) => body.stream === true), 'agent tool calls must use SSE streaming')
+    const glmToolRequests = agentRequests.filter(
+      ({ body }) =>
+        Array.isArray(body.messages) &&
+        Array.isArray(body.tools) &&
+        body.tools.length > 0 &&
+        /^glm-/i.test(body.model),
+    )
+    assert.ok(glmToolRequests.length > 0, 'expected GLM chat tool requests')
+    assert.ok(
+      glmToolRequests.some(({ body }) => body.tool_stream === true),
+      'GLM chat tool streams must request incremental tool-call frames',
+    )
 
     // Stop a pending model call, then restart the app with an interrupted disk record.
     provider.control.hold = true

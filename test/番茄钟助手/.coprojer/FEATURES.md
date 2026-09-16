@@ -228,7 +228,7 @@
 ## 番茄钟核心计时与本地复盘
 
 子项目：番茄钟助手桌面端
-模块：计时与统计 · 范围：current · 状态：blocked
+模块：计时与统计 · 范围：current · 状态：done
 
 个人桌面番茄钟，支持三阶段计时、四番茄长休息、控制操作、设置提醒和本地历史统计。
 
@@ -242,3 +242,7 @@
 在现有目标目录实现 Electron + React 番茄钟；状态机驱动计时并将设置、快照和历史保存到本地。
 
 ### 验证
+- 通过：默认专注25分钟、短休息5分钟、长休息15分钟 — src/shared/timer.ts DEFAULT_SETTINGS 为 25/5/15；tests/timer.test.ts 用例「默认配置为 25/5/15 分钟」通过（vitest 12/12 passed）
+- 通过：完成四个专注周期后进入长休息 — nextPhaseOf 中 completed % longBreakEvery === 0 时进入 longBreak；测试「完成 4 个专注后进入长休息（15 分钟）」通过
+- 通过：开始暂停继续重置手动结束均可用 — timer.ts 导出 start/pause/resume/reset/skip；测试覆盖开始递减、暂停继续剩余时间保持、暂停不前进、重置、手动结束专注/休息各用例，全部通过；渲染层 app.tsx 按钮均调用对应函数
+- 通过：设置、历史、统计和主题在重启后保留 — main.ts 将 settings.json、history.json、state.json 写入 app.getPath("userData")，loadAll 启动时读取并回传 get-init；theme 存于 settings 并在初始化时应用 document.documentElement.dataset.theme；recordHistory 每次完成后落盘。代码核对确认持久化链路完整（未做真实重启运行时验证，但读写逻辑与加载路径已实现并经类型检查）

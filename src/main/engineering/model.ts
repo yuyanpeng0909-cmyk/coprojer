@@ -56,6 +56,31 @@ function headers(c: Connection): Record<string, string> {
       }
     : { 'content-type': 'application/json', authorization: `Bearer ${c.apiKey}` }
 }
+function needsToolStream(c: Connection, body: unknown): boolean {
+  if (c.protocol !== 'chat' || !body || typeof body !== 'object') return false
+  const hostname = new URL(c.baseUrl).hostname
+  return (
+    (['open.bigmodel.cn', 'api.z.ai'].includes(hostname) || /^glm-/i.test(c.model)) &&
+    Array.isArray((body as { tools?: unknown }).tools) &&
+    (body as { tools: unknown[] }).tools.length > 0
+  )
+}
+function glm53AgentDefaults(c: Connection): Record<string, unknown> {
+  const hostname = new URL(c.baseUrl).hostname
+  if (
+    !/^glm-5(?:\.|-|$)/i.test(c.model) ||
+    !['open.bigmodel.cn', 'api.z.ai'].includes(hostname)
+  )
+    return {}
+  // GLM-5.3 defaults to maximum reasoning. That is useful for a standalone
+  // hard problem, but makes iterative tool work wait a long time between
+  // simple filesystem and command calls. Preserve the provider's reasoning
+  // chain for tool continuation while using its low-latency setting.
+  return {
+    thinking: { type: 'enabled', clear_thinking: false },
+    reasoning_effort: 'low',
+  }
+}
 function cleanError(text: string, key: string): string {
   return (key ? text.split(key).join('[已隐藏密钥]') : text)
     .replace(/(?:sk-|Bearer\s+)[a-zA-Z0-9_-]{6,}/g, '[已隐藏密钥]')
@@ -102,7 +127,15 @@ async function request(
       body:
         body === undefined
           ? undefined
-          : JSON.stringify(onDelta ? { ...(body as object), stream: true } : body),
+          : JSON.stringify(
+              onDelta
+                ? {
+                    ...(body as object),
+                    stream: true,
+                    ...(needsToolStream(c, body) ? { tool_stream: true } : {}),
+                  }
+                : body,
+            ),
       redirect: 'error',
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
@@ -279,6 +312,7 @@ export async function complete(
         })),
       ],
       stream: false,
+      ...glm53AgentDefaults(c),
       ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: t })) } : {}),
     },
     signal,

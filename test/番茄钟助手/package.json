@@ -1,0 +1,24 @@
+{
+  "name": "pomodoro-assistant",
+  "version": "1.0.0",
+  "description": "轻量化个人番茄钟助手",
+  "main": "dist/main.js",
+  "private": true,
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "electron": "^31.0.0",
+    "esbuild": "^0.23.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

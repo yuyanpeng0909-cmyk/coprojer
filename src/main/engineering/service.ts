@@ -41,6 +41,19 @@ function lines(value: unknown, label: string): string[] {
   if (!Array.isArray(value) || value.length > 80) throw new Error(`${label}格式无效。`)
   return value.map((v) => text(v, label, 3000)).filter(Boolean)
 }
+/**
+ * Tool results are written to the durable activity log in full, but sending a
+ * multi-page requirements document back on every subsequent model turn can
+ * exhaust a provider's effective context window before the agent reaches its
+ * first write. Keep the conversational copy bounded; the model can always
+ * call the same read tool again and the log remains the complete record.
+ */
+function agentToolMessage(name: string, output: string): string {
+  const limit = name === 'read_context' ? 12_000 : name === 'read_file' ? 24_000 : 12_000
+  if (output.length <= limit) return output
+  const head = Math.max(1, limit - 1_200)
+  return `${output.slice(0, head)}\n\n[工具结果过长，当前回合仅保留前 ${head} 个字符和末尾摘要；完整内容已记入活动记录，可再次调用该工具读取。]\n\n${output.slice(-1_000)}`
+}
 export class EngineeringService {
   readonly store = new EngineeringStore()
   private research = new RequirementsWorkspace({
@@ -251,7 +264,7 @@ export class EngineeringService {
     if (!connection.model) throw new Error('请填写模型标识。')
     const result = await complete(connection, '这是连接测试。请简短回复。', [
       { role: 'user', content: '请回复：连接成功' },
-    ])
+    ], [], undefined, () => {})
     if (!result.text.trim()) throw new Error('已收到响应，但没有文本内容。请检查模型类型。')
     const safe = connection.apiKey
       ? result.text.split(connection.apiKey).join('[已隐藏密钥]')
@@ -561,7 +574,7 @@ export class EngineeringService {
       role === 'developer'
         ? '实现完整可运行功能；首次从零建立网页工程时提供 npm run dev、build、test，测试须真实验证行为，执行 npm install 和必要检查。完成后简要报告所做修改和检查。'
         : `只检查实际工程，不得修改源代码、测试代码或通过降低测试标准使检查通过。必须运行实际测试（npm test、npm run test:* 或项目中的 test 脚本）并按需构建。最后只输出 JSON ${schema}，覆盖每一项标准，passed 为布尔值；无法确认的标 false。`
-    const system = `你是 Coprojer 的${role === 'developer' ? '开发' : '验证'}智能体。\n${agent.instructions}\n当前项目根目录：${p.root}。操作仅限当前项目。只能通过已提供工具执行，不可声称未发生的操作。不能修改已确认目标、验收标准、.coprojer 管理资料或项目外文件。\n先使用 list_files/read_file 检查实际项目，再开展工作。使用 npm 和 Node；run_command 的参数是数组，不使用 shell 连接符。不要运行永久驻留的服务，应用通过预览按钮启动 npm run dev。\n共享上下文：${this.context(p)}\n已确认功能：${JSON.stringify({ title: f.title, description: f.description, criteria: f.criteria, plan: f.plan, tasks: f.tasks.map((t) => t.title) })}\n${rolePrompt}\n上一轮反馈：${feedback || '无'}`
+    const system = `你是 Coprojer 的${role === 'developer' ? '开发' : '验证'}智能体。\n${agent.instructions}\n当前项目根目录：${p.root}。操作仅限当前项目。只能通过已提供工具执行，不可声称未发生的操作。不能修改已确认目标、验收标准、.coprojer 管理资料或项目外文件。\n先使用 list_files/read_file 检查实际项目，再开展工作。使用 npm 和 Node；run_command 的参数是数组，不使用 shell 连接符。不要运行永久驻留的服务，应用通过预览按钮启动 npm run dev。\n共享上下文索引：${this.agentContext(p)}\n已确认功能：${JSON.stringify({ title: f.title, description: f.description, criteria: f.criteria, plan: f.plan, tasks: f.tasks.map((t) => t.title) })}\n${rolePrompt}\n上一轮反馈：${feedback || '无'}`
     const messages: ModelMessage[] = [
       {
         role: 'user',
@@ -628,7 +641,7 @@ export class EngineeringService {
           output = `工具错误：${error instanceof Error ? error.message : String(error)}`
         }
         output = this.store.redact(output)
-        messages.push({ role: 'tool', content: output, callId: call.id })
+        messages.push({ role: 'tool', content: agentToolMessage(call.name, output), callId: call.id })
         this.store.event(p, 'tool-result', output, f.id)
       }
     }
@@ -924,6 +937,15 @@ export class EngineeringService {
       `\n多端子项目边界（目录均相对工作区，按功能所属子项目实现）：${JSON.stringify(project.targets || [])}\n功能归属：${JSON.stringify(project.features.map((f) => ({ id: f.id, title: f.title, targetId: f.targetId })))}`
     if (content.length <= 60000) return content + sources
     return `上下文较长，以下是完整索引与最近内容。执行时请用 read_context 按 ID 读取需要复用的早期记录。\n${JSON.stringify(project.context.map(({ id, title, source }) => ({ id, title, source })))}\n最近内容：\n${content.slice(-50000)}`
+  }
+  private agentContext(project: Project): string {
+    const summaries = project.context.map(({ id, title, source, content }) => ({
+      id,
+      title,
+      source,
+      summary: content.slice(0, 1200),
+    }))
+    return `${JSON.stringify(summaries)}\n需要完整资料时，先调用 read_context 查看索引，再按 ID 或 discussion:页码 / prototype:ID 读取；不要把整份历史材料重复带入当前回合。`
   }
   private begin(
     project: Project,

@@ -526,3 +526,44 @@
 
 来源：用户需求确认 · bc97861c-9ff3-4445-be35-aeec82489f50
 更新：2026-09-15T16:17:56.498Z
+
+## 工程结果：番茄钟核心计时与本地复盘
+
+开发智能体的总结（复用前仍须核对实际文件）：
+全部检查通过。实现完成，报告如下：
+
+## 已完成实现
+
+**工程**（Electron + React + TypeScript，从零搭建）：
+- `package.json`：提供 `npm run dev`（构建并启动 Electron）、`build`、`typecheck`、`test`（vitest）
+- `build.mjs`：esbuild 打包主进程与渲染进程
+
+**核心代码**：
+- `src/shared/timer.ts`：纯函数三阶段状态机（专注/短休/长休），基于绝对时间戳 `endAt` 计时以规避 WebView 后台节流；支持开始/暂停/继续/重置/手动结束；默认 25/5/15 分钟、4 个番茄后长休息（可配置）；手动结束专注时返回已专注毫秒数供统计
+- `src/main/main.ts`：Electron 主进程——设置/状态/历史本地 JSON 持久化（userData 目录，结构预留导出与热力图字段）、系统通知+音效转发、最小化到托盘（关窗隐藏）、单实例锁、开机自启 IPC（默认关闭）
+- `src/main/preload.ts`：contextBridge 安全暴露 API
+- `src/renderer/app.tsx` + `style.css` + `index.html`：React 界面——倒计时显示、番茄进度圆点、控制按钮、日/周/月专注统计与最近记录、设置面板（时长、提醒开关、浅/深主题、自启、数据目录）；主题切换即时生效并持久化
+- 专注时段通知经主进程系统通知推送，音效用 Web Audio 生成，无外部资源、无网络请求
+
+## 检查结果
+- `npm test`：12 个状态机行为测试全部通过（默认时长、四番茄长休息、暂停/继续/重置/手动结束、自定义时长、格式化）
+- `npm run typecheck`：通过
+- `npm run build`：通过，产物在 `dist/`
+
+启动方式：预览按钮执行 `npm run dev`。
+
+实际运行检查后的逐项验证记录：[{"criterion":"默认专注25分钟、短休息5分钟、长休息15分钟","passed":true,"evidence":"src/shared/timer.ts DEFAULT_SETTINGS 为 25/5/15；tests/timer.test.ts 用例「默认配置为 25/5/15 分钟」通过（vitest 12/12 passed）"},{"criterion":"完成四个专注周期后进入长休息","passed":true,"evidence":"nextPhaseOf 中 completed % longBreakEvery === 0 时进入 longBreak；测试「完成 4 个专注后进入长休息（15 分钟）」通过"},{"criterion":"开始暂停继续重置手动结束均可用","passed":true,"evidence":"timer.ts 导出 start/pause/resume/reset/skip；测试覆盖开始递减、暂停继续剩余时间保持、暂停不前进、重置、手动结束专注/休息各用例，全部通过；渲染层 app.tsx 按钮均调用对应函数"},{"criterion":"设置、历史、统计和主题在重启后保留","passed":true,"evidence":"main.ts 将 settings.json、history.json、state.json 写入 app.getPath(\"userData\")，loadAll 启动时读取并回传 get-init；theme 存于 settings 并在初始化时应用 document.documentElement.dataset.theme；recordHistory 每次完成后落盘。代码核对确认持久化链路完整（未做真实重启运行时验证，但读写逻辑与加载路径已实现并经类型检查）"}]
+
+涉及文件：package.json、tsconfig.json、build.mjs、src/shared/timer.ts、src/main/main.ts、src/main/preload.ts、src/renderer/index.html、src/renderer/style.css、src/renderer/app.tsx、tests/timer.test.ts、tests/_fragment.txt
+此功能等待用户最终验收。
+
+来源：功能 bc97861c-9ff3-4445-be35-aeec82489f50 的开发与验证执行记录
+更新：2026-09-16T14:36:35.260Z
+
+## 已交付：番茄钟核心计时与本地复盘
+
+个人桌面番茄钟，支持三阶段计时、四番茄长休息、控制操作、设置提醒和本地历史统计。
+验收标准：默认专注25分钟、短休息5分钟、长休息15分钟；完成四个专注周期后进入长休息；开始暂停继续重置手动结束均可用；设置、历史、统计和主题在重启后保留
+
+来源：用户最终验收 · bc97861c-9ff3-4445-be35-aeec82489f50
+更新：2026-09-16T14:37:40.658Z
