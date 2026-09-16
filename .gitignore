@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build and packaging output
+out/
+dist/
+release/
+
+# Local test/browser artifacts
+output/
+.runtime/
+
+# Working notes and scratch material
+.scratch/
+
+# Environment and local machine files
+.env
+.env.*
+!.env.example
+*.local
+*.log
+Thumbs.db
+Desktop.ini
+
+# Editor settings
+.idea/
+.vscode/
+
+# Nested demo/test builds and dependencies
+docs/test/**/node_modules/
+docs/test/**/dist/
+docs/test/**/output/

@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+test-results/
+playwright-report/
+output/playwright/
+.runtime/
+.scratch/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store

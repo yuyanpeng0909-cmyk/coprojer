@@ -1,0 +1,10 @@
+[
+  {
+    "id": "desktop",
+    "kind": "desktop",
+    "directory": "apps/desktop",
+    "name": "番茄钟助手桌面端",
+    "responsibility": "单机桌面客户端：番茄计时状态机（专注/短休/长休循环）、周期切换提醒、本地统计与设置存储、浅/深主题界面；Windows 与 macOS 双平台构建。",
+    "contracts": "对外零网络接口；本地数据仅读写用户数据目录（设置与历史记录 JSON）；调用系统通知、音效播放；不涉及账号与云端。数据结构为后续迭代（导出、热力图等）预留字段。技术栈已定（决策卡 3）：Tauri 2.x，Rust 核心进程承载计时状态机、落盘、托盘、通知、自启、单实例，系统 WebView 前端仅展示；插件映射 tray / autostart / notification / single-instance；计时基于 Rust 侧绝对时间戳（规避 WebView 后台节流）。"
+  }
+]

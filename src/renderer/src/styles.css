@@ -1,0 +1,69 @@
+@import url('./theme.css');
+@import url('./components/ui.css');
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  font-family: var(--font-ui);
+  color: var(--text);
+  background: var(--canvas);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  font-weight: 400;
+}
+button,
+textarea {
+  font: inherit;
+}
+button {
+  color: inherit;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+}
+button,
+a,
+textarea {
+  -webkit-app-region: no-drag;
+}
+button {
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 2px;
+}
+button:disabled {
+  cursor: default;
+}
+svg {
+  flex-shrink: 0;
+}
+svg.lucide {
+  stroke-width: 1.7px;
+}
+button svg {
+  pointer-events: none;
+}
+h1,
+h2,
+p {
+  margin: 0;
+}

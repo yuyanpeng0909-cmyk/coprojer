@@ -1,0 +1,240 @@
+import { app, safeStorage } from 'electron'
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { defaultAgentTools } from '../../shared/engineering'
+import type { AgentConfig, EngineeringState, ModelConfig, Project } from '../../shared/engineering'
+
+export const uid = () => randomUUID()
+export const now = () => new Date().toISOString()
+interface DiskState {
+  version: 1
+  models: (ModelConfig & { cipher: string })[]
+  agents: AgentConfig[]
+  projects: Project[]
+}
+export class EngineeringStore {
+  readonly path: string
+  data: DiskState
+  constructor() {
+    this.path = join(app.getPath('userData'), 'engineering-v1.json')
+    mkdirSync(app.getPath('userData'), { recursive: true })
+    this.data = {
+      version: 1,
+      models: [],
+      projects: [],
+      agents: [
+        {
+          id: 'developer',
+          name: '开发智能体',
+          role: 'developer',
+          tools: defaultAgentTools('developer'),
+          modelId: '',
+          instructions: '实现已确认需求，复用项目公共内容，修改后运行必要检查。',
+        },
+        {
+          id: 'reviewer',
+          name: '验证智能体',
+          role: 'reviewer',
+          tools: defaultAgentTools('reviewer'),
+          modelId: '',
+          instructions:
+            '独立检查实际代码，运行测试并逐项核对验收标准。不要仅复述开发者的完成声明。',
+        },
+      ],
+    }
+    if (existsSync(this.path)) {
+      const saved = JSON.parse(readFileSync(this.path, 'utf8'))
+      if (
+        saved.version !== 1 ||
+        !Array.isArray(saved.projects) ||
+        !Array.isArray(saved.models) ||
+        !Array.isArray(saved.agents)
+      )
+        throw new Error('工程资料格式无法识别，原文件已保留。')
+      this.data = saved
+      for (const agent of this.data.agents) agent.tools ??= defaultAgentTools(agent.role)
+      for (const project of this.data.projects) {
+        project.prototypes ??= []
+        project.targets ??= []
+        if (
+          project.roundtable &&
+          ['running', 'awaiting-decision'].includes(project.roundtable.status)
+        ) {
+          project.roundtable.status = 'stopped'
+          project.roundtable.phase = '上次圆桌已中断，可补充反馈后继续'
+        }
+        project.designActivity = false
+        for (const entry of project.chat)
+          if (entry.status === 'streaming') {
+            entry.status = 'stopped'
+            entry.finishedAt ??= now()
+            entry.error = '上次响应已中断，已收到的内容已保存。'
+            for (const tool of entry.tools ?? [])
+              if (['receiving', 'running'].includes(tool.status)) tool.status = 'error'
+          }
+        if (project.activity) {
+          for (const feature of project.features)
+            if (['developing', 'verifying'].includes(feature.stage)) feature.stage = 'blocked'
+          project.events.push({
+            id: uid(),
+            kind: 'interrupted',
+            message: '上次执行已中断，现场已保留。请检查后继续。',
+            at: now(),
+          })
+        }
+        project.activity = null
+        project.previewUrl = null
+      }
+      this.save()
+    }
+  }
+  save(): void {
+    const temp = `${this.path}.tmp`
+    writeFileSync(temp, JSON.stringify(this.data, null, 2), { mode: 0o600 })
+    // Windows readers may briefly prevent replacement. Retry the atomic rename;
+    // never delete the last good file or fall back to a partial in-place write.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        renameSync(temp, this.path)
+        break
+      } catch (error) {
+        if (
+          process.platform !== 'win32' ||
+          attempt >= 5 ||
+          !['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code || '')
+        )
+          throw error
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 * 2 ** attempt)
+      }
+    }
+  }
+  snapshot(): EngineeringState {
+    return JSON.parse(
+      JSON.stringify({
+        ...this.data,
+        models: this.data.models.map(({ cipher, ...model }) => ({ ...model, hasKey: !!cipher })),
+      }),
+    )
+  }
+  encrypt(key: string): string {
+    if (!safeStorage.isEncryptionAvailable())
+      throw new Error('系统密钥保护不可用，无法安全保存 API Key。')
+    return safeStorage.encryptString(key).toString('base64')
+  }
+  key(id: string): string {
+    const model = this.data.models.find((m) => m.id === id)
+    if (!model?.cipher) return ''
+    try {
+      return safeStorage.decryptString(Buffer.from(model.cipher, 'base64'))
+    } catch {
+      throw new Error('无法读取此模型的密钥，请重新填写并保存。')
+    }
+  }
+  project(id: string): Project {
+    const project = this.data.projects.find((p) => p.id === id)
+    if (!project) throw new Error('项目不存在。')
+    return project
+  }
+  event(project: Project, kind: string, message: string, featureId?: string): void {
+    project.events.push({
+      id: uid(),
+      kind,
+      message: this.redact(message).slice(0, 18000),
+      featureId,
+      at: now(),
+    })
+    if (project.events.length > 1200) project.events.splice(0, project.events.length - 1200)
+    this.save()
+  }
+  redact(value: string): string {
+    let text = value
+    for (const model of this.data.models) {
+      try {
+        const key = this.key(model.id)
+        if (key) text = text.split(key).join('[已隐藏密钥]')
+      } catch {
+        /* No plaintext fallback. */
+      }
+    }
+    return text.replace(/\bsk-[a-zA-Z0-9_-]{8,}/g, '[已隐藏密钥]')
+  }
+  export(project: Project): void {
+    const directory = join(project.root, '.coprojer')
+    for (const path of [
+      project.root,
+      directory,
+      ...[
+        'FEATURES.md',
+        'PROJECT_TARGETS.json',
+        'ROUNDTABLE.json',
+        'DECISIONS.json',
+        'CONTEXT.md',
+        'ACTIVITY.md',
+        'DISCUSSION.md',
+        'PROTOTYPES.json',
+        'REQUIREMENTS.md',
+      ].map((name) => join(directory, name)),
+    ]) {
+      const stat = lstatSync(path, { throwIfNoEntry: false })
+      if (stat?.isSymbolicLink()) throw new Error('工程资料导出路径不能是符号链接。')
+    }
+    mkdirSync(directory, { recursive: true })
+    const text =
+      `# ${project.name}\n\n${project.brief}\n\n` +
+      project.features
+        .map(
+          (f) =>
+            `## ${f.title}\n\n子项目：${project.targets?.find((t) => t.id === f.targetId)?.name || '未分配'}\n模块：${f.module} · 范围：${f.scope} · 状态：${f.stage}\n\n${f.description}\n\n### 验收标准\n${f.criteria.map((c) => '- ' + c).join('\n')}\n\n### 实现方案\n${f.plan}\n\n### 验证\n${f.results.map((r) => '- ' + (r.passed ? '通过' : '未通过') + '：' + r.criterion + ' — ' + r.evidence).join('\n')}`,
+        )
+        .join('\n\n')
+    writeFileSync(join(directory, 'FEATURES.md'), this.redact(text))
+    writeFileSync(
+      join(directory, 'REQUIREMENTS.md'),
+      this.redact(
+        '# 完整需求文档（讨论草稿）\n\n' + (project.requirementsDocument || project.brief),
+      ),
+    )
+    writeFileSync(
+      join(directory, 'DISCUSSION.md'),
+      this.redact(
+        '# 完整需求讨论\n\n' +
+          project.chat
+            .map(
+              (c) =>
+                `## ${c.role === 'user' ? '你' : c.modelName || '协作者'} · ${c.at}${c.meetingRound ? ` · 圆桌第 ${c.meetingRound} 轮 · ${c.speaker || ''}` : ''}\n\n${c.text}\n\n${c.reasoning ? `### 模型返回的思考\n${c.reasoning}\n` : ''}${(c.tools ?? []).map((t) => `### 工具：${t.name} · ${t.status}\n${t.arguments}\n${t.result ?? ''}`).join('\n')}${c.error ? `\n${c.error}` : ''}`,
+            )
+            .join('\n\n'),
+      ),
+    )
+    writeFileSync(
+      join(directory, 'PROTOTYPES.json'),
+      this.redact(JSON.stringify(project.prototypes ?? [], null, 2)),
+    )
+    writeFileSync(
+      join(directory, 'PROJECT_TARGETS.json'),
+      this.redact(JSON.stringify(project.targets || [], null, 2)),
+    )
+    writeFileSync(
+      join(directory, 'ROUNDTABLE.json'),
+      this.redact(JSON.stringify(project.roundtable || null, null, 2)),
+    )
+    writeFileSync(
+      join(directory, 'DECISIONS.json'),
+      this.redact(JSON.stringify(project.decisions || [], null, 2)),
+    )
+    writeFileSync(
+      join(directory, 'CONTEXT.md'),
+      this.redact(
+        `# 工程共享上下文\n\n` +
+          project.context
+            .map((c) => `## ${c.title}\n\n${c.content}\n\n来源：${c.source}\n更新：${c.at}`)
+            .join('\n\n'),
+      ),
+    )
+    writeFileSync(
+      join(directory, 'ACTIVITY.md'),
+      '# 工程活动\n\n' + project.events.map((e) => `- ${e.at} [${e.kind}] ${e.message}`).join('\n'),
+    )
+  }
+}
