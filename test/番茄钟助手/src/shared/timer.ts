@@ -156,12 +156,11 @@ export function skip(
               : state.remainingMs),
         )
       : 0;
-  const nextPhase: Phase =
-    state.phase === "focus"
-      ? state.completedFocus > 0 && state.completedFocus % s.longBreakEvery === 0
-        ? "longBreak"
-        : "shortBreak"
-      : "focus";
+  // 手动结束不算完成一个专注周期，因此专注结束后只进入短休息。
+  // 长休息只由自然完成专注周期的 nextPhaseOf 触发；否则在长休息结束后的
+  // 第一个专注周期手动结束时，completedFocus 仍是 4（或 8、12…），会错误地
+  // 再次进入长休息。
+  const nextPhase: Phase = state.phase === "focus" ? "shortBreak" : "focus";
   const dur = phaseDurationMs(s, nextPhase);
   return {
     state: {

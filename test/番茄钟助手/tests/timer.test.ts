@@ -83,6 +83,17 @@ describe("番茄钟状态机", () => {
     expect(state.remainingMs).toBe(25 * MIN);
   });
 
+  it("长休息结束后的第一个专注周期手动结束时进入短休息", () => {
+    let st = createInitialState(S);
+    st = { ...st, phase: "longBreak", completedFocus: 4, remainingMs: 15 * MIN };
+    st = tick(S, start(S, st, 0), 15 * MIN + 1).state;
+
+    const { state } = skip(S, st, 15 * MIN + 10);
+    expect(state.phase).toBe("shortBreak");
+    expect(state.completedFocus).toBe(4);
+    expect(state.running).toBe(false);
+  });
+
   it("重置回到专注阶段并保留已完成番茄数", () => {
     const st = { ...createInitialState(S), phase: "shortBreak" as const, completedFocus: 2 };
     const r = reset(S, st, 0);

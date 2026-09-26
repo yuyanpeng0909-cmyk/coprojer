@@ -171,8 +171,6 @@ if (!gotLock) {
     createWindow();
     createTray();
 
-    app.setLoginItemSettings({ openAtLogin: false, args: ["--hidden"] });
-
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
       else win?.show();
@@ -194,9 +192,6 @@ ipcMain.handle("get-init", () => ({ settings, state, history: readHistory() }));
 ipcMain.handle("set-settings", (_e, s: TimerSettings) => {
   settings = s;
   fs.writeFileSync(settingsFile, JSON.stringify(s, null, 2));
-  if (!isMac) {
-    app.setLoginItemSettings({ openAtLogin: false });
-  }
   return true;
 });
 
