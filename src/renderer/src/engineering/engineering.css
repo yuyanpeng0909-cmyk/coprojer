@@ -1081,10 +1081,13 @@
 @media (max-width: 960px) {
   .eng-context-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(190px, 0.85fr) minmax(260px, 1fr);
+    grid-template-rows: minmax(130px, 1fr) minmax(0, 1fr);
   }
   .eng-context-tree {
-    max-height: 300px;
+    max-height: none;
+  }
+  .eng-context-detail {
+    min-height: 0;
   }
   .eng-discussion {
     display: flex;
