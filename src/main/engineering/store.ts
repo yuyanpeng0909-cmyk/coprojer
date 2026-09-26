@@ -55,8 +55,22 @@ export class EngineeringStore {
       this.data = saved
       for (const agent of this.data.agents) agent.tools ??= defaultAgentTools(agent.role)
       for (const project of this.data.projects) {
+        project.features ??= []
+        project.context ??= []
+        project.events ??= []
+        project.changes ??= []
         project.prototypes ??= []
         project.targets ??= []
+        for (const feature of project.features) {
+          feature.criteria ??= []
+          feature.dependencies ??= []
+          feature.plan ??= ''
+          feature.tasks ??= []
+          feature.results ??= []
+          feature.revision ??= 1
+          feature.repairRound ??= 0
+          feature.feedback ??= ''
+        }
         if (
           project.roundtable &&
           ['running', 'awaiting-decision'].includes(project.roundtable.status)

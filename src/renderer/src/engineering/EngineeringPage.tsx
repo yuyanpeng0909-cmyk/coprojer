@@ -245,6 +245,9 @@ export default function EngineeringPage({
     : project?.features.length && project.features.every((f) => f.stage === 'done')
       ? 6
       : 0
+  const totalTasks = project?.features.reduce((sum, item) => sum + (item.tasks ?? []).length, 0) ?? 0
+  const unplannedFeatures =
+    project?.features.filter((item) => item.stage === 'solution' && (item.tasks ?? []).length === 0) ?? []
   const navigate = (next: ProjectView) => {
     setSection('projects')
     setView(next)
@@ -555,51 +558,77 @@ export default function EngineeringPage({
                       />
                     )}
                     {view === 'board' && (
-                      <div className="eng-board">
-                        {(
-                          [
-                            'requirements',
-                            'solution',
-                            'ready',
-                            'developing',
-                            'verifying',
-                            'acceptance',
-                            'done',
-                            'blocked',
-                          ] as const
-                        ).map((stage) => (
-                          <section key={stage} className="eng-board-column">
-                            <h3>
-                              {stageLabels[stage]}
-                              <span>
-                                {project.features.filter((f) => f.stage === stage).length}
-                              </span>
-                            </h3>
-                            {project.features
-                              .filter((f) => f.stage === stage)
-                              .map((f) => (
-                                <button
-                                  className="eng-board-card"
-                                  key={f.id}
-                                  onClick={() => setFeatureId(f.id)}
-                                >
-                                  <small>
-                                    {f.module} · {scopeLabels[f.scope]}
-                                  </small>
-                                  <strong>{f.title}</strong>
-                                  <span>
-                                    <ListChecks size={12} />
-                                    {f.tasks.filter((t) => t.done).length}/{f.tasks.length} 任务
-                                  </span>
-                                  {f.tasks.slice(0, 3).map((t) => (
-                                    <em key={t.id}>
-                                      {t.done ? '✓' : '○'} {t.title}
-                                    </em>
-                                  ))}
-                                </button>
-                              ))}
-                          </section>
-                        ))}
+                      <div className="eng-board-shell">
+                        <div className="eng-board-summary" role="status">
+                          <strong>
+                            {totalTasks ? `${totalTasks} 项实现任务` : '当前没有已确认实现任务'}
+                          </strong>
+                          <span>
+                            {unplannedFeatures.length
+                              ? `${unplannedFeatures.length} 个功能正在方案确认，打开卡片生成并确认任务。`
+                              : '任务会按开发、验证和验收阶段自动进入看板。'}
+                          </span>
+                        </div>
+                        <div className="eng-board">
+                          {(
+                            [
+                              'requirements',
+                              'solution',
+                              'ready',
+                              'developing',
+                              'verifying',
+                              'acceptance',
+                              'done',
+                              'blocked',
+                            ] as const
+                          ).map((stage) => {
+                            const cards = project.features.filter((f) => f.stage === stage)
+                            return (
+                              <section key={stage} className="eng-board-column">
+                                <h3>
+                                  {stageLabels[stage]}
+                                  <span>{cards.length}</span>
+                                </h3>
+                                {cards.map((f) => {
+                                  const tasks = f.tasks ?? []
+                                  return (
+                                    <button
+                                      className="eng-board-card"
+                                      key={f.id}
+                                      aria-label={`打开功能：${f.title}`}
+                                      onClick={() => setFeatureId(f.id)}
+                                    >
+                                      <small>
+                                        {f.module} · {scopeLabels[f.scope]}
+                                      </small>
+                                      <strong>{f.title}</strong>
+                                      <span>
+                                        <ListChecks size={12} />
+                                        {tasks.filter((t) => t.done).length}/{tasks.length} 任务
+                                      </span>
+                                      {tasks.length ? (
+                                        tasks.slice(0, 3).map((t) => (
+                                          <em key={t.id}>
+                                            {t.done ? '✓' : '○'} {t.title}
+                                          </em>
+                                        ))
+                                      ) : (
+                                        <em className="eng-board-card-empty">
+                                          {stage === 'solution'
+                                            ? '待生成实现方案与任务'
+                                            : stage === 'blocked'
+                                              ? '现场已保留，等待继续处理'
+                                              : '当前阶段暂无实现任务'}
+                                        </em>
+                                      )}
+                                    </button>
+                                  )
+                                })}
+                                {!cards.length && <p className="eng-board-empty">暂无功能</p>}
+                              </section>
+                            )
+                          })}
+                        </div>
                       </div>
                     )}
                     {view === 'context' && (
