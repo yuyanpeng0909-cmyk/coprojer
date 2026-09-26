@@ -598,10 +598,71 @@
   font-size: 11px;
   line-height: 1.5;
 }
+.eng-board-summary-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1 1 320px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
 .eng-board-summary strong {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+}
+.eng-board-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.eng-execution-plan {
+  flex: 1 1 100%;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.eng-execution-plan-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.eng-execution-plan-heading strong {
+  flex: 1;
+  min-width: 180px;
+}
+.eng-execution-plan-order {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.eng-execution-plan-order span {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.eng-execution-plan-order span.current {
+  border-color: var(--control-hover-border);
+  color: var(--text);
+  background: var(--selected);
+}
+.eng-execution-plan small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.eng-execution-plan-hint {
+  color: var(--tone-orange) !important;
 }
 .eng-board {
   display: flex;
@@ -632,6 +693,25 @@
   font-weight: 400;
   color: var(--muted);
 }
+.eng-board-card-wrap {
+  margin-bottom: 8px;
+}
+.eng-board-select {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 3px 5px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.eng-board-select input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent-solid);
+}
 .eng-board-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -642,7 +722,7 @@
   gap: 9px;
   width: 100%;
   text-align: left;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 .eng-board-card:hover {
   border-color: var(--control-hover-border);

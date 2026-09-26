@@ -8,6 +8,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import type {
   AgentConfig,
+  ExecutionPlan,
   Feature,
   FeatureInput,
   ModelInput,
@@ -542,6 +543,113 @@ export class EngineeringService {
     this.store.event(p, 'confirmed', '方案与任务已确认，可以开始开发。', f.id)
     this.save(p)
   }
+  planExecution = async (projectId: string, featureIds: string[]): Promise<ExecutionPlan> => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    if (!Array.isArray(featureIds) || featureIds.length < 1 || featureIds.length > 8)
+      throw new Error('请选择 1–8 个已确认方案。')
+    const ids = [...new Set(featureIds)]
+    if (ids.length !== featureIds.length) throw new Error('执行计划中不能重复选择同一功能。')
+    const features = ids.map((id) => this.feature(p, id))
+    if (features.some((feature) => feature.stage !== 'ready'))
+      throw new Error('只能选择已确认方案，先完成方案确认再加入执行计划。')
+    if (features.some((feature) => feature.scope !== 'current'))
+      throw new Error('只有本期功能可以加入执行计划。')
+    if (p.features.some((feature) => feature.stage === 'acceptance'))
+      throw new Error('请先完成当前待验收功能，再创建新的执行计划。')
+    const selected = new Set(ids)
+    for (const feature of features) {
+      for (const dependencyId of feature.dependencies) {
+        const dependency = this.feature(p, dependencyId)
+        if (dependency.stage !== 'done' && !selected.has(dependency.id))
+          throw new Error(`「${feature.title}」依赖「${dependency.title}」，请一并选择或先完成前置功能。`)
+      }
+    }
+    const modelId =
+      p.discussionModelId ||
+      this.store.data.agents.find((agent) => agent.id === features[0].developerId)?.modelId
+    if (!modelId) throw new Error('请先为项目配置规划模型。')
+    const connection = this.model(modelId)
+    return this.beginResult(p, 'LLM 正在规划批量执行', async (signal) => {
+      const payload = features.map((feature) => ({
+        id: feature.id,
+        title: feature.title,
+        description: feature.description,
+        dependencies: feature.dependencies,
+        plan: feature.plan,
+        tasks: feature.tasks.map((task) => task.title),
+      }))
+      const reply = await complete(
+        connection,
+        '你是软件项目执行规划器。只规划顺序，不修改代码。根据功能依赖、方案和任务，给出可执行的顺序。必须返回 JSON：{"orderedFeatureIds":["功能ID"],"rationale":"中文说明"}。orderedFeatureIds 必须包含输入中的全部 ID，不能新增或遗漏。优先安排依赖更少、能为其他功能提供基础的功能。',
+        [{ role: 'user', content: JSON.stringify({ project: p.name, features: payload }) }],
+        [],
+        signal,
+      )
+      const parsed = parseJson(reply.text)
+      if (!Array.isArray(parsed.orderedFeatureIds)) throw new Error('LLM 没有返回有效的执行顺序。')
+      const orderedFeatureIds: string[] = parsed.orderedFeatureIds.map((id: unknown) =>
+        text(id, '功能 ID', 120),
+      )
+      if (
+        orderedFeatureIds.length !== ids.length ||
+        new Set(orderedFeatureIds).size !== ids.length ||
+        orderedFeatureIds.some((id: string) => !ids.includes(id))
+      )
+        throw new Error('LLM 返回的执行顺序与已选功能不一致，请重新规划。')
+      const order = new Map<string, number>(orderedFeatureIds.map((id, index) => [id, index]))
+      for (const feature of features) {
+        for (const dependencyId of feature.dependencies) {
+          if (selected.has(dependencyId) && (order.get(dependencyId) ?? 0) > (order.get(feature.id) ?? 0))
+            throw new Error('LLM 返回的顺序违反功能依赖，请重新规划。')
+        }
+      }
+      const plan: ExecutionPlan = {
+        id: uid(),
+        featureIds: ids,
+        orderedFeatureIds,
+        rationale: text(parsed.rationale, '规划说明', 6000),
+        currentIndex: 0,
+        status: 'planned',
+        at: now(),
+      }
+      p.executionPlan = plan
+      this.store.event(
+        p,
+        'plan',
+        `LLM 已规划 ${orderedFeatureIds.length} 个功能的执行顺序：${orderedFeatureIds
+          .map((id) => this.feature(p, id).title)
+          .join(' → ')}`,
+      )
+      return plan
+    })
+  }
+  runExecutionPlan = (projectId: string): Promise<void> => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    const plan = p.executionPlan
+    if (!plan) throw new Error('请先创建 LLM 执行计划。')
+    if (plan.status === 'running') throw new Error('执行计划正在运行，请等待当前功能完成。')
+    if (plan.status === 'completed') throw new Error('执行计划已完成。')
+    if (plan.status === 'waiting-acceptance') throw new Error('请先验收当前功能，再继续执行计划。')
+    if (plan.currentIndex >= plan.orderedFeatureIds.length) {
+      plan.status = 'completed'
+      this.save(p)
+      return Promise.resolve()
+    }
+    const next = this.feature(p, plan.orderedFeatureIds[plan.currentIndex])
+    if (next.stage !== 'ready') throw new Error(`「${next.title}」当前不在待开发阶段。`)
+    plan.status = 'running'
+    this.save(p)
+    try {
+      this.runFeature(projectId, next.id)
+    } catch (error) {
+      plan.status = 'stopped'
+      this.save(p)
+      throw error
+    }
+    return Promise.resolve()
+  }
   private sourceSnapshot(project: Project): string {
     return JSON.stringify(
       listFiles(project.root)
@@ -745,6 +853,14 @@ export class EngineeringService {
               at: now(),
             })
             this.store.event(p, 'acceptance', '独立验证通过，等待你试用并最终验收。', f.id)
+            const executionPlan = p.executionPlan
+            if (
+              executionPlan?.status === 'running' &&
+              executionPlan.orderedFeatureIds[executionPlan.currentIndex] === f.id
+            ) {
+              executionPlan.status = 'waiting-acceptance'
+              this.store.event(p, 'plan', `「${f.title}」已通过独立验证，请先最终验收后继续执行计划。`, f.id)
+            }
             return
           }
           feedback = `${result.summary ?? '验证未通过'}\n${JSON.stringify(f.results)}\n测试输出：${verification.commands
@@ -776,6 +892,23 @@ export class EngineeringService {
     if (f.stage !== 'acceptance') throw new Error('此功能尚未通过独立验证。')
     f.stage = 'done'
     this.store.event(p, 'accepted', '开发者已最终验收。', f.id)
+    const executionPlan = p.executionPlan
+    if (
+      executionPlan?.status === 'waiting-acceptance' &&
+      executionPlan.orderedFeatureIds[executionPlan.currentIndex] === f.id
+    ) {
+      executionPlan.currentIndex += 1
+      executionPlan.status =
+        executionPlan.currentIndex >= executionPlan.orderedFeatureIds.length ? 'completed' : 'planned'
+      this.store.event(
+        p,
+        'plan',
+        executionPlan.status === 'completed'
+          ? 'LLM 执行计划已全部完成。'
+          : '当前功能已验收，可以继续执行计划中的下一项。',
+        f.id,
+      )
+    }
     p.context.push({
       id: uid(),
       title: `已交付：${f.title}`,
@@ -948,21 +1081,27 @@ export class EngineeringService {
     }))
     return `${JSON.stringify(summaries)}\n需要完整资料时，先调用 read_context 查看索引，再按 ID 或 discussion:页码 / prototype:ID 读取；不要把整份历史材料重复带入当前回合。`
   }
-  private begin(
+  private beginResult<T>(
     project: Project,
     activity: string,
-    work: (signal: AbortSignal) => Promise<void>,
+    work: (signal: AbortSignal) => Promise<T>,
     feature?: Feature,
-  ): void {
+  ): Promise<T> {
     this.idle(project)
     const controller = new AbortController()
     this.jobs.set(project.id, controller)
     project.activity = activity
     this.store.event(project, 'start', activity, feature?.id)
-    void work(controller.signal)
+    return work(controller.signal)
       .catch((error) => {
-        if (feature && ['developing', 'verifying'].includes(feature.stage))
-          feature.stage = 'blocked'
+        if (feature && ['developing', 'verifying'].includes(feature.stage)) feature.stage = 'blocked'
+        const executionPlan = project.executionPlan
+        if (
+          feature &&
+          executionPlan?.status === 'running' &&
+          executionPlan.orderedFeatureIds[executionPlan.currentIndex] === feature.id
+        )
+          executionPlan.status = 'stopped'
         this.store.event(
           project,
           controller.signal.aborted ? 'stopped' : 'error',
@@ -973,6 +1112,7 @@ export class EngineeringService {
               : String(error),
           feature?.id,
         )
+        throw error
       })
       .finally(() => {
         this.jobs.delete(project.id)
@@ -983,5 +1123,15 @@ export class EngineeringService {
           this.store.event(project, 'error', `导出工程文档失败：${String(error)}`, feature?.id)
         }
       })
+  }
+  private begin(
+    project: Project,
+    activity: string,
+    work: (signal: AbortSignal) => Promise<void>,
+    feature?: Feature,
+  ): void {
+    void this.beginResult(project, activity, async (signal) => {
+      await work(signal)
+    }, feature).catch(() => undefined)
   }
 }

@@ -130,6 +130,15 @@ export interface FileChange {
   after: string | null
   featureId: string
 }
+export interface ExecutionPlan {
+  id: string
+  featureIds: string[]
+  orderedFeatureIds: string[]
+  rationale: string
+  currentIndex: number
+  status: 'planned' | 'running' | 'waiting-acceptance' | 'completed' | 'stopped'
+  at: string
+}
 export interface Project {
   targets?: ProjectTarget[]
   roundtable?: Roundtable
@@ -153,6 +162,7 @@ export interface Project {
   designActivity?: boolean
   requirementsBaseline?: RequirementsBaseline
   requirementsDocument?: string
+  executionPlan?: ExecutionPlan
 }
 export const targetKinds = {
   web: '前端 Web',
@@ -292,6 +302,8 @@ export interface EngineeringApi {
   generatePlan(projectId: string, featureId: string): Promise<void>
   savePlan(projectId: string, featureId: string, plan: string, tasks: string[]): Promise<void>
   confirmPlan(projectId: string, featureId: string): Promise<void>
+  planExecution(projectId: string, featureIds: string[]): Promise<ExecutionPlan>
+  runExecutionPlan(projectId: string): Promise<void>
   runFeature(projectId: string, featureId: string): Promise<void>
   stop(projectId: string): Promise<void>
   accept(projectId: string, featureId: string): Promise<void>
@@ -341,6 +353,8 @@ export const engineeringMethods: (keyof EngineeringApi)[] = [
   'generatePlan',
   'savePlan',
   'confirmPlan',
+  'planExecution',
+  'runExecutionPlan',
   'runFeature',
   'stop',
   'accept',

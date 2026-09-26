@@ -29,6 +29,7 @@ import {
   scopeLabels,
   stageLabels,
   type AgentConfig,
+  type ExecutionPlan,
   type EngineeringState,
   type Feature,
   type FeatureInput,
@@ -72,6 +73,13 @@ const protocolLabels: Record<Protocol, string> = {
   chat: 'OpenAI 兼容',
   responses: 'Responses',
   anthropic: 'Anthropic',
+}
+const executionPlanStatusLabels: Record<ExecutionPlan['status'], string> = {
+  planned: '待开始',
+  running: '执行中',
+  'waiting-acceptance': '待最终验收',
+  completed: '已完成',
+  stopped: '已暂停',
 }
 const messageOf = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).replace(
@@ -140,6 +148,7 @@ export default function EngineeringPage({
   const [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false)
+  const [executionSelection, setExecutionSelection] = useState<string[]>([])
   const [model, setModel] = useState<ModelInput | null>(null),
     [modelList, setModelList] = useState<string[]>([]),
     [modelStatus, setModelStatus] = useState('')
@@ -215,6 +224,7 @@ export default function EngineeringPage({
   const selectProject = (id: string) => {
     setProjectId(id)
     setFeatureId(null)
+    setExecutionSelection([])
     setResearchTab('requirements')
     setView('overview')
     setSection('projects')
@@ -249,6 +259,21 @@ export default function EngineeringPage({
   const totalTasks = project?.features.reduce((sum, item) => sum + (item.tasks ?? []).length, 0) ?? 0
   const unplannedFeatures =
     project?.features.filter((item) => item.stage === 'solution' && (item.tasks ?? []).length === 0) ?? []
+  const readyFeatures = project?.features.filter((item) => item.stage === 'ready') ?? []
+  const selectedExecutionIds = readyFeatures
+    .filter((item) => executionSelection.includes(item.id))
+    .map((item) => item.id)
+  const executionPlan = project?.executionPlan
+  const executionPlanCurrent = executionPlan
+    ? project?.features.find((item) => item.id === executionPlan.orderedFeatureIds[executionPlan.currentIndex])
+    : undefined
+  useEffect(() => {
+    const available = new Set(readyFeatures.map((item) => item.id))
+    setExecutionSelection((current) => {
+      const next = current.filter((id) => available.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [project?.id, readyFeatures.map((item) => item.id).join('|')])
   const navigate = (next: ProjectView) => {
     setSection('projects')
     setView(next)
@@ -561,14 +586,84 @@ export default function EngineeringPage({
                     {view === 'board' && (
                       <div className="eng-board-shell">
                         <div className="eng-board-summary" role="status">
-                          <strong>
-                            {totalTasks ? `${totalTasks} 项实现任务` : '当前没有已确认实现任务'}
-                          </strong>
-                          <span>
-                            {unplannedFeatures.length
-                              ? `${unplannedFeatures.length} 个功能正在方案确认，打开卡片生成并确认任务。`
-                              : '任务会按开发、验证和验收阶段自动进入看板。'}
-                          </span>
+                          <div className="eng-board-summary-copy">
+                            <strong>
+                              {totalTasks ? `${totalTasks} 项实现任务` : '当前没有已确认实现任务'}
+                            </strong>
+                            <span>
+                              {readyFeatures.length
+                                ? `${readyFeatures.length} 个已确认方案可勾选加入执行计划。`
+                                : unplannedFeatures.length
+                                  ? `${unplannedFeatures.length} 个功能正在方案确认，打开卡片生成并确认任务。`
+                                  : '先在功能卡片中确认方案，确认后才可加入 LLM 执行计划。'}
+                            </span>
+                          </div>
+                          <div className="eng-board-summary-actions">
+                            <span>{selectedExecutionIds.length ? `已勾选 ${selectedExecutionIds.length} 项` : '可多选方案'}</span>
+                            <button
+                              className="ui-button primary small"
+                              disabled={!selectedExecutionIds.length || busy || !!project.activity}
+                              onClick={() =>
+                                void perform(async () => {
+                                  await api().planExecution(project.id, selectedExecutionIds)
+                                  setExecutionSelection([])
+                                }, 'LLM 已生成执行顺序，请检查规划理由后开始执行。')
+                              }
+                            >
+                              <ListChecks size={12} />
+                              LLM 规划执行
+                            </button>
+                          </div>
+                          {executionPlan && (
+                            <div className="eng-execution-plan" data-testid="execution-plan">
+                              <div className="eng-execution-plan-heading">
+                                <strong>执行计划 · {executionPlanStatusLabels[executionPlan.status]}</strong>
+                                {['planned', 'stopped'].includes(executionPlan.status) && (
+                                  <button
+                                    className="ui-button secondary small"
+                                    disabled={busy || !!project.activity}
+                                    onClick={() =>
+                                      void perform(
+                                        () => api().runExecutionPlan(project.id),
+                                        '已开始按 LLM 规划执行，当前功能完成验证后请最终验收。',
+                                      )
+                                    }
+                                  >
+                                    <Play size={11} />
+                                    {executionPlan.status === 'stopped' ? '继续执行计划' : '开始执行计划'}
+                                  </button>
+                                )}
+                                {executionPlan.status === 'waiting-acceptance' && executionPlanCurrent && (
+                                  <button
+                                    className="ui-button secondary small"
+                                    disabled={busy}
+                                    onClick={() => setFeatureId(executionPlanCurrent.id)}
+                                  >
+                                    打开当前验收
+                                  </button>
+                                )}
+                              </div>
+                              <div className="eng-execution-plan-order">
+                                {executionPlan.orderedFeatureIds.map((id, index) => {
+                                  const item = project.features.find((candidate) => candidate.id === id)
+                                  if (!item) return null
+                                  const current = index === executionPlan.currentIndex
+                                  return (
+                                    <span key={id} className={current ? 'current' : ''}>
+                                      {index + 1}. {item.title}
+                                      {item.stage === 'done' ? ' · 已验收' : current ? ' · 当前' : ''}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                              <small>LLM 规划理由：{executionPlan.rationale}</small>
+                              {executionPlan.status === 'waiting-acceptance' && executionPlanCurrent && (
+                                <small className="eng-execution-plan-hint">
+                                  「{executionPlanCurrent.title}」已通过独立验证，最终验收后才能继续下一项。
+                                </small>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="eng-board">
                           {(
@@ -593,36 +688,62 @@ export default function EngineeringPage({
                                 {cards.map((f) => {
                                   const tasks = f.tasks ?? []
                                   return (
-                                    <button
-                                      className="eng-board-card"
+                                    <div
+                                      className={`eng-board-card-wrap ${f.stage === 'ready' ? 'selectable' : ''}`}
                                       key={f.id}
-                                      aria-label={`打开功能：${f.title}`}
-                                      onClick={() => setFeatureId(f.id)}
                                     >
-                                      <small>
-                                        {f.module} · {scopeLabels[f.scope]}
-                                      </small>
-                                      <strong>{f.title}</strong>
-                                      <span>
-                                        <ListChecks size={12} />
-                                        {tasks.filter((t) => t.done).length}/{tasks.length} 任务
-                                      </span>
-                                      {tasks.length ? (
-                                        tasks.slice(0, 3).map((t) => (
-                                          <em key={t.id}>
-                                            {t.done ? '✓' : '○'} {t.title}
-                                          </em>
-                                        ))
-                                      ) : (
-                                        <em className="eng-board-card-empty">
-                                          {stage === 'solution'
-                                            ? '待生成实现方案与任务'
-                                            : stage === 'blocked'
-                                              ? '现场已保留，等待继续处理'
-                                              : '当前阶段暂无实现任务'}
-                                        </em>
+                                      {f.stage === 'ready' && (
+                                        <label className="eng-board-select">
+                                          <input
+                                            type="checkbox"
+                                            checked={executionSelection.includes(f.id)}
+                                            disabled={
+                                              !!project.activity ||
+                                              executionPlan?.status === 'running' ||
+                                              executionPlan?.status === 'waiting-acceptance'
+                                            }
+                                            aria-label={`选择执行方案：${f.title}`}
+                                            onChange={(event) =>
+                                              setExecutionSelection((current) =>
+                                                event.target.checked
+                                                  ? [...current, f.id]
+                                                  : current.filter((id) => id !== f.id),
+                                              )
+                                            }
+                                          />
+                                          <span>加入执行计划</span>
+                                        </label>
                                       )}
-                                    </button>
+                                      <button
+                                        className="eng-board-card"
+                                        aria-label={`打开功能：${f.title}`}
+                                        onClick={() => setFeatureId(f.id)}
+                                      >
+                                        <small>
+                                          {f.module} · {scopeLabels[f.scope]}
+                                        </small>
+                                        <strong>{f.title}</strong>
+                                        <span>
+                                          <ListChecks size={12} />
+                                          {tasks.filter((t) => t.done).length}/{tasks.length} 任务
+                                        </span>
+                                        {tasks.length ? (
+                                          tasks.slice(0, 3).map((t) => (
+                                            <em key={t.id}>
+                                              {t.done ? '✓' : '○'} {t.title}
+                                            </em>
+                                          ))
+                                        ) : (
+                                          <em className="eng-board-card-empty">
+                                            {stage === 'solution'
+                                              ? '待生成实现方案与任务'
+                                              : stage === 'blocked'
+                                                ? '现场已保留，等待继续处理'
+                                                : '当前阶段暂无实现任务'}
+                                          </em>
+                                        )}
+                                      </button>
+                                    </div>
                                   )
                                 })}
                                 {!cards.length && <p className="eng-board-empty">暂无功能</p>}
@@ -705,7 +826,7 @@ export default function EngineeringPage({
           {project
             ? `${project.features.length} 个功能 · ${project.context.length} 条上下文`
             : 'Coprojer · 本地工程智能体'}
-          <em>按功能串行</em>
+          <em>支持批量规划 · 逐项验收</em>
         </span>
       </footer>
       <Overlay
