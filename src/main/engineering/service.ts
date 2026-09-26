@@ -803,15 +803,16 @@ export class EngineeringService {
   saveContext = (projectId: string, id: string | null, title: string, content: string) => {
     const p = this.store.project(projectId)
     this.idle(p)
+    const index = p.context.findIndex((c) => c.id === id)
+    const existing = index >= 0 ? p.context[index] : undefined
     const item = {
       id: id || uid(),
       title: text(title, '上下文标题', 120),
       content: text(content, '上下文内容', 40000),
-      source: '用户编辑',
+      source: existing?.source ?? '用户编辑',
       at: now(),
     }
     if (!item.title || !item.content) throw new Error('请填写标题和内容。')
-    const index = p.context.findIndex((c) => c.id === id)
     if (index >= 0) {
       if (
         p.context[index].source.includes('用户需求确认') ||

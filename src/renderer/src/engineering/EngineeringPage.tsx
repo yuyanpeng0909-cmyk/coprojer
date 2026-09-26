@@ -46,6 +46,7 @@ import WorkspaceSidebar, {
 import WorkspaceOverview, { WelcomeWorkspace } from './WorkspaceOverview'
 import WorkspaceSettings from './WorkspaceSettings'
 import RequirementsWorkspace, { type ResearchTab } from './RequirementsWorkspace'
+import ContextWorkspace from './ContextWorkspace'
 import {
   defaultAgentTools,
   toolLabels,
@@ -632,41 +633,15 @@ export default function EngineeringPage({
                       </div>
                     )}
                     {view === 'context' && (
-                      <div className="eng-context">
-                        <div className="eng-section-heading">
-                          <p>供后续智能体读取的项目知识，保留内容来源。</p>
-                          <button
-                            className="ui-button secondary"
-                            disabled={!!project.activity}
-                            onClick={() => setContextDraft({ id: null, title: '', content: '' })}
-                          >
-                            <Plus size={13} />
-                            补充上下文
-                          </button>
-                        </div>
-                        {project.context.map((c) => (
-                          <article key={c.id}>
-                            <header>
-                              <h3>{c.title}</h3>
-                              <button
-                                className="ui-button secondary small"
-                                disabled={
-                                  !!project.activity ||
-                                  c.source.includes('用户需求确认') ||
-                                  c.source.includes('用户最终验收')
-                                }
-                                onClick={() =>
-                                  setContextDraft({ id: c.id, title: c.title, content: c.content })
-                                }
-                              >
-                                编辑
-                              </button>
-                            </header>
-                            <p>{c.content}</p>
-                            <small>来源：{c.source}</small>
-                          </article>
-                        ))}
-                      </div>
+                      <ContextWorkspace
+                        project={project}
+                        onAdd={() => setContextDraft({ id: null, title: '', content: '' })}
+                        onEdit={(entry) =>
+                          setContextDraft({ id: entry.id, title: entry.title, content: entry.content })
+                        }
+                        onFeature={setFeatureId}
+                        onNavigate={navigate}
+                      />
                     )}
                     {view === 'activity' && (
                       <div className="eng-activity">
