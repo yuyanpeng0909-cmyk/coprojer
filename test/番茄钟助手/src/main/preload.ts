@@ -6,8 +6,14 @@ contextBridge.exposeInMainWorld("api", {
   setState: (s: unknown) => ipcRenderer.invoke("set-state", s),
   setAutostart: (v: boolean) => ipcRenderer.invoke("set-autostart", v),
   getAutostart: () => ipcRenderer.invoke("get-autostart"),
-  recordHistory: (rec: { phase: string; minutes: number }) =>
+  recordHistory: (rec: {
+    phase: string;
+    minutes: number;
+    completed?: boolean;
+    source?: "auto" | "manual" | "recovery";
+  }) =>
     ipcRenderer.invoke("record-history", rec),
+  clearHistory: () => ipcRenderer.invoke("clear-history"),
   notify: (p: { title: string; body: string }) => ipcRenderer.invoke("notify", p),
   openDataDir: () => ipcRenderer.invoke("open-data-dir"),
   setTrayTitle: (t: string) => ipcRenderer.invoke("set-tray-title", t),

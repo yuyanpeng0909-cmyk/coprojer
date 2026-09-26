@@ -18,6 +18,9 @@ interface HistoryRecord {
   phase: Phase;
   minutes: number;
   at: number;
+  /** 旧记录没有该字段时按自然完成兼容。 */
+  completed?: boolean;
+  source?: "auto" | "manual" | "recovery";
 }
 
 function readJson<T>(file: string, fallback: T): T {
@@ -90,11 +93,16 @@ function playSound(kind: string) {
   }
 }
 
-function recordHistory(phase: Phase, minutes: number) {
+function recordHistory(
+  phase: Phase,
+  minutes: number,
+  completed = true,
+  source: "auto" | "manual" | "recovery" = completed ? "auto" : "manual",
+) {
   if (minutes <= 0) return;
   const now = Date.now();
   const records = readHistory();
-  records.push({ date: localDate(now), phase, minutes, at: now });
+  records.push({ date: localDate(now), phase, minutes, at: now, completed, source });
   writeHistory(records);
 }
 
@@ -207,9 +215,25 @@ ipcMain.handle("set-autostart", (_e, enabled: boolean) => {
 
 ipcMain.handle("get-autostart", () => app.getLoginItemSettings().openAtLogin);
 
-ipcMain.handle("record-history", (_e, rec: { phase: Phase; minutes: number }) => {
-  recordHistory(rec.phase, rec.minutes);
-  return readHistory();
+ipcMain.handle(
+  "record-history",
+  (
+    _e,
+    rec: {
+      phase: Phase;
+      minutes: number;
+      completed?: boolean;
+      source?: "auto" | "manual" | "recovery";
+    },
+  ) => {
+    recordHistory(rec.phase, rec.minutes, rec.completed ?? true, rec.source);
+    return readHistory();
+  },
+);
+
+ipcMain.handle("clear-history", () => {
+  writeHistory([]);
+  return [];
 });
 
 ipcMain.handle("notify", (_e, p: { title: string; body: string }) => {

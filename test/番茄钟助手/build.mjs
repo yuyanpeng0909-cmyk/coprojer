@@ -29,4 +29,5 @@ await build({
 });
 
 fs.copyFileSync("src/renderer/index.html", "dist/index.html");
+fs.copyFileSync("src/renderer/style.css", "dist/style.css");
 console.log("build done");

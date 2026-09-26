@@ -7,7 +7,11 @@ export interface TimerSettings {
   longBreakMinutes: number;
   longBreakEvery: number; // 完成多少个专注后长休息
   soundEnabled: boolean;
+  /** 提示音音量（0-100），只影响应用内音效增益。 */
+  volume: number;
   notificationEnabled: boolean;
+  /** 专注期间屏蔽应用内非必要 toast，系统通知仍由主进程发出。 */
+  doNotDisturb: boolean;
   theme: "light" | "dark";
 }
 
@@ -17,7 +21,9 @@ export const DEFAULT_SETTINGS: TimerSettings = {
   longBreakMinutes: 15,
   longBreakEvery: 4,
   soundEnabled: true,
+  volume: 60,
   notificationEnabled: true,
+  doNotDisturb: false,
   theme: "light",
 };
 

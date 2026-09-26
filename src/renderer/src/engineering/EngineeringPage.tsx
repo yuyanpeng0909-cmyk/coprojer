@@ -1222,6 +1222,16 @@ function EventList({ project, featureId }: { project: Project; featureId?: strin
   )
 }
 
+function mergedFeatureFor(project: Project, feature?: Feature): Feature | undefined {
+  if (!feature) return undefined
+  const mergedId = /历史记录[，,]\s*已合并至\s+([a-zA-Z0-9-]+)/.exec(feature.title)?.[1]
+  if (!mergedId) return undefined
+  const candidates = project.features.filter(
+    (candidate) => candidate.id !== feature.id && candidate.id.startsWith(mergedId),
+  )
+  return candidates.length === 1 ? candidates[0] : undefined
+}
+
 function FeatureDrawer({
   project,
   feature,
@@ -1273,7 +1283,8 @@ function FeatureDrawer({
     setTasks(feature?.tasks.map((t) => t.title).join('\n') ?? '')
   }, [feature?.plan])
   const locked = !!feature && feature.stage !== 'requirements',
-    running = !!project.activity
+    running = !!project.activity,
+    mergedTarget = mergedFeatureFor(project, feature)
   const save = async () => {
     const id = await api().saveFeature(project.id, feature?.id ?? null, {
       ...draft,
@@ -1324,7 +1335,17 @@ function FeatureDrawer({
               确认方案
             </button>
           )}
-          {feature && ['ready', 'blocked'].includes(feature.stage) && (
+          {feature && mergedTarget && feature.stage === 'blocked' ? (
+            <button
+              className="ui-button primary"
+              disabled={busy || running}
+              title={`此历史记录已合并至「${mergedTarget.title}」`}
+              onClick={() => onSaved(mergedTarget.id)}
+            >
+              <ArrowRight size={12} />
+              打开正式功能
+            </button>
+          ) : feature && ['ready', 'blocked'].includes(feature.stage) ? (
             <button
               className="ui-button primary"
               disabled={busy || running}
@@ -1338,7 +1359,7 @@ function FeatureDrawer({
               <Play size={12} />
               {feature.stage === 'blocked' ? '继续执行' : '开始开发'}
             </button>
-          )}
+          ) : null}
           {feature?.stage === 'acceptance' && (
             <button
               className="ui-button primary"
