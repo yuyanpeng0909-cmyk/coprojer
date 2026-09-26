@@ -81,6 +81,7 @@ const executionPlanStatusLabels: Record<ExecutionPlan['status'], string> = {
   completed: '已完成',
   stopped: '已暂停',
 }
+const deletableFeatureStages: Feature['stage'][] = ['requirements', 'solution', 'ready']
 const messageOf = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).replace(
     /^Error invoking remote method '[^']+': Error: /,
@@ -687,6 +688,10 @@ export default function EngineeringPage({
                                 </h3>
                                 {cards.map((f) => {
                                   const tasks = f.tasks ?? []
+                                  const deleteDisabled =
+                                    !!project.activity ||
+                                    !deletableFeatureStages.includes(f.stage) ||
+                                    !!executionPlan?.featureIds.includes(f.id)
                                   return (
                                     <div
                                       className={`eng-board-card-wrap ${f.stage === 'ready' ? 'selectable' : ''}`}
@@ -714,6 +719,27 @@ export default function EngineeringPage({
                                           <span>加入执行计划</span>
                                         </label>
                                       )}
+                                      <button
+                                        className="eng-board-card-delete"
+                                        type="button"
+                                        aria-label={`删除功能：${f.title}`}
+                                        title={
+                                          deleteDisabled
+                                            ? '当前阶段或执行计划不允许删除'
+                                            : `删除功能：${f.title}`
+                                        }
+                                        disabled={deleteDisabled}
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          if (!window.confirm(`确认删除「${f.title}」？删除后不会保留功能卡片。`)) return
+                                          void perform(async () => {
+                                            await api().deleteFeature(project.id, f.id)
+                                            if (featureId === f.id) setFeatureId(null)
+                                          }, '功能已删除。')
+                                        }}
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
                                       <button
                                         className="eng-board-card"
                                         aria-label={`打开功能：${f.title}`}
@@ -1318,6 +1344,7 @@ const eventLabels: Record<string, string> = {
   acceptance: '待验收',
   accepted: '已验收',
   rejected: '退回修改',
+  deleted: '已删除',
   error: '错误',
   stopped: '已停止',
   interrupted: '执行中断',

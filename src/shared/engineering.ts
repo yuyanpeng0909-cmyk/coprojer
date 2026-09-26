@@ -305,6 +305,7 @@ export interface EngineeringApi {
   planExecution(projectId: string, featureIds: string[]): Promise<ExecutionPlan>
   runExecutionPlan(projectId: string): Promise<void>
   runFeature(projectId: string, featureId: string): Promise<void>
+  deleteFeature(projectId: string, featureId: string): Promise<void>
   stop(projectId: string): Promise<void>
   accept(projectId: string, featureId: string): Promise<void>
   reject(projectId: string, featureId: string, reason: string): Promise<void>
@@ -356,6 +357,7 @@ export const engineeringMethods: (keyof EngineeringApi)[] = [
   'planExecution',
   'runExecutionPlan',
   'runFeature',
+  'deleteFeature',
   'stop',
   'accept',
   'reject',

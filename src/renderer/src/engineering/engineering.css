@@ -694,6 +694,7 @@
   color: var(--muted);
 }
 .eng-board-card-wrap {
+  position: relative;
   margin-bottom: 8px;
 }
 .eng-board-select {
@@ -716,13 +717,36 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 12px;
+  padding: 12px 32px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 9px;
   width: 100%;
   text-align: left;
   margin-bottom: 0;
+}
+.eng-board-card-delete {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+}
+.eng-board-card-delete:hover:not(:disabled) {
+  color: var(--tone-red);
+  background: var(--hover);
+}
+.eng-board-card-delete:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 .eng-board-card:hover {
   border-color: var(--control-hover-border);

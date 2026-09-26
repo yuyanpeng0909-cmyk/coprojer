@@ -638,7 +638,7 @@ export class EngineeringService {
       return Promise.resolve()
     }
     const next = this.feature(p, plan.orderedFeatureIds[plan.currentIndex])
-    if (next.stage !== 'ready') throw new Error(`「${next.title}」当前不在待开发阶段。`)
+    if (!['ready', 'blocked'].includes(next.stage)) throw new Error(`「${next.title}」当前不在待开发阶段。`)
     plan.status = 'running'
     this.save(p)
     try {
@@ -882,6 +882,22 @@ export class EngineeringService {
       f,
     )
   }
+  deleteFeature = (projectId: string, featureId: string) => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    const f = this.feature(p, featureId)
+    if (!['requirements', 'solution', 'ready'].includes(f.stage))
+      throw new Error('开发、验证、待验收、已暂停或已完成的功能不能删除，请保留工程记录。')
+    if (p.executionPlan?.featureIds.includes(f.id))
+      throw new Error('此功能已加入执行计划，请先完成或重新规划后再删除。')
+    if (p.features.some((other) => other.id !== f.id && other.dependencies.includes(f.id)))
+      throw new Error('还有功能依赖此功能，请先移除依赖关系。')
+    if (p.changes.some((change) => change.featureId === f.id))
+      throw new Error('此功能已有工程修改记录，不能删除。')
+    p.features = p.features.filter((item) => item.id !== f.id)
+    this.store.event(p, 'deleted', `已删除功能「${f.title}」。`)
+    this.save(p)
+  }
   stop = (projectId: string) => {
     this.jobs.get(projectId)?.abort()
   }
@@ -931,6 +947,14 @@ export class EngineeringService {
       t.done = false
     })
     this.store.event(p, 'rejected', feedback, f.id)
+    const executionPlan = p.executionPlan
+    if (
+      executionPlan?.status === 'waiting-acceptance' &&
+      executionPlan.orderedFeatureIds[executionPlan.currentIndex] === f.id
+    ) {
+      executionPlan.status = 'stopped'
+      this.store.event(p, 'plan', `「${f.title}」已退回修改，执行计划已暂停。`, f.id)
+    }
     this.save(p)
   }
   saveContext = (projectId: string, id: string | null, title: string, content: string) => {
