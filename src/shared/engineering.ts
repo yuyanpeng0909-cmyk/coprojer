@@ -68,6 +68,9 @@ export interface Feature {
   results: CriterionResult[]
   repairRound: number
   feedback: string
+  planSource?: 'manual' | 'llm'
+  planGenerationError?: string
+  planConfirmationError?: string
 }
 export interface ChatEntry {
   id: string
@@ -138,6 +141,21 @@ export interface ExecutionPlan {
   currentIndex: number
   status: 'planned' | 'running' | 'waiting-acceptance' | 'completed' | 'stopped'
   at: string
+}
+export interface BatchPlanResult {
+  featureId: string
+  success: boolean
+  plan?: string
+  tasks?: string[]
+  error?: string
+  skipped?: boolean
+}
+export interface BatchConfirmResult {
+  featureId: string
+  success: boolean
+  plan?: string
+  tasks?: string[]
+  error?: string
 }
 export interface Project {
   targets?: ProjectTarget[]
@@ -302,6 +320,12 @@ export interface EngineeringApi {
   generatePlan(projectId: string, featureId: string): Promise<void>
   savePlan(projectId: string, featureId: string, plan: string, tasks: string[]): Promise<void>
   confirmPlan(projectId: string, featureId: string): Promise<void>
+  generatePlans(
+    projectId: string,
+    featureIds: string[],
+    overwriteExisting?: boolean,
+  ): Promise<BatchPlanResult[]>
+  confirmPlans(projectId: string, featureIds: string[]): Promise<BatchConfirmResult[]>
   planExecution(projectId: string, featureIds: string[]): Promise<ExecutionPlan>
   runExecutionPlan(projectId: string): Promise<void>
   runFeature(projectId: string, featureId: string): Promise<void>
@@ -354,6 +378,8 @@ export const engineeringMethods: (keyof EngineeringApi)[] = [
   'generatePlan',
   'savePlan',
   'confirmPlan',
+  'generatePlans',
+  'confirmPlans',
   'planExecution',
   'runExecutionPlan',
   'runFeature',

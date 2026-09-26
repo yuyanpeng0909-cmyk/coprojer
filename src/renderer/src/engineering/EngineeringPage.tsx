@@ -29,6 +29,8 @@ import {
   scopeLabels,
   stageLabels,
   type AgentConfig,
+  type BatchConfirmResult,
+  type BatchPlanResult,
   type ExecutionPlan,
   type EngineeringState,
   type Feature,
@@ -80,6 +82,13 @@ const executionPlanStatusLabels: Record<ExecutionPlan['status'], string> = {
   'waiting-acceptance': '待最终验收',
   completed: '已完成',
   stopped: '已暂停',
+}
+type BatchPlanStatus = 'pending' | 'generating' | 'generated' | 'failed'
+const batchPlanStatusLabels: Record<BatchPlanStatus, string> = {
+  pending: '待生成',
+  generating: '生成中',
+  generated: '已生成',
+  failed: '生成失败',
 }
 const deletableFeatureStages: Feature['stage'][] = ['requirements', 'solution', 'ready']
 const messageOf = (error: unknown) =>
@@ -150,6 +159,9 @@ export default function EngineeringPage({
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false)
   const [executionSelection, setExecutionSelection] = useState<string[]>([])
+  const [solutionSelection, setSolutionSelection] = useState<string[]>([])
+  const [batchPlanStatuses, setBatchPlanStatuses] = useState<Record<string, BatchPlanStatus>>({})
+  const [batchPlanErrors, setBatchPlanErrors] = useState<Record<string, string>>({})
   const [model, setModel] = useState<ModelInput | null>(null),
     [modelList, setModelList] = useState<string[]>([]),
     [modelStatus, setModelStatus] = useState('')
@@ -226,6 +238,9 @@ export default function EngineeringPage({
     setProjectId(id)
     setFeatureId(null)
     setExecutionSelection([])
+    setSolutionSelection([])
+    setBatchPlanStatuses({})
+    setBatchPlanErrors({})
     setResearchTab('requirements')
     setView('overview')
     setSection('projects')
@@ -260,7 +275,32 @@ export default function EngineeringPage({
   const totalTasks = project?.features.reduce((sum, item) => sum + (item.tasks ?? []).length, 0) ?? 0
   const unplannedFeatures =
     project?.features.filter((item) => item.stage === 'solution' && (item.tasks ?? []).length === 0) ?? []
+  const solutionFeatures = project?.features.filter((item) => item.stage === 'solution') ?? []
   const readyFeatures = project?.features.filter((item) => item.stage === 'ready') ?? []
+  const selectedSolutionIds = solutionFeatures
+    .filter((item) => solutionSelection.includes(item.id))
+    .map((item) => item.id)
+  const solutionStatusFor = (item: Feature): BatchPlanStatus => {
+    const local = batchPlanStatuses[item.id]
+    if (local) return local
+    if (item.planGenerationError) return 'failed'
+    return item.plan.trim() && (item.tasks ?? []).some((task) => task.title.trim())
+      ? 'generated'
+      : 'pending'
+  }
+  const solutionErrorFor = (item: Feature) =>
+    batchPlanErrors[item.id] || item.planGenerationError || item.planConfirmationError || ''
+  const failedSelectedSolutionIds = solutionFeatures
+    .filter((item) => selectedSolutionIds.includes(item.id) && solutionStatusFor(item) === 'failed')
+    .map((item) => item.id)
+  const selectedConfirmIds = solutionFeatures
+    .filter(
+      (item) =>
+        selectedSolutionIds.includes(item.id) &&
+        item.plan.trim() &&
+        (item.tasks ?? []).some((task) => task.title.trim()),
+    )
+    .map((item) => item.id)
   const selectedExecutionIds = readyFeatures
     .filter((item) => executionSelection.includes(item.id))
     .map((item) => item.id)
@@ -274,7 +314,91 @@ export default function EngineeringPage({
       const next = current.filter((id) => available.has(id))
       return next.length === current.length ? current : next
     })
-  }, [project?.id, readyFeatures.map((item) => item.id).join('|')])
+    const solutions = new Set(solutionFeatures.map((item) => item.id))
+    setSolutionSelection((current) => {
+      const next = current.filter((id) => solutions.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [project?.id, readyFeatures.map((item) => item.id).join('|'), solutionFeatures.map((item) => item.id).join('|')])
+  const runBatchGeneration = async (ids: string[]) => {
+    if (!project || !ids.length) return
+    const existing = solutionFeatures.filter(
+      (item) => ids.includes(item.id) && (item.plan.trim() || (item.tasks ?? []).some((task) => task.title.trim())),
+    )
+    const overwrite = existing.length
+      ? window.confirm(
+          `所选功能已有方案或实现任务：${existing.map((item) => item.title).join('、')}。\n点击“确定”覆盖，点击“取消”跳过已有方案。`,
+        )
+      : false
+    setBatchPlanStatuses((current) => {
+      const next = { ...current }
+      ids.forEach((id) => {
+        next[id] = 'generating'
+      })
+      return next
+    })
+    setBatchPlanErrors((current) => {
+      const next = { ...current }
+      ids.forEach((id) => delete next[id])
+      return next
+    })
+    const completed = await perform(async () => {
+      const results: BatchPlanResult[] = await api().generatePlans(project.id, ids, overwrite)
+      setBatchPlanStatuses((current) => {
+        const next = { ...current }
+        results.forEach((result) => {
+          next[result.featureId] = result.success ? 'generated' : 'failed'
+        })
+        return next
+      })
+      setBatchPlanErrors((current) => {
+        const next = { ...current }
+        results.forEach((result) => {
+          if (result.success || !result.error) delete next[result.featureId]
+          else next[result.featureId] = result.error
+        })
+        return next
+      })
+    }, '批量方案生成完成，可重试失败项或确认成功项。')
+    if (!completed) {
+      setBatchPlanStatuses((current) => {
+        const next = { ...current }
+        ids.forEach((id) => {
+          next[id] = 'failed'
+        })
+        return next
+      })
+      setBatchPlanErrors((current) => {
+        const next = { ...current }
+        ids.forEach((id) => {
+          next[id] = next[id] || '批量生成未完成，请查看活动记录后重试。'
+        })
+        return next
+      })
+    }
+  }
+  const confirmSelectedPlans = async () => {
+    if (!project || !selectedSolutionIds.length) return
+    const completed = await perform(async () => {
+      const results: BatchConfirmResult[] = await api().confirmPlans(project.id, selectedSolutionIds)
+      setSolutionSelection([])
+      const successfulIds = new Set(results.filter((result) => result.success).map((result) => result.featureId))
+      setBatchPlanStatuses((current) => {
+        const next = { ...current }
+        successfulIds.forEach((id) => delete next[id])
+        return next
+      })
+      setBatchPlanErrors((current) => {
+        const next = { ...current }
+        results.forEach((result) => {
+          if (result.success || !result.error) delete next[result.featureId]
+          else next[result.featureId] = result.error
+        })
+        return next
+      })
+    }, '批量确认完成，成功项已进入待开发。')
+    if (!completed) setSolutionSelection([])
+  }
   const navigate = (next: ProjectView) => {
     setSection('projects')
     setView(next)
@@ -615,6 +739,51 @@ export default function EngineeringPage({
                               LLM 规划执行
                             </button>
                           </div>
+                          <div className="eng-board-batch-actions">
+                            <strong>方案确认批处理</strong>
+                            <span>
+                              {selectedSolutionIds.length
+                                ? `已选择 ${selectedSolutionIds.length} 项`
+                                : `可处理 ${solutionFeatures.length} 项`}
+                            </span>
+                            <button
+                              className="ui-button secondary small"
+                              disabled={!solutionFeatures.length || busy || !!project.activity}
+                              onClick={() => setSolutionSelection(solutionFeatures.map((item) => item.id))}
+                            >
+                              全选当前方案
+                            </button>
+                            <button
+                              className="ui-button secondary small"
+                              disabled={!selectedSolutionIds.length || busy || !!project.activity}
+                              onClick={() => setSolutionSelection([])}
+                            >
+                              取消全选
+                            </button>
+                            <button
+                              className="ui-button primary small"
+                              disabled={!selectedSolutionIds.length || busy || !!project.activity}
+                              onClick={() => void runBatchGeneration(selectedSolutionIds)}
+                            >
+                              <ListChecks size={12} />
+                              批量生成方案
+                            </button>
+                            <button
+                              className="ui-button secondary small"
+                              disabled={!failedSelectedSolutionIds.length || busy || !!project.activity}
+                              onClick={() => void runBatchGeneration(failedSelectedSolutionIds)}
+                            >
+                              仅重试失败项
+                            </button>
+                            <button
+                              className="ui-button primary small"
+                              disabled={!selectedConfirmIds.length || busy || !!project.activity}
+                              onClick={() => void confirmSelectedPlans()}
+                            >
+                              <Check size={12} />
+                              确认已生成方案
+                            </button>
+                          </div>
                           {executionPlan && (
                             <div className="eng-execution-plan" data-testid="execution-plan">
                               <div className="eng-execution-plan-heading">
@@ -694,9 +863,27 @@ export default function EngineeringPage({
                                     !!executionPlan?.featureIds.includes(f.id)
                                   return (
                                     <div
-                                      className={`eng-board-card-wrap ${f.stage === 'ready' ? 'selectable' : ''}`}
+                                      className={`eng-board-card-wrap ${['ready', 'solution'].includes(f.stage) ? 'selectable' : ''}`}
                                       key={f.id}
                                     >
+                                      {f.stage === 'solution' && (
+                                        <label className="eng-board-select">
+                                          <input
+                                            type="checkbox"
+                                            checked={solutionSelection.includes(f.id)}
+                                            disabled={!!project.activity || busy}
+                                            aria-label={`选择批量方案：${f.title}`}
+                                            onChange={(event) =>
+                                              setSolutionSelection((current) =>
+                                                event.target.checked
+                                                  ? [...current, f.id]
+                                                  : current.filter((id) => id !== f.id),
+                                              )
+                                            }
+                                          />
+                                          <span>加入批量处理</span>
+                                        </label>
+                                      )}
                                       {f.stage === 'ready' && (
                                         <label className="eng-board-select">
                                           <input
@@ -749,6 +936,16 @@ export default function EngineeringPage({
                                           {f.module} · {scopeLabels[f.scope]}
                                         </small>
                                         <strong>{f.title}</strong>
+                                        {f.stage === 'solution' && (
+                                          <em className={`eng-board-plan-status plan-status-${solutionStatusFor(f)}`}>
+                                            方案：{batchPlanStatusLabels[solutionStatusFor(f)]}
+                                          </em>
+                                        )}
+                                        {f.stage === 'solution' && solutionErrorFor(f) && (
+                                          <em className="eng-board-card-error">
+                                            处理失败：{solutionErrorFor(f)}
+                                          </em>
+                                        )}
                                         <span>
                                           <ListChecks size={12} />
                                           {tasks.filter((t) => t.done).length}/{tasks.length} 任务

@@ -620,6 +620,25 @@
   font-size: 10px;
   white-space: nowrap;
 }
+.eng-board-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+.eng-board-batch-actions strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.eng-board-batch-actions > span {
+  color: var(--muted);
+  font-size: 10px;
+  margin-right: auto;
+}
 .eng-execution-plan {
   flex: 1 1 100%;
   border-top: 1px solid var(--border-subtle);
@@ -763,6 +782,23 @@
   display: flex;
   gap: 5px;
   align-items: center;
+}
+.eng-board-plan-status {
+  border-top: 1px dashed var(--border);
+  padding-top: 7px;
+}
+.eng-board-plan-status.plan-status-generating {
+  color: var(--tone-blue);
+}
+.eng-board-plan-status.plan-status-generated {
+  color: var(--tone-green);
+}
+.eng-board-plan-status.plan-status-failed,
+.eng-board-card-error {
+  color: var(--tone-red) !important;
+}
+.eng-board-card-error {
+  overflow-wrap: anywhere;
 }
 .eng-board-card strong {
   font-size: 12px;

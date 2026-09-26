@@ -8,6 +8,8 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import type {
   AgentConfig,
+  BatchConfirmResult,
+  BatchPlanResult,
   ExecutionPlan,
   Feature,
   FeatureInput,
@@ -198,6 +200,57 @@ export class EngineeringService {
     const feature = project.features.find((f) => f.id === id)
     if (!feature) throw new Error('功能不存在。')
     return feature
+  }
+  private dependencyError(project: Project, feature: Feature): string | null {
+    const visit = (id: string, path: Set<string>): string | null => {
+      if (path.has(id)) return '功能依赖存在循环。'
+      const node = project.features.find((item) => item.id === id)
+      if (!node) return `依赖功能不存在：${id}。`
+      const next = new Set(path)
+      next.add(id)
+      for (const dependencyId of node.dependencies ?? []) {
+        const error = visit(dependencyId, next)
+        if (error) return error
+      }
+      return null
+    }
+    return visit(feature.id, new Set())
+  }
+  private async generatePlanContent(
+    project: Project,
+    feature: Feature,
+    signal: AbortSignal,
+  ): Promise<{ plan: string; tasks: string[] }> {
+    const agent = this.agent(feature.developerId, 'developer')
+    const connection = this.model(agent.modelId)
+    const format = JSON.stringify({
+      plan: '可实现的方案、公共模块复用、检查方式和本地启动方式',
+      tasks: ['具体任务'],
+    })
+    const reply = await complete(
+      connection,
+      `你是软件方案设计者。输出中文 JSON ${format}。不改动已确认需求、验收标准和依赖关系。首次创建项目时使用本机 npm/Node 网页技术栈，提供 npm run dev/build/test。已有文件：${JSON.stringify(listFiles(project.root))}\n共享上下文：${this.context(project)}\n职责：${agent.instructions}`,
+      [
+        {
+          role: 'user',
+          content: JSON.stringify({
+            title: feature.title,
+            description: feature.description,
+            criteria: feature.criteria,
+            dependencies: feature.dependencies,
+            project: project.brief,
+          }),
+        },
+      ],
+      [],
+      signal,
+    )
+    signal.throwIfAborted()
+    const parsed = parseJson(reply.text)
+    const plan = text(parsed.plan, '方案', 40000)
+    const tasks = lines(parsed.tasks, '实现任务')
+    if (!plan || !tasks.length) throw new Error('方案缺少内容或实现任务，请重试或手动补充。')
+    return { plan, tasks }
   }
   private save(project: Project): void {
     this.store.save()
@@ -481,44 +534,28 @@ export class EngineeringService {
     const p = this.store.project(projectId),
       f = this.feature(p, featureId)
     if (f.stage !== 'solution') throw new Error('请先确认需求。')
-    const agent = this.agent(f.developerId, 'developer'),
-      connection = this.model(agent.modelId)
+    this.agent(f.developerId, 'developer')
     this.begin(
       p,
       `为「${f.title}」生成方案`,
       async (signal) => {
-        const format = JSON.stringify({
-          plan: '可实现的方案、公共模块复用、检查方式和本地启动方式',
-          tasks: ['具体任务'],
-        })
-        const reply = await complete(
-          connection,
-          `你是软件方案设计者。输出中文 JSON ${format}。不改动已确认需求。首次创建项目时使用本机 npm/Node 网页技术栈，提供 npm run dev/build/test。已有文件：${JSON.stringify(listFiles(p.root))}\n共享上下文：${this.context(p)}\n职责：${agent.instructions}`,
-          [
-            {
-              role: 'user',
-              content: JSON.stringify({
-                title: f.title,
-                description: f.description,
-                criteria: f.criteria,
-                project: p.brief,
-              }),
-            },
-          ],
-          [],
-          signal,
-        )
-        signal.throwIfAborted()
-        const parsed = parseJson(reply.text)
-        f.plan = text(parsed.plan, '方案', 40000)
-        f.tasks = lines(parsed.tasks, '实现任务').map((title) => ({
-          id: uid(),
-          title,
-          done: false,
-        }))
-        if (!f.plan || !f.tasks.length)
-          throw new Error('方案缺少内容或实现任务，请重试或手动补充。')
-        this.store.event(p, 'plan', '方案已生成，等待你确认。', f.id)
+        try {
+          const generated = await this.generatePlanContent(p, f, signal)
+          f.plan = generated.plan
+          f.tasks = generated.tasks.map((title) => ({
+            id: uid(),
+            title,
+            done: false,
+          }))
+          f.planSource = 'llm'
+          f.planGenerationError = undefined
+          f.planConfirmationError = undefined
+          this.store.event(p, 'plan', '方案已生成，等待你确认。', f.id)
+        } catch (error) {
+          if (!signal.aborted)
+            f.planGenerationError = error instanceof Error ? error.message : String(error)
+          throw error
+        }
       },
       f,
     )
@@ -530,18 +567,176 @@ export class EngineeringService {
     if (f.stage !== 'solution') throw new Error('当前阶段不能编辑初始方案。')
     f.plan = text(plan, '方案', 40000)
     f.tasks = lines(tasks, '实现任务').map((title) => ({ id: uid(), title, done: false }))
+    f.planSource = 'manual'
+    f.planGenerationError = undefined
+    f.planConfirmationError = undefined
     this.save(p)
   }
   confirmPlan = (projectId: string, featureId: string) => {
     const p = this.store.project(projectId)
     this.idle(p)
     const f = this.feature(p, featureId)
-    if (f.stage !== 'solution' || !f.plan || !f.tasks.length)
+    if (f.stage !== 'solution' || !f.plan.trim() || !f.tasks.some((task) => task.title.trim()))
       throw new Error('请先准备方案和实现任务。')
+    const dependencyError = this.dependencyError(p, f)
+    if (dependencyError) throw new Error(dependencyError)
     this.executionAgents(f)
     f.stage = 'ready'
+    f.planConfirmationError = undefined
+    f.planGenerationError = undefined
     this.store.event(p, 'confirmed', '方案与任务已确认，可以开始开发。', f.id)
     this.save(p)
+  }
+  private async generatePlanBatchItem(
+    project: Project,
+    featureId: string,
+    overwriteExisting: boolean,
+    signal: AbortSignal,
+  ): Promise<BatchPlanResult> {
+    signal.throwIfAborted()
+    const feature = project.features.find((item) => item.id === featureId)
+    if (!feature)
+      return { featureId, success: false, error: '功能不存在。' }
+    if (feature.stage !== 'solution')
+      return { featureId, success: false, error: '只能批量生成处于方案确认阶段的功能。' }
+    const plan = feature.plan.trim()
+    const tasks = feature.tasks.map((task) => task.title.trim()).filter(Boolean)
+    if ((plan || tasks.length) && !overwriteExisting)
+      return { featureId, success: true, skipped: true, plan: plan || undefined, tasks }
+    try {
+      const generated = await this.generatePlanContent(project, feature, signal)
+      feature.plan = generated.plan
+      feature.tasks = generated.tasks.map((title) => ({ id: uid(), title, done: false }))
+      feature.planSource = 'llm'
+      feature.planGenerationError = undefined
+      feature.planConfirmationError = undefined
+      this.store.event(project, 'plan', '方案已生成，等待你确认。', feature.id)
+      return {
+        featureId,
+        success: true,
+        plan: feature.plan,
+        tasks: feature.tasks.map((task) => task.title),
+      }
+    } catch (error) {
+      if (signal.aborted) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      feature.planGenerationError = message
+      this.store.event(project, 'error', `批量生成方案失败：${message}`, feature.id)
+      return {
+        featureId,
+        success: false,
+        plan: feature.plan.trim() || undefined,
+        tasks,
+        error: message,
+      }
+    }
+  }
+  generatePlans = async (
+    projectId: string,
+    featureIds: string[],
+    overwriteExisting = false,
+  ): Promise<BatchPlanResult[]> => {
+    const project = this.store.project(projectId)
+    this.idle(project)
+    if (!Array.isArray(featureIds) || featureIds.length < 1 || featureIds.length > 20)
+      throw new Error('请选择 1–20 个方案确认阶段的功能。')
+    const ids = [...new Set(featureIds)]
+    if (ids.length !== featureIds.length) throw new Error('批量生成不能重复选择同一功能。')
+    return this.beginResult(project, `批量生成 ${ids.length} 个方案`, async (signal) => {
+      const settled = await Promise.allSettled(
+        ids.map((featureId) =>
+          this.generatePlanBatchItem(project, featureId, Boolean(overwriteExisting), signal),
+        ),
+      )
+      signal.throwIfAborted()
+      const results: BatchPlanResult[] = settled.map((result, index) => {
+        if (result.status === 'fulfilled') return result.value
+        const message = result.reason instanceof Error ? result.reason.message : String(result.reason)
+        const feature = project.features.find((item) => item.id === ids[index])
+        if (feature) feature.planGenerationError = message
+        return { featureId: ids[index], success: false, error: message }
+      })
+      const succeeded = results.filter((result) => result.success && !result.skipped).length
+      const skipped = results.filter((result) => result.skipped).length
+      const failed = results.length - succeeded - skipped
+      this.store.event(
+        project,
+        'plan',
+        `批量方案生成完成：${succeeded} 个已生成，${skipped} 个跳过已有方案，${failed} 个失败。`,
+      )
+      return results
+    })
+  }
+  private async confirmPlanBatchItem(
+    project: Project,
+    featureId: string,
+    signal: AbortSignal,
+  ): Promise<BatchConfirmResult> {
+    signal.throwIfAborted()
+    const feature = project.features.find((item) => item.id === featureId)
+    if (!feature) return { featureId, success: false, error: '功能不存在。' }
+    if (feature.stage !== 'solution') {
+      const error = '只能确认处于方案确认阶段的功能。'
+      feature.planConfirmationError = error
+      return { featureId, success: false, error }
+    }
+    const plan = feature.plan.trim()
+    const tasks = feature.tasks.map((task) => task.title.trim()).filter(Boolean)
+    if (!plan || !tasks.length) {
+      const error = '请先生成或补充完整方案与实现任务。'
+      feature.planConfirmationError = error
+      this.store.event(project, 'error', `批量确认方案失败：${error}`, feature.id)
+      return { featureId, success: false, error }
+    }
+    const dependencyError = this.dependencyError(project, feature)
+    if (dependencyError) {
+      feature.planConfirmationError = dependencyError
+      this.store.event(project, 'error', `批量确认方案失败：${dependencyError}`, feature.id)
+      return { featureId, success: false, error: dependencyError }
+    }
+    try {
+      this.executionAgents(feature)
+      signal.throwIfAborted()
+      feature.stage = 'ready'
+      feature.planConfirmationError = undefined
+      feature.planGenerationError = undefined
+      this.store.event(project, 'confirmed', '方案与任务已确认，可以开始开发。', feature.id)
+      return { featureId, success: true, plan, tasks }
+    } catch (error) {
+      if (signal.aborted) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      feature.planConfirmationError = message
+      this.store.event(project, 'error', `批量确认方案失败：${message}`, feature.id)
+      return { featureId, success: false, plan, tasks, error: message }
+    }
+  }
+  confirmPlans = async (projectId: string, featureIds: string[]): Promise<BatchConfirmResult[]> => {
+    const project = this.store.project(projectId)
+    this.idle(project)
+    if (!Array.isArray(featureIds) || featureIds.length < 1 || featureIds.length > 20)
+      throw new Error('请选择 1–20 个方案确认阶段的功能。')
+    const ids = [...new Set(featureIds)]
+    if (ids.length !== featureIds.length) throw new Error('批量确认不能重复选择同一功能。')
+    return this.beginResult(project, `批量确认 ${ids.length} 个方案`, async (signal) => {
+      const settled = await Promise.allSettled(
+        ids.map((featureId) => this.confirmPlanBatchItem(project, featureId, signal)),
+      )
+      signal.throwIfAborted()
+      const results: BatchConfirmResult[] = settled.map((result, index) => {
+        if (result.status === 'fulfilled') return result.value
+        const message = result.reason instanceof Error ? result.reason.message : String(result.reason)
+        const feature = project.features.find((item) => item.id === ids[index])
+        if (feature) feature.planConfirmationError = message
+        return { featureId: ids[index], success: false, error: message }
+      })
+      const succeeded = results.filter((result) => result.success).length
+      this.store.event(
+        project,
+        'confirmed',
+        `批量方案确认完成：${succeeded} 个进入待开发，${results.length - succeeded} 个保留在方案确认。`,
+      )
+      return results
+    })
   }
   planExecution = async (projectId: string, featureIds: string[]): Promise<ExecutionPlan> => {
     const p = this.store.project(projectId)
