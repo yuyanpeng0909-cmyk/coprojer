@@ -45,7 +45,8 @@ async function closePanel(window) {
     page = await app.firstWindow()
     page.setDefaultTimeout(12000)
     page.on('pageerror', (e) => errors.push(e.message))
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
+    if (pid) await page.getByRole('button', { name: '继续开发 多端设备平台', exact: true }).click()
     await page.emulateMedia({ reducedMotion: 'reduce' })
   }
   try {
@@ -68,6 +69,7 @@ async function closePanel(window) {
       parent,
       modelId: models[0].id,
     })
+    await page.getByRole('button', { name: '继续开发 多端设备平台', exact: true }).click()
     await page.getByRole('button', { name: '需求与功能图', exact: true }).click()
     await page.getByRole('button', { name: '圆桌讨论', exact: true }).click()
     const configDialog = page.getByRole('dialog', { name: '配置圆桌会议' })
@@ -198,9 +200,16 @@ async function closePanel(window) {
       await call('acceptPrototypeAndPreparePrd', pid, (await project()).prototypes.at(-1).id)
     }
     await page.getByRole('button', { name: '审阅完整方案' }).click()
-    const review = page.getByRole('dialog', { name: '确认完整需求' })
+    const review = page.getByRole('region', { name: '需求与规格审阅' })
     await review.waitFor()
-    assert.match(await review.textContent(), /4 个子项目/)
+    // Prototype approval can update the PRD after this review snapshot opens.
+    // Explicitly refresh the review, as a person must, before confirming it.
+    await waitFor(async () => {
+      if (await review.locator('.specification-warning').isVisible())
+        await review.getByRole('button', { name: '刷新审阅内容', exact: true }).click()
+      return await review.getByRole('button', { name: '确认并保存基线', exact: true }).isEnabled()
+    }, 'latest requirement review ready')
+    assert.equal(await review.locator('.specification-target').count(), 4)
     await review.getByRole('button', { name: '确认并保存基线' }).click()
     await waitFor(
       async () => (await project()).roundtable.status === 'confirmed',

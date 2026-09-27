@@ -37,7 +37,8 @@ async function main() {
     page = await desktop.firstWindow()
     page.setDefaultTimeout(15000)
     page.on('pageerror', (e) => errors.push(e.message))
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
+    if (pid) await page.getByRole('button', { name: '继续开发 轻记 · 产品需求空间', exact: true }).click()
     await page.emulateMedia({ reducedMotion: 'reduce' })
   }
   try {
@@ -67,6 +68,13 @@ async function main() {
         '为个人开发者设计一个简洁的本地记账应用。先讨论完整需求、数据归属和主要操作，再共同探索界面。',
       modelId: models.chat.id,
     })
+    await page.getByRole('button', { name: '继续开发 轻记 · 产品需求空间', exact: true }).click()
+    // Dismiss the optional setup tip before measuring the focused prototype viewport.
+    const assistantHint = page.getByRole('button', { name: '忽略助手提示', exact: true })
+    if (await assistantHint.isVisible()) {
+      await assistantHint.click()
+      await assistantHint.waitFor({ state: 'hidden' })
+    }
     await page.getByRole('button', { name: '需求与功能图', exact: true }).click()
     await screenshot('research-empty-light.png')
     provider.control.holdFinal = true
@@ -279,9 +287,10 @@ async function main() {
     await waitFor(async () => !(await project()).designActivity, 'final prototype')
     await invoke('acceptPrototypeAndPreparePrd', pid, (await project()).prototypes.at(-1).id)
     await page.getByRole('button', { name: '确认完整需求', exact: true }).click()
-    dialog = page.getByRole('dialog', { name: '确认完整需求', exact: true })
+    dialog = page.getByRole('region', { name: '需求与规格审阅', exact: true })
     await dialog.getByRole('button', { name: '确认并保存基线', exact: true }).click()
-    await dialog.waitFor({ state: 'hidden' })
+    await dialog.getByText('已确认基线', {exact:true}).waitFor()
+    await dialog.getByRole('button', {name:'继续讨论',exact:true}).click()
     p = await project()
     assert.ok(p.requirementsBaseline)
     assert.ok(p.features.filter((f) => f.scope !== 'later').every((f) => f.stage === 'solution'))

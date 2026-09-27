@@ -46,11 +46,21 @@ import WorkspaceSidebar, {
   type ProjectView,
   type WorkspaceSection,
 } from './WorkspaceSidebar'
-import WorkspaceOverview, { WelcomeWorkspace } from './WorkspaceOverview'
+import WorkspaceOverview from './WorkspaceOverview'
+import ProjectManager from './ProjectManager'
+import type { ProjectDestination } from './project-library'
 import WorkspaceSettings from './WorkspaceSettings'
 import RequirementsWorkspace, { type ResearchTab } from './RequirementsWorkspace'
+import SpecificationWorkspace from './SpecificationWorkspace'
+import DeliveryWorkspace from './DeliveryWorkspace'
+import { deliveryFeatures, deliveryStages, mergedFeatureFor, type DeliveryStage, type FeatureTab } from './delivery'
 import ContextWorkspace from './ContextWorkspace'
 import { FirstRunCheck } from './GuidedWorkflow'
+import AgentSkills from './AgentSkills'
+import ModelAssistant from './ModelAssistant'
+import { DefaultAssistantSettings } from './GeneralAssistant'
+import GeneralAssistant, { AssistantHint } from './AssistantPanel'
+import BoardBatchActions, { type BoardBatchAction } from './BoardBatchActions'
 import { agentRoleLabels } from '../../../shared/engineering'
 import {
   defaultAgentTools,
@@ -62,7 +72,6 @@ const api = () => window.desktop.engineering
 const emptyState: EngineeringState = { models: [], agents: [], projects: [] }
 const freshModel: ModelInput = {
   id: '',
-  name: '',
   baseUrl: '',
   model: '',
   protocol: 'chat',
@@ -142,20 +151,17 @@ export default function EngineeringPage({
   connected: boolean
 }) {
   const [state, setState] = useState<EngineeringState>(emptyState)
+  const [loaded, setLoaded] = useState(false)
   const [section, setSection] = useState<WorkspaceSection>('projects')
-  const [projectId, setProjectId] = useState(() => {
-    try {
-      return localStorage.getItem('coprojer.studio.project') || ''
-    } catch {
-      return ''
-    }
-  })
+  // A saved project is history, not an instruction to enter it on launch.
+  const [projectId, setProjectId] = useState('')
   const [collapsed, setCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false),
     [search, setSearch] = useState('')
   const [researchTab, setResearchTab] = useState<ResearchTab>('requirements')
   const [view, setView] = useState<ProjectView>('overview')
   const [featureId, setFeatureId] = useState<string | null>(null)
+  const [featureInitialTab, setFeatureInitialTab] = useState<FeatureTab>()
   const [newFeature, setNewFeature] = useState(false)
   const [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
@@ -168,6 +174,19 @@ export default function EngineeringPage({
     [modelList, setModelList] = useState<string[]>([]),
     [modelStatus, setModelStatus] = useState('')
   const [agent, setAgent] = useState<AgentConfig | null>(null)
+  const [skillAgentId, setSkillAgentId] = useState<string | null>(null)
+  const [modelAssistantOpen, setModelAssistantOpen] = useState(false)
+  const [generalAssistantOpen, setGeneralAssistantOpen] = useState(false)
+  const [assistantExpanded, setAssistantExpanded] = useState(false)
+  const [compactAssistantWindow, setCompactAssistantWindow] = useState(() => window.matchMedia('(max-width: 1050px)').matches)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1050px)')
+    const resize = () => setCompactAssistantWindow(media.matches)
+    media.addEventListener('change', resize)
+    return () => media.removeEventListener('change', resize)
+  }, [])
+  const assistantCompactSidebar = generalAssistantOpen && !assistantExpanded && compactAssistantWindow
+  const effectiveCollapsed = collapsed || assistantCompactSidebar
   const [projectDraft, setProjectDraft] = useState<{
     name: string
     parent: string
@@ -182,6 +201,7 @@ export default function EngineeringPage({
   const [script, setScript] = useState('dev')
   const refresh = useCallback(async () => {
     setState(await api().state())
+    setLoaded(true)
   }, [])
   useEffect(() => {
     let mounted = true,
@@ -191,7 +211,10 @@ export default function EngineeringPage({
       fetching = true
       try {
         const value = await api().state()
-        if (mounted) setState(value)
+        if (mounted) {
+          setState(value)
+          setLoaded(true)
+        }
       } catch (e) {
         if (mounted) setError(messageOf(e))
       } finally {
@@ -205,7 +228,7 @@ export default function EngineeringPage({
       clearInterval(timer)
     }
   }, [])
-  const project = state.projects.find((p) => p.id === projectId) ?? state.projects[0]
+  const project = state.projects.find((p) => p.id === projectId)
   const lastEvent = project?.events.at(-1)
   const backgroundProblem =
     !project?.activity &&
@@ -239,6 +262,11 @@ export default function EngineeringPage({
   const selectProject = (id: string) => {
     setProjectId(id)
     setFeatureId(null)
+    setNewFeature(false)
+    setContextDraft(null)
+    setError('')
+    setNotice('')
+    setFeatureInitialTab(undefined)
     setExecutionSelection([])
     setSolutionSelection([])
     setBatchPlanStatuses({})
@@ -247,38 +275,26 @@ export default function EngineeringPage({
     setView('overview')
     setSection('projects')
     try {
-      localStorage.setItem('coprojer.studio.project', id)
+      if (id) localStorage.setItem('coprojer.studio.project', id)
     } catch {
       /* Session selection remains available. */
     }
   }
   const startNewProject = () =>
     setProjectDraft({ name: '', parent: '', brief: '', modelId: state.models[0]?.id ?? '' })
-  const activeFeature =
-    feature ??
-    ['developing', 'verifying', 'acceptance', 'blocked', 'ready', 'solution', 'requirements']
-      .map((stage) => project?.features.find((f) => f.stage === stage))
-      .find(Boolean)
-  const stages = ['需求讨论', '需求确认', '方案与任务', '代码开发', '独立验证', '最终验收']
-  const stageIndex = activeFeature
-    ? {
-        requirements: 0,
-        solution: 2,
-        ready: 3,
-        developing: 3,
-        verifying: 4,
-        acceptance: 5,
-        done: 5,
-        blocked: 3,
-      }[activeFeature.stage]
-    : project?.features.length && project.features.every((f) => f.stage === 'done')
-      ? 6
-      : 0
-  const totalTasks = project?.features.reduce((sum, item) => sum + (item.tasks ?? []).length, 0) ?? 0
+  const openProjectDestination = (id: string, destination: ProjectDestination) => {
+    selectProject(id)
+    setView(destination.view)
+    setResearchTab(destination.researchTab ?? 'requirements')
+    setFeatureId(destination.featureId ?? null)
+    setFeatureInitialTab(destination.tab)
+  }
+  const currentDeliveryFeatures = project ? deliveryFeatures(project) : []
+  const totalTasks = currentDeliveryFeatures.reduce((sum, item) => sum + (item.tasks ?? []).length, 0)
   const unplannedFeatures =
-    project?.features.filter((item) => item.stage === 'solution' && (item.tasks ?? []).length === 0) ?? []
-  const solutionFeatures = project?.features.filter((item) => item.stage === 'solution') ?? []
-  const readyFeatures = project?.features.filter((item) => item.stage === 'ready') ?? []
+    currentDeliveryFeatures.filter((item) => item.stage === 'solution' && (item.tasks ?? []).length === 0)
+  const solutionFeatures = currentDeliveryFeatures.filter((item) => item.stage === 'solution')
+  const readyFeatures = currentDeliveryFeatures.filter((item) => item.stage === 'ready')
   const selectedSolutionIds = solutionFeatures
     .filter((item) => solutionSelection.includes(item.id))
     .map((item) => item.id)
@@ -308,7 +324,7 @@ export default function EngineeringPage({
     .map((item) => item.id)
   const executionPlan = project?.executionPlan
   const executionPlanCurrent = executionPlan
-    ? project?.features.find((item) => item.id === executionPlan.orderedFeatureIds[executionPlan.currentIndex])
+    ? currentDeliveryFeatures.find((item) => item.id === executionPlan.orderedFeatureIds[executionPlan.currentIndex])
     : undefined
   useEffect(() => {
     const available = new Set(readyFeatures.map((item) => item.id))
@@ -404,19 +420,36 @@ export default function EngineeringPage({
   const navigate = (next: ProjectView) => {
     setSection('projects')
     setView(next)
+    setFeatureId(null)
+    setFeatureInitialTab(undefined)
+    setNewFeature(false)
+  }
+  const navigateStage = (stage: DeliveryStage) => {
+    if (!project) return
+    setError('')
+    setNotice('')
+    if (stage === 'discussion' || stage === 'prototype') {
+      navigate('map')
+      setResearchTab(stage === 'discussion' ? 'requirements' : 'prototype')
+    } else navigate(stage)
   }
   const pageTitle =
     section === 'projects'
-      ? workspaceNavigation.find((n) => n.id === view)!.label
+      ? project ? (workspaceNavigation.find((n) => n.id === view)?.label ?? deliveryStages.find((stage) => stage.id === view)?.label ?? '工作台') : '项目管理'
       : { models: '模型连接', agents: '智能体', appearance: '外观与偏好' }[section]
   const pageDescription =
     section === 'projects'
-      ? {
+      ? !project ? '管理已创建的项目，继续开发，或开始一个新项目。' : {
           overview: '掌握项目进展，处理关键决策。',
           map: '探索完整需求，让功能与界面随着讨论逐步成形。',
           board: '追踪每项功能的开发阶段与任务进度。',
           context: '让每次接续开发，都建立在已有工程知识上。',
           activity: '查看真实操作、测试输出与交付依据。',
+          specification: '按目录核对产品需求与功能规格，确认统一需求基线。',
+          plans: '总览本期功能的实现方案、任务与依赖。',
+          development: '查看当前执行、队列与各项功能的开发记录。',
+          verification: '汇总独立验证过程与证据，定位需要处理的问题。',
+          acceptance: '对照需求审阅成果，由人工确认最终验收。',
         }[view]
       : {
           models: '管理你的模型服务与连接。',
@@ -440,7 +473,7 @@ export default function EngineeringPage({
     return () => window.removeEventListener('keydown', handler)
   }, [state.models])
   return (
-    <section className="studio eng-page" data-collapsed={collapsed}>
+    <section className="studio eng-page" data-collapsed={effectiveCollapsed} data-assistant={generalAssistantOpen ? assistantExpanded ? 'wide' : 'side' : undefined}>
       <WorkspaceSidebar
         researchTab={researchTab}
         onResearchTab={(tab) => {
@@ -451,46 +484,38 @@ export default function EngineeringPage({
         project={project}
         view={view}
         section={section}
-        collapsed={collapsed}
-        phase={stageIndex}
+        collapsed={effectiveCollapsed}
         onSelect={selectProject}
         onCreate={startNewProject}
+        onHome={() => selectProject('')}
         onNavigate={navigate}
         onSection={setSection}
-        onStage={(index) => {
-          if (index < 2) {
-            navigate('map')
-            setResearchTab('requirements')
-            return
-          }
-          const targets = [
-            ['requirements'],
-            ['requirements'],
-            ['solution'],
-            ['ready', 'developing', 'blocked'],
-            ['verifying'],
-            ['acceptance'],
-          ]
-          const target = project?.features.find((f) => targets[index].includes(f.stage))
-          if (target) setFeatureId(target.id)
-          else navigate(index < 2 ? 'map' : index === 4 ? 'activity' : 'board')
-        }}
+        onStage={navigateStage}
       />
       <main className="studio-main">
         <div className="studio-toolbar">
           <div className="studio-breadcrumb">
             <button
               className="eng-icon"
-              aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+              aria-label={effectiveCollapsed ? '展开侧边栏' : '收起侧边栏'}
+              disabled={assistantCompactSidebar}
+              title={assistantCompactSidebar ? '窄窗口中自动收起；关闭或展开助手后可切换' : undefined}
               onClick={() => setCollapsed(!collapsed)}
             >
-              {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+              {effectiveCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
             </button>
-            <span>{project?.name ?? '工作空间'}</span>
+            {project ? (
+              <>
+                <button className="project-home-link" onClick={() => selectProject('')}>项目管理</button>
+                <ChevronRight size={12} />
+                <span title={project.name}>{project.name}</span>
+              </>
+            ) : <span>工作空间</span>}
             <ChevronRight size={12} />
             <strong>{pageTitle}</strong>
           </div>
           <div className="studio-toolbar-actions">
+            <button className="ui-button secondary" onClick={() => setGeneralAssistantOpen(true)}><Bot size={14} />通用助手</button>
             <button
               className="quick-search-button"
               aria-label="搜索工作空间"
@@ -519,11 +544,23 @@ export default function EngineeringPage({
           </div>
         </div>
         <div className="studio-content">
+          {loaded && (section !== 'projects' || !project || view === 'overview') && <AssistantHint state={state} projectId={project?.id} refresh={refresh} onHelp={(text, scopeId) => {
+            void perform(async () => {
+              const session = await api().createAssistantSession(scopeId)
+              await api().updateAssistantSession(session.id, { draft: text })
+              setGeneralAssistantOpen(true)
+            })
+          }} />}
           <header className="studio-page-heading">
             <div>
               <h1>{pageTitle}</h1>
               <p>{pageDescription}</p>
             </div>
+            {section === 'projects' && !project && (
+              <button className="ui-button" onClick={startNewProject}>
+                <Plus size={13} />新建项目
+              </button>
+            )}
             {section === 'projects' && project && (
               <div className="page-actions">
                 {project.activity && view !== 'map' && (
@@ -587,17 +624,17 @@ export default function EngineeringPage({
                         <Bot size={20} />
                       </div>
                       <div className="eng-card-copy">
-                        <h3>{m.name}</h3>
-                        <p>{m.model}</p>
+                        <h3>{m.model}</h3>
                         <small>{m.baseUrl}</small>
                       </div>
                       <span className="eng-tag">{protocolLabels[m.protocol]}</span>
                       <button className="ui-button secondary" onClick={() => openModel(m)}>
                         编辑
                       </button>
+                      <button className="ui-button secondary" onClick={() => openModel({ ...m, id: '', model: '', reuseConnectionId: m.id, apiKey: '' })}>复用连接</button>
                       <button
                         className="eng-icon"
-                        aria-label={`删除模型 ${m.name}`}
+                        aria-label={`删除模型 ${m.model}`}
                         disabled={busy}
                         onClick={() => void perform(() => api().deleteModel(m.id))}
                       >
@@ -607,6 +644,7 @@ export default function EngineeringPage({
                   ))}
                 </div>
               )}
+              <DefaultAssistantSettings state={state} refresh={refresh} onOpen={() => setGeneralAssistantOpen(true)} />
             </div>
           )}
           {section === 'agents' && (
@@ -614,8 +652,9 @@ export default function EngineeringPage({
               <div className="eng-section-heading">
                 <div>
                   <h2>你的工程成员</h2>
-                  <p>默认团队按阶段接力。一个模型即可使用，也可为每个角色装配不同技能。</p>
+                  <p>规划、原型设计、开发、独立验证按阶段接力。同类可有多个实例，每个实例的技能独立装配、独立使用。</p>
                 </div>
+                <button className="ui-button secondary" disabled={!state.models.length} onClick={() => setModelAssistantOpen(true)}><Bot size={14} />模型配置助手</button>
                 <button
                   className="ui-button primary"
                   onClick={() =>
@@ -634,19 +673,21 @@ export default function EngineeringPage({
                 </button>
               </div>
               <div className="eng-agents">
-                {state.agents.map((a) => (
+                {Object.keys(agentRoleLabels).flatMap(role => state.agents.filter(a => a.role === role)).map((a) => (
                   <article className="eng-agent-card" key={a.id}>
                     <div className="eng-section-heading">
                       <Bot size={21} />
                       <span className="eng-tag">{agentRoleLabels[a.role]}</span>
                     </div>
                     <h3>{a.name}</h3>
+                    <small>{a.ownerProjectId ? '项目专用 · ' + (state.projects.find(p => p.id === a.ownerProjectId)?.name || '原项目已删除') : '全局共享成员'}</small>
                     <p>{a.instructions}</p>
-                    <small>已装配：{(a.skillIds || []).map(id => state.skills?.find(s => s.id === id)?.name || id).join('、') || '未装配技能'}</small>
+                    <small>专属技能：{(a.skillIds || []).map(id => state.skills?.find(s => s.id === id && s.ownerAgentId === a.id)?.name || id).join('、') || '未启用技能'}</small>
                     <footer>
                       <span>
-                        {state.models.find((m) => m.id === a.modelId)?.name ?? '尚未选择模型'}
+                        {state.models.find((m) => m.id === a.modelId)?.model ?? '尚未选择模型'}
                       </span>
+                      <button className="ui-button secondary" onClick={() => setSkillAgentId(a.id)}>技能</button>
                       <button className="ui-button secondary" onClick={() => setAgent({ ...a })}>
                         配置
                       </button>
@@ -654,19 +695,25 @@ export default function EngineeringPage({
                   </article>
                 ))}
               </div>
-              <button className="ui-button secondary" disabled={busy} onClick={() => void perform(async () => {
-                const directory = await window.desktop.selectFolder()
-                if (directory) await api().importSkill(directory)
-              }, '本地技能已导入，可在智能体配置中装配。')}>导入本地技能</button>
-              <p className="eng-hint">选择包含 skill.json 和 SKILL.md 的目录。导入后按角色装配，不会自动执行技能中的命令。</p>
+              <p className="eng-hint">点击具体智能体的“技能”，导入本地目录或获取联网推荐。名称只是标识，实际职责以卡片右上角为准。</p>
             </div>
           )}
           {section === 'projects' && (
             <div className="eng-workspace">
               <div className="eng-project-content">
                 {!project ? (
-                  <WelcomeWorkspace
+                  <ProjectManager
                     state={state}
+                    loaded={loaded}
+                    loadFailed={!loaded && !!error}
+                    onRetry={() => void perform(refresh)}
+                    onSelect={selectProject}
+                    onOpen={openProjectDestination}
+                    onUpdate={async (id, input) => {
+                      await api().updateProjectMetadata(id, input)
+                      await refresh()
+                    }}
+                    onOpenFolder={(id) => api().openProject(id)}
                     onCreate={startNewProject}
                     onModels={() => setSection('models')}
                     onAgents={() => setSection('agents')}
@@ -716,7 +763,19 @@ export default function EngineeringPage({
                         perform={perform}
                         tab={researchTab}
                         onTab={setResearchTab}
+                        onReview={() => navigate('specification')}
                       />
+                    )}
+                    {view === 'specification' && (
+                      <SpecificationWorkspace key={project.id} project={project} busy={busy} perform={perform}
+                        onDiscuss={() => navigateStage('discussion')}
+                        onFeature={(id) => { setFeatureId(id); setFeatureInitialTab('requirements') }}
+                        onPrototype={() => navigateStage('prototype')} onPlans={() => navigate('plans')} />
+                    )}
+                    {(view === 'plans' || view === 'development' || view === 'verification' || view === 'acceptance') && (
+                      <DeliveryWorkspace key={project.id + view} project={project} view={view}
+                        onFeature={(id, tab) => { setFeatureId(id); setFeatureInitialTab(tab) }}
+                        onBoard={() => navigate('board')} onSpecification={() => navigate('specification')} />
                     )}
                     {view === 'board' && (
                       <div className="eng-board-shell">
@@ -733,86 +792,10 @@ export default function EngineeringPage({
                                   : '先在功能卡片中确认方案，确认后才可加入 LLM 执行计划。'}
                             </span>
                           </div>
-                          <div className="eng-board-summary-actions">
-                            <span>{selectedExecutionIds.length ? `已勾选 ${selectedExecutionIds.length} 项` : '可多选方案'}</span>
-                            <button
-                              className="ui-button primary small"
-                              disabled={!selectedExecutionIds.length || busy || !!project.activity}
-                              onClick={() =>
-                                void perform(async () => {
-                                  await api().planExecution(project.id, selectedExecutionIds)
-                                  setExecutionSelection([])
-                                }, 'LLM 已生成执行顺序，请检查规划理由后开始执行。')
-                              }
-                            >
-                              <ListChecks size={12} />
-                              LLM 规划执行
-                            </button>
-                          </div>
-                          <div className="eng-board-batch-actions">
-                            <strong>方案确认批处理</strong>
-                            <span>
-                              {selectedSolutionIds.length
-                                ? `已选择 ${selectedSolutionIds.length} 项`
-                                : `可处理 ${solutionFeatures.length} 项`}
-                            </span>
-                            <button
-                              className="ui-button secondary small"
-                              disabled={!solutionFeatures.length || busy || !!project.activity}
-                              onClick={() => setSolutionSelection(solutionFeatures.map((item) => item.id))}
-                            >
-                              全选当前方案
-                            </button>
-                            <button
-                              className="ui-button secondary small"
-                              disabled={!selectedSolutionIds.length || busy || !!project.activity}
-                              onClick={() => setSolutionSelection([])}
-                            >
-                              取消全选
-                            </button>
-                            <button
-                              className="ui-button primary small"
-                              disabled={!selectedSolutionIds.length || busy || !!project.activity}
-                              onClick={() => void runBatchGeneration(selectedSolutionIds)}
-                            >
-                              <ListChecks size={12} />
-                              批量生成方案
-                            </button>
-                            <button
-                              className="ui-button secondary small"
-                              disabled={!failedSelectedSolutionIds.length || busy || !!project.activity}
-                              onClick={() => void runBatchGeneration(failedSelectedSolutionIds)}
-                            >
-                              仅重试失败项
-                            </button>
-                            <button
-                              className="ui-button primary small"
-                              disabled={!selectedConfirmIds.length || busy || !!project.activity}
-                              onClick={() => void confirmSelectedPlans()}
-                            >
-                              <Check size={12} />
-                              确认已生成方案
-                            </button>
-                          </div>
                           {executionPlan && (
                             <div className="eng-execution-plan" data-testid="execution-plan">
                               <div className="eng-execution-plan-heading">
                                 <strong>执行计划 · {executionPlanStatusLabels[executionPlan.status]}</strong>
-                                {['planned', 'stopped'].includes(executionPlan.status) && (
-                                  <button
-                                    className="ui-button secondary small"
-                                    disabled={busy || !!project.activity}
-                                    onClick={() =>
-                                      void perform(
-                                        () => api().runExecutionPlan(project.id),
-                                        '已开始按 LLM 规划执行，当前功能完成验证后请最终验收。',
-                                      )
-                                    }
-                                  >
-                                    <Play size={11} />
-                                    {executionPlan.status === 'stopped' ? '继续执行计划' : '开始执行计划'}
-                                  </button>
-                                )}
                                 {executionPlan.status === 'waiting-acceptance' && executionPlanCurrent && (
                                   <button
                                     className="ui-button secondary small"
@@ -825,7 +808,7 @@ export default function EngineeringPage({
                               </div>
                               <div className="eng-execution-plan-order">
                                 {executionPlan.orderedFeatureIds.map((id, index) => {
-                                  const item = project.features.find((candidate) => candidate.id === id)
+                                  const item = currentDeliveryFeatures.find((candidate) => candidate.id === id)
                                   if (!item) return null
                                   const current = index === executionPlan.currentIndex
                                   return (
@@ -836,7 +819,7 @@ export default function EngineeringPage({
                                   )
                                 })}
                               </div>
-                              <small>LLM 规划理由：{executionPlan.rationale}</small>
+                              <small>规划理由：{executionPlan.rationale}</small>
                               {executionPlan.status === 'waiting-acceptance' && executionPlanCurrent && (
                                 <small className="eng-execution-plan-hint">
                                   「{executionPlanCurrent.title}」已通过独立验证，最终验收后才能继续下一项。
@@ -858,13 +841,44 @@ export default function EngineeringPage({
                               'blocked',
                             ] as const
                           ).map((stage) => {
-                            const cards = project.features.filter((f) => f.stage === stage)
+                            const cards = project.features.filter((f) => f.stage === stage && !mergedFeatureFor(project, f))
+                            const executionLocked = executionPlan?.status === 'running' || executionPlan?.status === 'waiting-acceptance'
+                            const actions: BoardBatchAction[] = stage === 'requirements' ? [{
+                              label: '审阅并确认完整需求',
+                              onSelect: () => navigate('specification'),
+                            }] : stage === 'solution' ? [
+                              { label: '全选当前方案', onSelect: () => setSolutionSelection(solutionFeatures.map((item) => item.id)) },
+                              { label: '取消全选', disabled: !selectedSolutionIds.length, onSelect: () => setSolutionSelection([]) },
+                              { label: '批量生成方案', icon: <ListChecks size={12} />, primary: true, disabled: !selectedSolutionIds.length, onSelect: () => void runBatchGeneration(selectedSolutionIds) },
+                              { label: '仅重试失败项', disabled: !failedSelectedSolutionIds.length, onSelect: () => void runBatchGeneration(failedSelectedSolutionIds) },
+                              { label: '确认已生成方案', icon: <Check size={12} />, disabled: !selectedConfirmIds.length, onSelect: () => void confirmSelectedPlans() },
+                            ] : stage === 'ready' ? [
+                              { label: '全选待开发方案', disabled: !readyFeatures.length || executionLocked, onSelect: () => setExecutionSelection(readyFeatures.map((item) => item.id)) },
+                              { label: '取消全选', disabled: !selectedExecutionIds.length || executionLocked, onSelect: () => setExecutionSelection([]) },
+                              { label: 'LLM 规划执行', icon: <ListChecks size={12} />, primary: true, disabled: !selectedExecutionIds.length || executionLocked, onSelect: () => void perform(async () => {
+                                await api().planExecution(project.id, selectedExecutionIds)
+                                setExecutionSelection([])
+                              }, '执行计划已生成，请检查规划理由后开始执行。') },
+                              ...(executionPlan && ['planned', 'stopped'].includes(executionPlan.status) ? [{
+                                label: executionPlan.status === 'stopped' ? '继续执行计划' : '开始执行计划',
+                                icon: <Play size={12} />,
+                                onSelect: () => void perform(() => api().runExecutionPlan(project.id), '已开始按执行计划推进，当前功能完成验证后请最终验收。'),
+                              }] : []),
+                            ] : []
+                            const selectedCount = stage === 'solution' ? selectedSolutionIds.length : stage === 'ready' ? selectedExecutionIds.length : 0
                             return (
-                              <section key={stage} className="eng-board-column">
-                                <h3>
-                                  {stageLabels[stage]}
-                                  <span>{cards.length}</span>
-                                </h3>
+                              <section key={stage} className="eng-board-column" data-stage={stage}>
+                                <div className="eng-board-column-heading">
+                                  <h3>{stageLabels[stage]}</h3>
+                                  {actions.length > 0 && <BoardBatchActions
+                                    label={`${stageLabels[stage]}批量操作`}
+                                    summary={stage === 'requirements' ? '按完整需求基线审阅与确认' : `已选择 ${selectedCount} 项 · 可处理 ${cards.length} 项`}
+                                    selected={selectedCount}
+                                    disabled={busy || !!project.activity || (!cards.length && !(stage === 'ready' && executionPlan))}
+                                    actions={actions}
+                                  />}
+                                  <span className="eng-board-column-count">{cards.length}</span>
+                                </div>
                                 {cards.map((f) => {
                                   const tasks = f.tasks ?? []
                                   const deleteDisabled =
@@ -1057,7 +1071,7 @@ export default function EngineeringPage({
         </span>
         <span>
           {project
-            ? `${project.features.length} 个功能 · ${project.context.length} 条上下文`
+            ? `${currentDeliveryFeatures.length} 个本期功能 · ${project.context.length} 条上下文`
             : 'Coprojer · 本地工程智能体'}
           <em>支持批量规划 · 逐项验收</em>
         </span>
@@ -1066,7 +1080,7 @@ export default function EngineeringPage({
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         title="快速查找"
-        description="打开工作区或当前项目中的功能。"
+        description="打开项目、工作区或当前项目中的功能。"
       >
         <div className="workspace-command">
           <label className="workspace-search">
@@ -1080,7 +1094,17 @@ export default function EngineeringPage({
             />
           </label>
           <div>
-            {workspaceNavigation
+            {state.projects
+              .filter((p) => !p.archivedAt)
+              .filter((p) => `${p.name} ${p.root}`.toLowerCase().includes(search.toLowerCase()))
+              .map((p) => (
+                <button key={p.id} onClick={() => { selectProject(p.id); setSearchOpen(false) }}>
+                  <FolderOpen size={14} />
+                  <span>{p.name}<small>{p.root}</small></span>
+                  <ArrowRight size={12} />
+                </button>
+              ))}
+            {(project ? workspaceNavigation : [])
               .filter((n) => n.label.includes(search))
               .map((n) => (
                 <button
@@ -1125,7 +1149,7 @@ export default function EngineeringPage({
           if (!busy) setModel(null)
         }}
         title={model?.id ? '编辑模型' : '新增模型'}
-        description="保存连接后，可在智能体中选择使用。"
+        description="保存后可用于通用助手、需求讨论或工程智能体。"
         footer={
           <>
             <button className="ui-button secondary" disabled={busy} onClick={() => setModel(null)}>
@@ -1150,13 +1174,16 @@ export default function EngineeringPage({
       >
         {model && (
           <div className="eng-form">
+            {model.reuseConnectionId && <p className="eng-hint">复用连接：{state.models.find(m => m.id === model.reuseConnectionId)?.model}。沿用其地址、协议和已保存密钥，仅新增具体型号。</p>}
             <Field label="服务预设">
               <select
+                disabled={!!model.reuseConnectionId}
                 defaultValue="custom"
                 onChange={(e) => {
                   const presets: Record<string, string> = {
                     deepseek: 'https://api.deepseek.com',
                     glm: 'https://open.bigmodel.cn/api/paas/v4',
+                    dashscope: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
                     custom: '',
                   }
                   setModel({ ...model, baseUrl: presets[e.target.value], protocol: 'chat' })
@@ -1166,19 +1193,14 @@ export default function EngineeringPage({
                 <option value="custom">自定义服务</option>
                 <option value="deepseek">DeepSeek</option>
                 <option value="glm">GLM / 智谱</option>
+                <option value="dashscope">DashScope / 阿里云百炼</option>
               </select>
             </Field>
             <button className="ui-button secondary" disabled={busy || !model.model} onClick={() => void perform(async () => setModelStatus(await api().testCapabilities(model)))}>检查开发能力</button>
-            <Field label="显示名称">
-              <input
-                value={model.name}
-                onChange={(e) => setModel({ ...model, name: e.target.value })}
-                placeholder="例如：我的开发模型"
-              />
-            </Field>
             <Field label="服务地址 Base URL">
               <input
                 value={model.baseUrl}
+                disabled={!!model.reuseConnectionId}
                 onChange={(e) => {
                   setModel({ ...model, baseUrl: e.target.value })
                   setModelStatus('')
@@ -1189,6 +1211,7 @@ export default function EngineeringPage({
             <Field label="接口类型">
               <select
                 value={model.protocol}
+                disabled={!!model.reuseConnectionId}
                 onChange={(e) => {
                   setModel({ ...model, protocol: e.target.value as Protocol })
                   setModelStatus('')
@@ -1207,13 +1230,14 @@ export default function EngineeringPage({
             >
               <input
                 type="password"
+                disabled={!!model.reuseConnectionId}
                 autoComplete="off"
                 value={model.apiKey ?? ''}
                 onChange={(e) => setModel({ ...model, apiKey: e.target.value })}
                 placeholder={model.id ? '已保存，留空不修改' : '填写服务提供的密钥'}
               />
             </Field>
-            <Field label="模型标识">
+            <Field label="模型标识" hint="直接使用服务提供的模型 ID 作为名称。">
               <div className="eng-input-action">
                 <input
                   list="eng-model-options"
@@ -1269,6 +1293,21 @@ export default function EngineeringPage({
           </div>
         )}
       </Overlay>
+      <Overlay open={!!skillAgentId} onClose={() => setSkillAgentId(null)} title="智能体专属技能">
+        {skillAgentId && state.agents.find(a => a.id === skillAgentId) && <AgentSkills key={skillAgentId} agent={state.agents.find(a => a.id === skillAgentId)!} skills={state.skills || []} state={state} refresh={refresh} />}
+      </Overlay>
+      {generalAssistantOpen && <GeneralAssistant state={state} refresh={refresh} currentProjectId={project?.id} expanded={assistantExpanded} onExpandedChange={setAssistantExpanded} onClose={() => setGeneralAssistantOpen(false)} onNavigate={(destination, scopeId) => {
+        setAssistantExpanded(false)
+        if (destination === 'models' || destination === 'agents') { setSection(destination); return }
+        if (destination === 'projects') { selectProject(''); return }
+        if (!scopeId || !state.projects.some(p => p.id === scopeId)) { selectProject(''); return }
+        if (projectId !== scopeId) selectProject(scopeId)
+        setSection('projects'); setView(destination === 'requirements' ? 'map' : destination === 'board' ? 'board' : 'overview')
+        if (destination === 'requirements') setResearchTab('requirements')
+      }} />}
+      <Overlay open={modelAssistantOpen} onClose={() => setModelAssistantOpen(false)} title="模型配置助手">
+        {modelAssistantOpen && <ModelAssistant state={state} refresh={refresh} />}
+      </Overlay>
       <Overlay
         open={!!agent}
         onClose={() => {
@@ -1313,7 +1352,7 @@ export default function EngineeringPage({
                     ...agent,
                     role: e.target.value as AgentConfig['role'],
                     tools: defaultAgentTools(e.target.value as AgentConfig['role']),
-                    skillIds: state.skills?.filter(s => s.origin === 'builtin' && s.roles.includes(e.target.value as AgentConfig['role'])).map(s => s.id) || [],
+                    skillIds: [],
                   })
                 }
               >
@@ -1328,7 +1367,7 @@ export default function EngineeringPage({
                 <option value="">选择模型</option>
                 {state.models.map((m) => (
                   <option value={m.id} key={m.id}>
-                    {m.name}
+                    {m.model}
                   </option>
                 ))}
               </select>
@@ -1367,8 +1406,9 @@ export default function EngineeringPage({
               <small>基础读取工具始终可用，验证角色不提供文件修改工具。</small>
             </fieldset>
             <fieldset className="eng-skill-options">
-              <legend>装配技能</legend>
-              {state.skills?.filter(s => s.roles.includes(agent.role)).map(skill => {
+              <legend>启用专属技能</legend>
+              {!agent.id && <p className="eng-hint">保存后会创建此实例的基础技能副本；更多技能请从卡片的“技能”入口添加。</p>}
+              {state.skills?.filter(s => s.ownerAgentId === agent.id && s.roles.includes(agent.role)).map(skill => {
                 const missing = skill.requiredTools.filter(t => !agent.tools.includes(t))
                 return <label key={skill.id}><input type="checkbox" checked={agent.skillIds?.includes(skill.id) || false} disabled={!!missing.length} onChange={e => setAgent({ ...agent, skillIds: e.target.checked ? [...(agent.skillIds || []), skill.id] : agent.skillIds?.filter(id => id !== skill.id) })} /><span>{skill.name} · {skill.version}<small>{skill.description}{missing.length ? ' · 需要启用：' + missing.map(t => toolLabels[t]).join('、') : ''}</small></span></label>
               })}
@@ -1458,7 +1498,7 @@ export default function EngineeringPage({
                 <option value="">稍后配置</option>
                 {state.models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {m.model}
                   </option>
                 ))}
               </select>
@@ -1530,16 +1570,19 @@ export default function EngineeringPage({
           key={feature?.id ?? 'new'}
           project={project}
           feature={feature}
+          initialTab={featureInitialTab}
           state={state}
           busy={busy}
           error={error}
           onClose={() => {
             setFeatureId(null)
+            setFeatureInitialTab(undefined)
             setNewFeature(false)
           }}
           perform={perform}
           onSaved={(id) => {
             setNewFeature(false)
+            setFeatureInitialTab(undefined)
             setFeatureId(id)
           }}
         />
@@ -1549,6 +1592,7 @@ export default function EngineeringPage({
 }
 
 const eventLabels: Record<string, string> = {
+  'project-management': '项目管理',
   project: '项目',
   confirmed: '已确认',
   start: '开始',
@@ -1594,19 +1638,10 @@ function EventList({ project, featureId }: { project: Project; featureId?: strin
   )
 }
 
-function mergedFeatureFor(project: Project, feature?: Feature): Feature | undefined {
-  if (!feature) return undefined
-  const mergedId = /历史记录[，,]\s*已合并至\s+([a-zA-Z0-9-]+)/.exec(feature.title)?.[1]
-  if (!mergedId) return undefined
-  const candidates = project.features.filter(
-    (candidate) => candidate.id !== feature.id && candidate.id.startsWith(mergedId),
-  )
-  return candidates.length === 1 ? candidates[0] : undefined
-}
-
 function FeatureDrawer({
   project,
   feature,
+  initialTab,
   state,
   busy,
   error,
@@ -1616,6 +1651,7 @@ function FeatureDrawer({
 }: {
   project: Project
   feature?: Feature
+  initialTab?: FeatureTab
   state: EngineeringState
   busy: boolean
   error: string
@@ -1623,14 +1659,14 @@ function FeatureDrawer({
   perform(work: () => Promise<unknown>, success?: string): Promise<boolean>
   onSaved(id: string): void
 }) {
-  const [tab, setTab] = useState<'requirements' | 'plan' | 'results' | 'changes' | 'logs'>(
-    feature?.stage === 'solution' || feature?.stage === 'ready'
+  const [tab, setTab] = useState<FeatureTab>(
+    initialTab ?? (feature?.stage === 'solution' || feature?.stage === 'ready'
       ? 'plan'
       : feature?.stage === 'acceptance' || feature?.stage === 'done'
         ? 'results'
         : feature && ['developing', 'verifying', 'blocked'].includes(feature.stage)
           ? 'logs'
-          : 'requirements',
+          : 'requirements'),
   )
   const [draft, setDraft] = useState<FeatureInput>(
     feature
@@ -1642,8 +1678,8 @@ function FeatureDrawer({
           criteria: [],
           scope: 'discussion',
           dependencies: [],
-          developerId: state.agents.find((a) => a.role === 'developer')?.id ?? '',
-          reviewerId: state.agents.find((a) => a.role === 'reviewer')?.id ?? '',
+          developerId: (state.agents.find(a => a.role === 'developer' && project.teamAgentIds?.includes(a.id)) || state.agents.find(a => a.role === 'developer' && !a.ownerProjectId))?.id ?? '',
+          reviewerId: (state.agents.find(a => a.role === 'reviewer' && project.teamAgentIds?.includes(a.id)) || state.agents.find(a => a.role === 'reviewer' && !a.ownerProjectId))?.id ?? '',
         },
   )
   const [criteria, setCriteria] = useState(feature?.criteria.join('\n') ?? '')
@@ -1854,7 +1890,7 @@ function FeatureDrawer({
                   >
                     <option value="">选择智能体</option>
                     {state.agents
-                      .filter((a) => a.role === role)
+                      .filter((a) => a.role === role && (!a.ownerProjectId || a.ownerProjectId === project.id))
                       .map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name}
@@ -2026,7 +2062,15 @@ function FeatureDrawer({
             )}
           </div>
         )}
-        {tab === 'logs' && <EventList project={project} featureId={feature?.id} />}
+        {tab === 'logs' && (project.events.some((event) => event.featureId === feature?.id)
+          ? <EventList project={project} featureId={feature?.id} />
+          : <Empty
+              title={feature?.stage === 'ready' ? '等待开始开发' : '暂无执行记录'}
+              detail={feature?.stage === 'ready'
+                ? '方案已确认。点击底部“开始开发”后，这里会显示实际执行日志。'
+                : '此功能尚无已保存的执行日志。'}
+            />
+        )}
       </div>
     </Overlay>
   )

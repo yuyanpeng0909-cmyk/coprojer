@@ -5,8 +5,8 @@ import { readFileSync, statSync } from 'node:fs'
 import { boundMessages, readContext, readPage } from './context'
 import type { Project } from '../../shared/engineering'
 
-export async function completeWithContext(connection: Connection, system: string, messages: ModelMessage[], project: Project, signal: AbortSignal, listener?: DeltaListener, requiredContextIds: string[] = []): Promise<ModelReply> {
-  const tools = engineeringTools.filter(t => ['read_context', 'list_files', 'read_file'].includes(t.name))
+export async function completeWithContext(connection: Connection, system: string, messages: ModelMessage[], project: Project, signal: AbortSignal, listener?: DeltaListener, requiredContextIds: string[] = [], readSkill?: (args: Record<string, any>) => string): Promise<ModelReply> {
+  const tools = engineeringTools.filter(t => ['read_context', 'list_files', 'read_file', ...(readSkill ? ['read_skill'] : [])].includes(t.name))
   const coverage = new Map(requiredContextIds.map(id => [id, { read: 0, total: Infinity }]))
   for (let step = 0; step < 12; step++) {
     boundMessages(messages)
@@ -21,7 +21,8 @@ export async function completeWithContext(connection: Connection, system: string
       let content: string
       try {
         const args = parseJson(call.arguments)
-        if (call.name === 'read_context') {
+        if (call.name === 'read_skill' && readSkill) content = readSkill(args)
+        else if (call.name === 'read_context') {
           content = readContext(project, args)
           const tracked = coverage.get(args.id)
           if (tracked) {

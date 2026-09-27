@@ -23,7 +23,7 @@ async function main() {
     page.on('pageerror', (e) => errors.push(e.message))
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.getByText('桌面服务已连接', { exact: true }).waitFor()
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
   }
   const shot = (name) =>
     page.screenshot({ path: join(output, name), scale: 'css', animations: 'disabled' })
@@ -33,19 +33,18 @@ async function main() {
       '开始',
       '全部任务',
       '工作总览',
-      '项目管理',
       '资源库',
       '消息中心',
       '组件实验室',
     ])
       assert.equal(await page.getByRole('button', { name, exact: true }).count(), 0)
-    assert.equal(await page.getByRole('navigation', { name: '项目导航' }).count(), 1)
+    assert.equal(await page.getByRole('navigation', { name: '项目导航' }).count(), 0)
     assert.deepEqual(
       await page.evaluate(() => ({
         node: typeof window.require,
         bridge: Object.keys(window.desktop).sort(),
       })),
-      { node: 'undefined', bridge: ['engineering', 'getAppInfo', 'openResearchPanel', 'researchPanel', 'saveArtifact', 'selectFolder', 'windowControl'] },
+      { node: 'undefined', bridge: ['engineering', 'getAppInfo', 'onBeforeClose', 'openResearchPanel', 'researchPanel', 'saveArtifact', 'selectFolder', 'windowControl'] },
     )
     const duplicate = spawnSync(require('electron'), ['.'], {
       env,
@@ -174,6 +173,8 @@ async function main() {
     await desktop.close()
     desktop = null
     await launch()
+    assert.equal(await page.getByRole('combobox', { name: '切换工程项目' }).count(), 0)
+    await page.getByRole('button', { name: '继续开发 工程工作台验证', exact: true }).click()
     assert.equal(await page.getByRole('combobox', { name: '切换工程项目' }).inputValue(), pid)
     assert.equal((await invoke('state')).projects[0].features.length, 3)
     assert.equal(

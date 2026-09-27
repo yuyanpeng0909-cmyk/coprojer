@@ -16,6 +16,33 @@ export function defaultAgents(modelId = ''): AgentConfig[] {
   ]
   return definitions.map(([role, name, instructions]) => ({
     id: role, role, name, instructions, modelId, tools: defaultAgentTools(role),
-    skillIds: builtinSkills.filter(skill => skill.roles.includes(role)).map(skill => skill.id),
+    skillIds: builtinSkills.filter(skill => skill.roles.includes(role)).map(skill => ownedSkillId(role, skill.id)),
   }))
+}
+
+export const ownedSkillId = (agentId: string, sourceId: string) => `${agentId}::${sourceId}`
+export function ownSkill(skill: SkillDefinition, agentId: string): SkillDefinition {
+  const sourceId = skill.sourceId || skill.id
+  return { ...structuredClone(skill), id: ownedSkillId(agentId, sourceId), sourceId, ownerAgentId: agentId }
+}
+
+// Keep unassigned legacy definitions for recovery; only owned copies may execute.
+export function migrateAgentSkills(agents: AgentConfig[], skills: SkillDefinition[]): SkillDefinition[] {
+  const result = [...skills]
+  for (const agent of agents) {
+    agent.tools = [...new Set([...agent.tools, 'read_skill' as const])]
+    const defaults = builtinSkills.filter(s => s.roles.includes(agent.role) && s.requiredTools.every(t => agent.tools.includes(t)))
+    for (const template of defaults) {
+      const owned = ownSkill(template, agent.id)
+      if (!result.some(s => s.id === owned.id)) result.push(owned)
+    }
+    agent.skillIds = (agent.skillIds ?? defaults.map(s => s.id)).map(id => {
+      const skill = result.find(s => s.id === id) || builtinSkills.find(s => s.id === id)
+      if (!skill || skill.ownerAgentId) return id
+      const owned = ownSkill(skill, agent.id)
+      if (!result.some(s => s.id === owned.id)) result.push(owned)
+      return owned.id
+    })
+  }
+  return result
 }

@@ -1,3 +1,4 @@
+import type { AssistantAction, AssistantMemory, AssistantMemoryInput, AssistantSession, AssistantSessionPatch, AssistantTeamMember, AssistantTeamPlan, AssistantWorkspace } from './assistant'
 export type Protocol = 'chat' | 'responses' | 'anthropic'
 export interface ModelConfig {
   id: string
@@ -7,11 +8,39 @@ export interface ModelConfig {
   protocol: Protocol
   hasKey: boolean
 }
-export interface ModelInput extends Omit<ModelConfig, 'hasKey'> {
+export interface ModelInput extends Omit<ModelConfig, 'hasKey' | 'name'> {
+  /** Legacy clients may send a name; new connections derive it from the model ID. */
+  name?: string
   apiKey?: string
+  reuseConnectionId?: string
+}
+export interface AssistantModelUsage {
+  connectionId: string
+  connectionName: string
+  requestedModel: string
+  reportedModels: string[]
+}
+export interface AssistantChatEntry {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  at: string
+  status: 'pending' | 'complete' | 'error' | 'stopped'
+  requestKind?: 'chat' | 'team'
+  actions?: AssistantAction[]
+  planId?: string
+  usage?: AssistantModelUsage
+  error?: string
+}
+export interface SkillSearchResult {
+  query: string
+  recommendations: SkillRecommendation[]
+  usage: AssistantModelUsage
+  at: string
 }
 export const toolLabels = {
   read_context: '共享上下文',
+  read_skill: '专属技能与资源',
   list_files: '目录浏览',
   read_file: '读取文件',
   write_file: '修改文件',
@@ -27,6 +56,7 @@ export const defaultAgentTools = (role: AgentRole): EngineeringToolName[] =>
     (name) => role === 'developer' || (role === 'reviewer' ? name !== 'write_file' : !['write_file', 'run_command'].includes(name)),
   )
 export interface AgentConfig {
+  ownerProjectId?: string
   id: string
   name: string
   role: AgentRole
@@ -37,13 +67,39 @@ export interface AgentConfig {
 }
 export interface SkillDefinition {
   id: string
+  ownerAgentId?: string
+  sourceId?: string
+  source?: { kind: 'local' | 'github'; location: string; revision?: string }
+  resources?: { path: string; size: number }[]
+  packageRoot?: string
+  compatibility?: string
   name: string
   version: string
   description: string
   roles: AgentRole[]
   requiredTools: EngineeringToolName[]
   content: string
-  origin: 'builtin' | 'local'
+  origin: 'builtin' | 'local' | 'remote'
+}
+export interface SkillImportPreview {
+  id: string
+  agentId: string
+  skill: SkillDefinition
+  fileCount: number
+  totalBytes: number
+  notices: string[]
+}
+export interface SkillRecommendation {
+  name: string
+  description: string
+  url: string
+  reason: string
+}
+export interface AgentModelPlan {
+  id: string
+  usage: AssistantModelUsage
+  choices: { agentId: string; previousModelId: string; modelId: string; reason: string }[]
+  caveat: string
 }
 export interface AgentRunSnapshot {
   id: string
@@ -198,6 +254,9 @@ export interface BatchConfirmResult {
   error?: string
 }
 export interface Project {
+  pinned?: boolean
+  archivedAt?: string | null
+  teamAgentIds?: string[]
   prd?: {
     status: 'generating' | 'review' | 'confirmed' | 'error' | 'stale'
     sources: { prototypeId: string; targetId?: string; fingerprint: string; derivedFingerprint?: string }[]
@@ -322,6 +381,12 @@ export function requirementsFingerprint(project: Project): string {
   })
 }
 export interface EngineeringState {
+  defaultTeamAgentIds?: string[]
+  assistant?: AssistantWorkspace
+  defaultAssistantModelId?: string
+  assistantChat?: AssistantChatEntry[]
+  skillSearches?: Record<string, SkillSearchResult>
+  skillSearchActivity?: Record<string, { query: string; usage: AssistantModelUsage }>
   skills?: SkillDefinition[]
   models: ModelConfig[]
   agents: AgentConfig[]
@@ -345,7 +410,28 @@ export interface EngineeringApi {
   confirmRequirementsAndPrepare(projectId: string, fingerprint: string, messageCount: number): Promise<BatchPlanResult[]>
   configureProject(projectId: string, input: { plannerId: string; designerId: string; contextBudget: number }): Promise<void>
   archiveContext(projectId: string, id: string, archived: boolean): Promise<void>
-  importSkill(directory: string): Promise<void>
+  previewSkill(agentId: string, source: { kind: 'local' | 'github'; location: string }): Promise<SkillImportPreview>
+  installSkill(agentId: string, previewId: string): Promise<SkillDefinition>
+  discardSkillPreview(agentId: string, previewId: string): Promise<void>
+  removeSkill(agentId: string, skillId: string): Promise<void>
+  setDefaultAssistantModel(modelId: string): Promise<void>
+  sendAssistantMessage(message: string, modelId?: string, sessionId?: string): Promise<void>
+  clearAssistantChat(sessionId?: string): Promise<void>
+  createAssistantSession(projectId?: string): Promise<AssistantSession>
+  selectAssistantSession(sessionId: string): Promise<void>
+  updateAssistantSession(sessionId: string, patch: AssistantSessionPatch): Promise<void>
+  deleteAssistantSession(sessionId: string): Promise<void>
+  stopAssistantMessage(sessionId: string): Promise<void>
+  saveAssistantMemory(input: AssistantMemoryInput): Promise<AssistantMemory>
+  deleteAssistantMemory(id: string): Promise<void>
+  dismissAssistantHint(key: string): Promise<void>
+  recommendAssistantTeam(sessionId: string, preference: string, modelId?: string): Promise<AssistantTeamPlan>
+  updateAssistantTeamPlan(id: string, members: AssistantTeamMember[]): Promise<void>
+  applyAssistantTeamPlan(id: string): Promise<void>
+  clearSkillSearch(agentId: string): Promise<void>
+  recommendSkills(agentId: string, query: string, modelId?: string): Promise<SkillSearchResult>
+  recommendAgentModels(advisorModelId: string, preference: string): Promise<AgentModelPlan>
+  applyAgentModels(planId: string): Promise<void>
   selectPrototype(projectId: string, prototypeId: string): Promise<void>
   preparePlans(projectId: string): Promise<BatchPlanResult[]>
   confirmPlansAndStart(projectId: string, featureIds: string[], revisions: number[]): Promise<BatchConfirmResult[]>
@@ -365,6 +451,7 @@ export interface EngineeringApi {
     modelId: string
   }): Promise<string>
   setProjectModel(projectId: string, modelId: string): Promise<void>
+  updateProjectMetadata(projectId: string, input: { name?: string; pinned?: boolean; archived?: boolean }): Promise<void>
   discuss(projectId: string, text: string): Promise<void>
   roundtableTurn(projectId: string, text: string, config: RoundtableConfig): Promise<void>
   answerDecision(projectId: string, decisionId: string, answer: DecisionAnswer): Promise<void>
@@ -429,11 +516,14 @@ export const scopeLabels: Record<Scope, string> = {
   later: '暂缓',
 }
 export const engineeringMethods: (keyof EngineeringApi)[] = [
+  'createAssistantSession', 'selectAssistantSession', 'updateAssistantSession', 'deleteAssistantSession', 'stopAssistantMessage',
+  'saveAssistantMemory', 'deleteAssistantMemory', 'dismissAssistantHint', 'recommendAssistantTeam', 'updateAssistantTeamPlan', 'applyAssistantTeamPlan',
+  'setDefaultAssistantModel', 'sendAssistantMessage', 'clearAssistantChat', 'clearSkillSearch',
   'acceptPrototypeAndPreparePrd',
   'preparePrd',
   'submitPrototypePreferences',
   'confirmRequirementsAndPrepare', 'configureProject', 'archiveContext',
-  'importSkill', 'selectPrototype', 'preparePlans', 'confirmPlansAndStart', 'acceptAndContinue', 'preflight', 'testCapabilities',
+  'previewSkill', 'installSkill', 'discardSkillPreview', 'removeSkill', 'recommendSkills', 'recommendAgentModels', 'applyAgentModels', 'selectPrototype', 'preparePlans', 'confirmPlansAndStart', 'acceptAndContinue', 'preflight', 'testCapabilities',
   'state',
   'saveModel',
   'deleteModel',
@@ -441,6 +531,7 @@ export const engineeringMethods: (keyof EngineeringApi)[] = [
   'listModels',
   'saveAgent',
   'createProject',
+  'updateProjectMetadata',
   'setProjectModel',
   'discuss',
   'roundtableTurn',

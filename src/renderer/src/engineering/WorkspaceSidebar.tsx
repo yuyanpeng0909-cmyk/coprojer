@@ -2,8 +2,8 @@ import { Fragment } from 'react'
 import type { ResearchTab } from './RequirementsWorkspace'
 import {
   Activity,
+  ArrowLeft,
   Bot,
-  Check,
   ChevronDown,
   Folder,
   GitBranch,
@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import type { EngineeringState, Project } from '../../../shared/engineering'
+import { deliveryCount, deliveryFeatures, deliveryStages, isStageRunning, type DeliveryStage, type DeliveryView } from './delivery'
 export const workspaceNavigation = [
   { id: 'overview', label: '工作台', icon: LayoutDashboard },
   { id: 'map', label: '需求与功能图', icon: GitBranch },
@@ -22,7 +23,7 @@ export const workspaceNavigation = [
   { id: 'context', label: '共享上下文', icon: BookOpen },
   { id: 'activity', label: '执行记录', icon: Activity },
 ] as const
-export type ProjectView = (typeof workspaceNavigation)[number]['id']
+export type ProjectView = (typeof workspaceNavigation)[number]['id'] | DeliveryView
 export type WorkspaceSection = 'projects' | 'models' | 'agents' | 'appearance'
 export default function WorkspaceSidebar({
   researchTab,
@@ -32,9 +33,9 @@ export default function WorkspaceSidebar({
   view,
   section,
   collapsed,
-  phase,
   onSelect,
   onCreate,
+  onHome,
   onNavigate,
   onSection,
   onStage,
@@ -46,17 +47,22 @@ export default function WorkspaceSidebar({
   view: ProjectView
   section: WorkspaceSection
   collapsed: boolean
-  phase: number
   onSelect(id: string): void
   onCreate(): void
+  onHome(): void
   onNavigate(view: ProjectView): void
   onSection(section: WorkspaceSection): void
-  onStage(index: number): void
+  onStage(stage: DeliveryStage): void
 }) {
-  const completed = project?.features.filter((f) => f.stage === 'done').length ?? 0
+  const features = project ? deliveryFeatures(project) : []
+  const completed = features.filter((f) => f.stage === 'done').length
+  const selectedStage = section !== 'projects' ? undefined : view === 'map'
+    ? researchTab === 'requirements' ? 'discussion' : researchTab === 'prototype' ? 'prototype' : undefined
+    : view
+  const countLabels: Record<DeliveryStage, string> = { discussion: '条需求讨论', prototype: '个原型版本', specification: '项需求规格', plans: '项待准备或确认方案', development: '项待开发或开发中', verification: '项验证中', acceptance: '项待验收' }
   return (
     <aside className={`studio-sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="project-switcher">
+      {project ? <div className="project-switcher">
         <span className="project-monogram">
           {project ? project.name.slice(0, 1).toUpperCase() : <Folder size={16} />}
         </span>
@@ -70,7 +76,7 @@ export default function WorkspaceSidebar({
             <option value="" disabled>
               选择或创建项目
             </option>
-            {state.projects.map((p) => (
+            {state.projects.filter((p) => !p.archivedAt || p.id === project?.id).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -78,7 +84,12 @@ export default function WorkspaceSidebar({
           </select>
         </label>
         <ChevronDown size={13} />
-      </div>
+      </div> : (
+        <div className="project-library-brand">
+          <span className="project-monogram"><Folder size={16} /></span>
+          <div><strong>我的项目</strong><small>{state.projects.filter(p => !p.archivedAt).length} 个活跃项目</small></div>
+        </div>
+      )}
       <button
         className="create-project-button"
         aria-label="新建工程项目"
@@ -90,6 +101,19 @@ export default function WorkspaceSidebar({
         <kbd>Ctrl N</kbd>
       </button>
       <div className="studio-sidebar-scroll">
+        <nav className="project-home-nav" aria-label="项目管理导航">
+          <button
+            aria-label={project ? '返回项目管理' : '项目管理'}
+            title={project ? '返回项目管理' : '项目管理'}
+            aria-current={!project && section === 'projects' ? 'page' : undefined}
+            className={!project && section === 'projects' ? 'selected' : ''}
+            onClick={onHome}
+          >
+            {project ? <ArrowLeft size={15} /> : <Folder size={15} />}
+            <span className="nav-label">{project ? '返回项目管理' : '项目管理'}</span>
+          </button>
+        </nav>
+        {project && <>
         <div className="sidebar-section-label">项目工作区</div>
         <nav aria-label="项目导航">
           {workspaceNavigation.map(({ id, label, icon: Icon }) => (
@@ -105,7 +129,7 @@ export default function WorkspaceSidebar({
                 <Icon size={15} />
                 <span className="nav-label">{label}</span>
                 {id === 'board' && !!project?.features.length && (
-                  <span className="nav-count">{project.features.length}</span>
+                  <span className="nav-count">{features.length}</span>
                 )}
               </button>
               {id === 'map' && section === 'projects' && view === 'map' && (
@@ -137,25 +161,21 @@ export default function WorkspaceSidebar({
             交付阶段 <span>开发串行</span>
           </div>
           <ol>
-            {['需求讨论', '需求确认', '方案与任务', '代码开发', '独立验证', '最终验收'].map(
-              (label, index) => (
-                <li key={label}>
+            {deliveryStages.map(
+              ({ id, label }, index) => (
+                <li key={id}>
                   <button
                     disabled={!project}
-                    className={
-                      project && index === phase
-                        ? 'current'
-                        : project && index < phase
-                          ? 'complete'
-                          : ''
-                    }
-                    onClick={() => onStage(index)}
+                    aria-label={label}
+                    title={`${label} · ${deliveryCount(project, id)} ${countLabels[id]} · 仅导航`}
+                    aria-current={selectedStage === id ? 'page' : undefined}
+                    className={`${selectedStage === id ? 'viewing' : ''} ${isStageRunning(project, id) ? 'running' : ''}`}
+                    onClick={() => onStage(id)}
                   >
-                    <span className="lifecycle-step">
-                      {project && index < phase ? <Check size={10} /> : index + 1}
-                    </span>
+                    <span className="lifecycle-step">{index + 1}</span>
                     <span>{label}</span>
-                    {project && index === phase && <i />}
+                    <span className="lifecycle-count" aria-hidden="true">{deliveryCount(project, id)}</span>
+                    {isStageRunning(project, id) && <i aria-label="正在执行" />}
                   </button>
                 </li>
               ),
@@ -167,15 +187,15 @@ export default function WorkspaceSidebar({
                 <span>已验收</span>
                 <strong>
                   {completed}
-                  <em> / {project.features.length}</em>
+                  <em> / {features.length}</em>
                 </strong>
               </div>
               <div
                 role="progressbar"
                 aria-label="项目验收进度"
                 aria-valuenow={
-                  project.features.length
-                    ? Math.round((completed / project.features.length) * 100)
+                  features.length
+                    ? Math.round((completed / features.length) * 100)
                     : 0
                 }
                 aria-valuemin={0}
@@ -184,13 +204,14 @@ export default function WorkspaceSidebar({
               >
                 <i
                   style={{
-                    width: `${project.features.length ? (completed / project.features.length) * 100 : 0}%`,
+                    width: `${features.length ? (completed / features.length) * 100 : 0}%`,
                   }}
                 />
               </div>
             </div>
           )}
         </div>
+        </>}
       </div>
       <nav className="studio-config" aria-label="工作空间设置">
         {[

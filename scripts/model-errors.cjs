@@ -19,6 +19,17 @@ async function main() {
     for (const protocol of ['chat', 'responses', 'anthropic'])
       await assert.rejects(complete({ ...connection, protocol }, 'x'.repeat(160001), []), /160000 字符上限/)
     assert.equal(oversizeRequests, 0)
+    for (const protocol of ['chat', 'responses', 'anthropic']) {
+      const model = 'provider-specific-model-id'
+      const data = protocol === 'chat' ? {model,choices:[{message:{content:'ok'}}]} : protocol === 'responses' ? {model,output:[{type:'message',content:[{type:'output_text',text:'ok'}]}]} : {model,content:[{type:'text',text:'ok'}]}
+      global.fetch = async () => new Response(JSON.stringify(data), {headers:{'content-type':'application/json'}})
+      assert.equal((await complete({...connection,protocol},'',[])).model,model)
+      const events = protocol === 'chat' ? [{model,choices:[{delta:{content:'ok'},finish_reason:'stop'}]}] : protocol === 'responses' ? [{type:'response.completed',response:data}] : [{type:'message_start',message:{model}},{type:'content_block_start',index:0,content_block:{type:'text',text:'ok'}},{type:'message_stop'}]
+      const newline = String.fromCharCode(10)
+      global.fetch = async () => new Response(events.map(e=>'data: '+JSON.stringify(e)+newline+newline).join(''),{headers:{'content-type':'text/event-stream'}})
+      const streamed = await complete({...connection,protocol},'',[],[],undefined,()=>{})
+      assert.equal(streamed.model,model);assert.equal(streamed.text,'ok')
+    }
     for (const [code, label] of [
       ['UND_ERR_HEADERS_TIMEOUT', '底层网络超时'], ['ECONNRESET', '连接中断'],
       ['ENOTFOUND', '域名解析失败'], ['CERT_HAS_EXPIRED', 'TLS 或证书校验失败'],

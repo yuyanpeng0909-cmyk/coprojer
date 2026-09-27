@@ -25,7 +25,7 @@ async function main() {
   const launch = async () => {
     desktop = await electron.launch({ args: ['.'], env })
     page = await desktop.firstWindow()
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
   }
   try {
     await launch()

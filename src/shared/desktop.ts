@@ -24,4 +24,5 @@ export interface DesktopApi {
   getAppInfo: () => Promise<AppInfo>
   selectFolder: () => Promise<string | null>
   windowControl: (action: 'minimize' | 'maximize' | 'close') => Promise<void>
+  onBeforeClose: (save: () => Promise<void>) => () => void
 }

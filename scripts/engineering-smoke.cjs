@@ -35,7 +35,7 @@ async function main() {
     page = await desktop.firstWindow()
     await page.emulateMedia({ reducedMotion: 'reduce' })
     page.on('pageerror', (e) => errors.push(e.message))
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
     await waitFor(async () => (await state()).agents.length === 4, 'main service')
   }
   const featureInput = (title, dependencies = []) => ({
@@ -68,7 +68,7 @@ async function main() {
     await page.getByRole('button', { name: '模型连接', exact: true }).click()
     await page.getByRole('button', { name: '新增模型', exact: true }).click()
     let dialog = page.getByRole('dialog', { name: '新增模型', exact: true })
-    await dialog.getByLabel('显示名称').fill('本地协议测试模型')
+    assert.equal(await dialog.getByLabel('显示名称').count(), 0)
     await dialog.getByLabel('服务地址 Base URL').fill(provider.baseUrl)
     await dialog.getByLabel('API Key', { exact: false }).fill('coprojer-fixture-secret')
     await dialog.getByRole('button', { name: '获取列表' }).click()
@@ -137,7 +137,7 @@ async function main() {
       !(await state()).agents.find((a) => a.role === 'reviewer').tools.includes('run_command'),
     )
 
-    await page.getByRole('button', { name: '工作台', exact: true }).click()
+    await page.getByRole('button', { name: '项目管理', exact: true }).click()
     await page.getByRole('button', { name: '创建项目', exact: true }).click()
     dialog = page.getByRole('dialog', { name: '新建工程项目', exact: true })
     // Only replace the OS picker, preserving actual UI + preload + IPC.
@@ -192,9 +192,17 @@ async function main() {
     await invoke('submitPrototypePreferences', pid, '简洁的记账界面，突出金额输入与结余。')
     await waitFor(async () => !(await project(pid)).designActivity, 'initial prototype ready')
     await invoke('acceptPrototypeAndPreparePrd', pid, (await project(pid)).prototypes.at(-1).id)
+    await idle(pid)
     await page.getByRole('button', {name:'确认完整需求',exact:true}).click()
+    // The review intentionally retains its snapshot while background PRD updates arrive.
+    await waitFor(async () => {
+      if (await page.locator('.specification-warning').count())
+        await page.getByRole('button', { name: '刷新审阅内容', exact: true }).click()
+      return page.getByRole('button', { name: '确认并保存基线', exact: true }).isEnabled()
+    }, 'fresh requirements review after PRD generation')
     await page.getByRole('button', {name:'确认并保存基线',exact:true}).click()
-    await page.getByRole('dialog',{name:'确认完整需求',exact:true}).waitFor({state:'hidden'})
+    await page.getByText('已确认基线', {exact:true}).waitFor()
+    await page.getByRole('button', {name:'继续讨论',exact:true}).click()
     await waitFor(async () => (await page.locator('.smm-node').filter({ hasText: '记录收支' }).count()) === 1, 'graph redraw after confirmation')
     await page.locator('.smm-node').filter({ hasText: '记录收支' }).click()
     dialog = page.getByRole('dialog', { name: '记录收支', exact: true })

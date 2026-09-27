@@ -1,7 +1,8 @@
-import type { ChatEntry, FeatureInput, Project, RoundtableConfig } from '../../shared/engineering'
+import type { AgentConfig, AgentRole, ChatEntry, FeatureInput, Project, RoundtableConfig } from '../../shared/engineering'
 import { mergeTargets } from './targets'
 import { boundMessages, discussionHistory, readContext, readPage } from './context'
 import { completeWithContext } from './planning'
+import { engineeringTools } from './files'
 import { requirementsFingerprint } from '../../shared/engineering'
 import { extractPrototypeHtml } from '../../shared/prototype'
 import { activePrototypeBriefs, designFingerprint, requirePrototypeReview, requirePrd } from '../../shared/prototype-workflow'
@@ -22,6 +23,7 @@ const schema = (properties: Record<string, unknown>, required: string[] = []) =>
   required,
 })
 const tools: ToolDefinition[] = [
+  engineeringTools.find(t => t.name === 'read_skill')!,
   {
     name: 'update_project_targets',
     description:
@@ -112,7 +114,9 @@ export class RequirementsWorkspace {
       model(id: string): Connection
       save(p: Project): void
       context(p: Project): string
+      roleAgent(p: Project, role: AgentRole): AgentConfig
       agentInstructions(p: Project, role: 'planner' | 'designer', modelId: string): string
+      skillReader(p: Project, role: 'planner' | 'designer'): (args: Record<string, any>) => string
       upsert(p: Project, id: string | null, input: FeatureInput): string
     },
   ) {
@@ -198,9 +202,9 @@ export class RequirementsWorkspace {
         scope: item.scope === 'later' ? 'later' : 'discussion',
         dependencies: f?.dependencies ?? [],
         developerId:
-          f?.developerId || this.store.data.agents.find((a) => a.role === 'developer')?.id || '',
+          f?.developerId || this.deps.roleAgent(p, 'developer').id,
         reviewerId:
-          f?.reviewerId || this.store.data.agents.find((a) => a.role === 'reviewer')?.id || '',
+          f?.reviewerId || this.deps.roleAgent(p, 'reviewer').id,
       })
       versions.set(id, p.features.find((f) => f.id === id)!.revision)
       report.push(`已更新 ${item.title}`)
@@ -218,6 +222,7 @@ export class RequirementsWorkspace {
     let documentVersion = p.requirementsDocument || ''
     const messages = this.history(p)
     const instructions = this.deps.agentInstructions(p, 'planner', connection.id)
+    const readSkill = this.deps.skillReader(p, 'planner')
     const system = instructions + '\n' + `你是软件需求协作者。使用中文，先理解用户的完整产品，充分探索目标、使用场景、边界、替代方案与开放问题。不要机械地每次追问或急于进入开发。用户掌控节奏，可随时重新讨论。\n项目：${p.name}\n目标：${p.brief}\n共享上下文：${this.deps.context(p)}\n完整需求文档草稿：${(p.requirementsDocument || '尚未整理').slice(0, 8000) + '（完整原文：read_context id=requirements:current）'}\n当前功能记录：${JSON.stringify(p.features.map(({ id, title, targetId, scope }) => ({ id, title, targetId, scope })))}\n讨论记录会完整保存，你接收的是跨模型的对话。以最新直接编辑的记录为准。自然地使用 Markdown 回复，绝不要要求把每次讨论变成固定 JSON。流程必须先确定原型，再从已验收原型生成 PRD，最后基于同一原型设计方案和开发。在原型尚未验收时，只整理初步目标、业务约束与设计偏好，不要求用户先完成 PRD；用 update_requirements 保存的只是讨论草稿，保留业务规则、非功能要求、开放问题和备选方案，不能只记录功能标题。你可在回复过程中用 update_features 同步新想法到功能图，可多次调用；暂缓的想法标为 later。已有交付中的目标不能被静默覆盖，提出变更方案作为新的候选。没有得到用户确认，不自动进入方案或代码开发。在目标和主要使用场景已清楚时主动询问设计风格、主要设备与关键操作；用户已给设计意见时主动调用 design_prototype，不等用户再点击生成。原型等待用户验收，验收后系统自动生成 PRD。无需为使用已提供工具再索取许可。`
     const additional =
       `\n子项目规划：${JSON.stringify(p.targets || [])}。需求涉及多端时，用 update_project_targets 建立实际需要的子项目，明确各自职责、相对目录、接口与共享数据约定；update_features 的 targetId 必须关联已建立的子项目。不要因为列举了端类型就默认全部都要开发。` +
@@ -310,7 +315,8 @@ export class RequirementsWorkspace {
           this.store.save()
           try {
             const args = parseJson(call.arguments)
-            if (call.name === 'ask_human' && meeting) {
+            if (call.name === 'read_skill') t.result = readSkill(args)
+            else if (call.name === 'ask_human' && meeting) {
               t.result = await this.decisions.ask(p, entry, connection, args, signal)
               humanAnswered = true
             } else if (call.name === 'resolve_deferred_decision' && meeting) {
@@ -348,7 +354,7 @@ export class RequirementsWorkspace {
               this.generatePrototype(
                 p.id,
                 args.instruction,
-                p.designModelId || this.store.data.agents.find(a => a.role === 'designer')?.modelId || connection.id,
+                p.designModelId || this.deps.roleAgent(p, 'designer').modelId || connection.id,
                 args.targetId,
               )
               t.result = '设计 AI 已开始工作。原型完成后自动显示在右侧；你可继续讨论。'
@@ -437,7 +443,7 @@ export class RequirementsWorkspace {
     if (p.prd?.status === 'generating') throw new Error('正在根据已确认原型整理 PRD，请等待完成或停止后再修改原型。')
     if (typeof instruction !== 'string' || !instruction.trim() || instruction.length > 20000)
       throw new Error('请填写有效的原型设计要求。')
-    modelId ||= this.store.data.agents.find(a => a.id === p.designerId)?.modelId || this.store.data.agents.find(a => a.role === 'designer')?.modelId || p.discussionModelId
+    modelId ||= p.designModelId || this.deps.roleAgent(p, 'designer').modelId || p.discussionModelId
     const instructions = this.deps.agentInstructions(p, 'designer', modelId) + '\n原型运行于无同源权限的沙箱，交互状态使用内存变量；不要使用 localStorage、sessionStorage、cookie 或外部接口。开发角色会在正式项目中接入真实状态。'
     const connection = this.deps.model(modelId),
       controller = new AbortController()
@@ -472,6 +478,8 @@ export class RequirementsWorkspace {
           p,
           controller.signal,
           this.listener(entry),
+          [],
+          this.deps.skillReader(p, 'designer'),
         )
         controller.signal.throwIfAborted()
         entry.designOutput = this.store.redact(reply.text)

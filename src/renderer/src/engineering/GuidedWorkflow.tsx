@@ -28,11 +28,14 @@ export default function GuidedWorkflow({ project, state, onMap, onModels, onOpen
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const api = window.desktop.engineering
-  const [team, setTeam] = useState({ plannerId: project.plannerId || state.agents.find(a => a.role === 'planner')?.id || '', designerId: project.designerId || state.agents.find(a => a.role === 'designer')?.id || '', contextBudget: project.contextBudget || 32000 })
+  const availableAgents = state.agents.filter(a => !a.ownerProjectId || a.ownerProjectId === project.id)
+  const defaultAgent = (role: 'planner' | 'designer' | 'developer' | 'reviewer') => availableAgents.find(a => a.role === role && project.teamAgentIds?.includes(a.id)) || availableAgents.find(a => a.role === role && !a.ownerProjectId)
+  const [team, setTeam] = useState({ plannerId: project.plannerId || defaultAgent('planner')?.id || '', designerId: project.designerId || defaultAgent('designer')?.id || '', contextBudget: project.contextBudget || 32000 })
+  useEffect(() => { setTeam({ plannerId: project.plannerId || defaultAgent('planner')?.id || '', designerId: project.designerId || defaultAgent('designer')?.id || '', contextBudget: project.contextBudget || 32000 }) }, [project.id, project.plannerId, project.designerId, project.contextBudget])
   const current = project.features.filter(f => f.scope !== 'later')
   const teamAgents = (['planner', 'designer', 'developer', 'reviewer'] as const).flatMap(role => {
     const id = role === 'planner' ? project.plannerId : role === 'designer' ? project.designerId : undefined
-    const agent = state.agents.find(a => a.role === role && a.id === id) || state.agents.find(a => a.role === role)
+    const agent = availableAgents.find(a => a.role === role && a.id === id) || defaultAgent(role)
     return agent ? [agent] : []
   })
   const acceptance = current.find(f => f.stage === 'acceptance')
@@ -76,7 +79,7 @@ export default function GuidedWorkflow({ project, state, onMap, onModels, onOpen
     <div className="eng-team-summary">{teamAgents.map(a => <span key={a.id} title={a.name}>{a.modelId && <Check size={11} />}{agentRoleLabels[a.role]} · {(a.skillIds || []).length} 项技能</span>)}</div>
     {error && <p role="alert" className="eng-inline-error">{error}</p>}
     <details className="eng-guided-settings"><summary>团队与上下文设置</summary><div className="eng-form">
-      {(['planner', 'designer'] as const).map(role => <label key={role}>{agentRoleLabels[role]}智能体<select aria-label={agentRoleLabels[role] + '智能体'} value={role === 'planner' ? team.plannerId : team.designerId} onChange={e => setTeam({ ...team, [role === 'planner' ? 'plannerId' : 'designerId']: e.target.value })}>{state.agents.filter(a => a.role === role).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>)}
+      {(['planner', 'designer'] as const).map(role => <label key={role}>{agentRoleLabels[role]}智能体<select aria-label={agentRoleLabels[role] + '智能体'} value={role === 'planner' ? team.plannerId : team.designerId} onChange={e => setTeam({ ...team, [role === 'planner' ? 'plannerId' : 'designerId']: e.target.value })}>{availableAgents.filter(a => a.role === role).map(a => <option key={a.id} value={a.id}>{a.name}{a.ownerProjectId ? ' · 项目专用' : ''}</option>)}</select></label>)}
       <label>资料字符预算<input type="number" min={8000} max={64000} step={1000} value={team.contextBudget} onChange={e => setTeam({ ...team, contextBudget: Number(e.target.value) })} /></label>
       <small>只计算组装资料的字符数，模型输入还包括技能、工具和当前对话。必需约束超限时会明确提示。</small>
       <button className="ui-button secondary" disabled={pending} onClick={() => void act(() => api.configureProject(project.id, team))}>保存团队与预算</button>

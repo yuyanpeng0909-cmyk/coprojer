@@ -17,7 +17,7 @@ const { startRoundtableProvider } = require('./fixtures/roundtable-provider.cjs'
   try {
     app = await electron.launch({ args: ['.'], env })
     let page = await app.firstWindow()
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
     const call = (method, ...args) =>
       page.evaluate(({ method, args }) => window.desktop.engineering[method](...args), {
         method,

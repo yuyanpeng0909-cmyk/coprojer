@@ -35,7 +35,7 @@ import FeatureMindMap from './FeatureMindMap'
 import PrototypePreview from './PrototypePreview'
 import PrototypeWorkflow from './PrototypeWorkflow'
 import RoundtableControls from './RoundtableControls'
-import DecisionCard, { DecisionHistory } from './DecisionCard'
+import DecisionCard from './DecisionCard'
 import ProjectTargets from './ProjectTargets'
 import type { ResearchPanelKind } from '../../../shared/desktop'
 import './requirements.css'
@@ -353,6 +353,7 @@ export default function RequirementsWorkspace({
   perform,
   tab,
   onTab,
+  onReview,
 }: {
   project: Project
   state: EngineeringState
@@ -360,6 +361,7 @@ export default function RequirementsWorkspace({
   perform(work: () => Promise<unknown>, success?: string): Promise<boolean>
   tab: ResearchTab
   onTab(tab: ResearchTab): void
+  onReview(): void
 }) {
   const [panel, setPanel] = useState<Panel>('map'),
     [draft, setDraft] = useState(() => {
@@ -382,8 +384,7 @@ export default function RequirementsWorkspace({
   const [documentOpen, setDocumentOpen] = useState(false),
     [documentDraft, setDocumentDraft] = useState(''),
     [documentPrevious, setDocumentPrevious] = useState('')
-  const [confirmOpen, setConfirmOpen] = useState(false),
-    [pending, setPending] = useState(false),
+  const [pending, setPending] = useState(false),
     [ratio, setRatio] = useState(46)
   const scroll = useRef<HTMLDivElement>(null),
     stick = useRef(true)
@@ -398,27 +399,6 @@ export default function RequirementsWorkspace({
   const confirmed =
     project.requirementsBaseline?.fingerprint === fingerprint &&
     project.requirementsBaseline?.messageCount === project.chat.length
-  const [confirmation, setConfirmation] = useState({ fingerprint, count: project.chat.length })
-  const [reviewProject, setReviewProject] = useState(project)
-  const [reviewError, setReviewError] = useState('')
-  const openConfirmation = async () => {
-    setPending(true)
-    try {
-      await perform(async () => {
-        const fresh = (await window.desktop.engineering.state()).projects.find(
-          (p) => p.id === project.id,
-        )
-        if (!fresh) throw new Error('项目不存在。')
-        if (fresh.activity || fresh.designActivity) throw new Error('请等待讨论和原型设计完成。')
-        setReviewProject(fresh)
-        setConfirmation({ fingerprint: requirementsFingerprint(fresh), count: fresh.chat.length })
-        setReviewError('')
-        setConfirmOpen(true)
-      })
-    } finally {
-      setPending(false)
-    }
-  }
   useEffect(() => {
     try {
       localStorage.setItem(`coprojer.discussion.draft.${project.id}`, draft)
@@ -537,14 +517,14 @@ export default function RequirementsWorkspace({
             disabled={
               !!project.activity || project.designActivity || !project.features.length || confirmed
             }
-            onClick={() => void openConfirmation()}
+            onClick={() => void onReview()}
           >
             <Check size={13} />
             确认完整需求
           </button>
         </div>
       </div>
-      <PrototypeWorkflow project={project} targetId={targetId || undefined} onPreview={id => { setTargetId(id || ''); setPanel('prototype'); onTab('prototype') }} onReview={() => void openConfirmation()} />
+      <PrototypeWorkflow project={project} targetId={targetId || undefined} onPreview={id => { setTargetId(id || ''); setPanel('prototype'); onTab('prototype') }} onReview={() => void onReview()} />
       {tab === 'requirements' ? (
         <div
           className="research-split"
@@ -564,7 +544,7 @@ export default function RequirementsWorkspace({
               onMode={setRoundtableMode}
               config={meetingConfig}
               onConfig={setMeetingConfig}
-              onReview={() => void openConfirmation()}
+              onReview={() => void onReview()}
             />
             <div
               className="conversation-scroll"
@@ -644,7 +624,7 @@ export default function RequirementsWorkspace({
                   <option value="">选择模型</option>
                   {state.models.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name}
+                      {m.model}
                     </option>
                   ))}
                 </select>
@@ -801,7 +781,7 @@ export default function RequirementsWorkspace({
                 <option value="">选择模型</option>
                 {state.models.map((m) => (
                   <option value={m.id} key={m.id}>
-                    {m.name}
+                    {m.model}
                   </option>
                 ))}
               </select>
@@ -854,101 +834,6 @@ export default function RequirementsWorkspace({
         </Overlay>
       )}
       {tab !== 'requirements' && <DecisionCard project={project} />}
-      {confirmOpen && (
-        <Overlay open title="确认完整需求" onClose={() => setConfirmOpen(false)}>
-          <div className="research-dialog-form">
-            <p>
-              将以下完整范围、验收标准和讨论来源保存为工程共享基线。确认后仍可继续讨论新想法；开发按已确认范围进行。
-            </p>
-            <div className="baseline-review">
-              <DecisionHistory decisions={reviewProject.decisions || []} />
-              {!!reviewProject.targets?.length && (
-                <section>
-                  <strong>{reviewProject.targets.length} 个子项目</strong>
-                  {reviewProject.targets.map((t) => (
-                    <p key={t.id}>
-                      <b>{t.name}</b> · {t.directory}
-                      <br />
-                      {t.responsibility}
-                      <br />
-                      接口约定：{t.contracts || '待补充'}
-                    </p>
-                  ))}
-                </section>
-              )}
-              {reviewProject.requirementsDocument && (
-                <section className="message-markdown">
-                  {markdown(reviewProject.requirementsDocument)}
-                </section>
-              )}
-              {reviewProject.features.map((f) => (
-                <section key={f.id}>
-                  <strong>
-                    {reviewProject.targets?.find((t) => t.id === f.targetId)?.name || '未分配'} /{' '}
-                    {f.module} / {f.title} <small>{f.scope === 'later' ? '暂缓' : '本期'}</small>
-                  </strong>
-                  <p>{f.description || '尚缺需求说明'}</p>
-                  <ul>
-                    {f.criteria.map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                  {!f.criteria.length && <p>尚缺验收标准</p>}
-                </section>
-              ))}
-            </div>
-            <small>
-              {reviewProject.chat.length} 条讨论 · {reviewProject.prototypes?.length ?? 0}{' '}
-              个原型版本
-            </small>
-            {reviewError && (
-              <p className="message-error" role="alert">
-                {reviewError}
-              </p>
-            )}
-            <footer>
-              <button className="ui-button secondary" onClick={() => setConfirmOpen(false)}>
-                继续讨论
-              </button>
-              <button
-                className="ui-button primary"
-                disabled={pending}
-                onClick={() => {
-                  setPending(true)
-                  void perform(
-                    () =>
-                      window.desktop.engineering.confirmProjectRequirements(
-                        project.id,
-                        confirmation.fingerprint,
-                        confirmation.count,
-                      ),
-                    '完整需求基线已写入共享上下文',
-                  )
-                    .then((ok) => {
-                      if (ok) setConfirmOpen(false)
-                      else
-                        setReviewError(
-                          '未能保存基线。请关闭后重新审阅最新内容；需求说明和验收标准也需要完整。',
-                        )
-                    })
-                    .finally(() => setPending(false))
-                }}
-              >
-                确认并保存基线
-              </button>
-              <button className="ui-button primary" disabled={pending} onClick={() => {
-                setPending(true)
-                void perform(async () => {
-                  const results = await window.desktop.engineering.confirmRequirementsAndPrepare(project.id, confirmation.fingerprint, confirmation.count)
-                  const failures = results.filter(r => !r.success)
-                  setConfirmOpen(false)
-                  if (failures.length) throw new Error('需求已确认，' + failures.length + ' 项方案未生成；成功项已保留，可到工作台重试。')
-                }, '需求已确认，方案已准备好，可到工作台审阅并开始。').finally(() => setPending(false))
-              }}>确认需求并准备方案</button>
-            </footer>
-          </div>
-        </Overlay>
-      )}
     </div>
   )
 }

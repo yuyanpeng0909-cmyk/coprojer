@@ -1,0 +1,60 @@
+{
+  "profile": "output\\playwright\\assistant-workspace\\profile-JiWiio",
+  "checks": [
+    "nonmodal navigation and no-model guidance without model calls",
+    "immediate close/reopen draft",
+    "confirmed memory only",
+    "one-shot choice and draft restored",
+    "rename, pin, archive, search and restore",
+    "editable team plan",
+    "project-only apply, shared agents and project B unchanged; foreign project member rejected; newly discussed features retain project team",
+    "close continues response",
+    "restart retains partial text, draft, memory and session; no automatic replay",
+    "1280x840 and 860x600 light/dark layouts"
+  ],
+  "errors": [],
+  "requests": 6,
+  "capturedAt": "2026-09-27T14:30:35.528Z",
+  "provider": "Local HTTP fixture; no real provider quality or pricing validation",
+  "screenshots": [
+    "welcome-1280.png",
+    "welcome-860.png",
+    "welcome-860-dark.png",
+    "wide-team-1280.png",
+    "wide-team-860.png",
+    "wide-team-860-dark.png",
+    "side-team-1280.png",
+    "restored-860.png"
+  ],
+  "sourceSha256": {
+    "src/main/index.ts": "9168b9e61bfb095505a3e7e63c798b0a1b7d812ad084c344bb498626f9aac65e",
+    "src/preload/index.ts": "8fae36969de99b78ace7a5e6f5442956d8e6d37bea008f76086848eb374a5b1e",
+    "src/shared/desktop.ts": "19717efcf29eee2efe66d437d609cf3bf30e77a23ccc6cf983656d1c13c08675",
+    "src/shared/assistant.ts": "845c4efcad61ade87251358c409436f9874115ec671cc3e00611a6710fcc3f62",
+    "src/shared/engineering.ts": "0b8a01302b152a7f66feed41d625234092d782c189c786df34a153abf5acaa0f",
+    "src/main/engineering/general-assistant.ts": "418f4f9004755f935ea7bbf2cabc415e5a81dc098c736f3869d31d8e92ac4780",
+    "src/main/engineering/assistant-team.ts": "3cf8dbdc0bf2c41a5e6f47a98cf33798e5e9846661d5694d98ed701bedf73fac",
+    "src/main/engineering/requirements.ts": "04f2be39151cef3dcbeb22153254b19d134a9f3244735eb0b1692c4935cc3f02",
+    "src/main/engineering/service.ts": "e32abb15cfa36400174a5b1482ff0b73c08155a6614784eee4957018050f2d5f",
+    "src/main/engineering/store.ts": "f78a734865bdd993cecb40d93da8f2ea422e1c625e442d229c4f20be7220606a",
+    "src/renderer/src/engineering/AssistantPanel.tsx": "6fc83b2b006a326fbf4cc180fbea80c5c7938d0ddd7099169771a9c6679577bf",
+    "src/renderer/src/engineering/AssistantConversation.tsx": "d530d7bd79180eabd1ddf2a491d58adad4a297b6049712e4d9f655f59a266d5d",
+    "src/renderer/src/engineering/AssistantSessions.tsx": "a63befa7b024aaf87132a4a369578d3930a82b40c89291e76f18a49ff25335bc",
+    "src/renderer/src/engineering/AssistantTeamCard.tsx": "42e6296bf81865add6096cd149508077391bcbeef79402a54317deb2c029bdbd",
+    "src/renderer/src/engineering/assistant.css": "f2091dcbee67c5f63c44e308065c6140ceb4e838a197be7c156a2a7659306f0c",
+    "src/renderer/src/engineering/EngineeringPage.tsx": "eb93e009e31b357a0ea58cef6ada7d00b80f6b3d576c4295ac9dedea2a4fa0f8",
+    "src/renderer/src/engineering/GuidedWorkflow.tsx": "aaa77f1733e74130a030594a664bdc43c72d12b4490c19be5410de365486a17d",
+    "scripts/assistant-workspace.cjs": "a81b7c971ab7b2c3823464e14856899a4f0975a7c152fa3cb5232e2bc19e073a",
+    "scripts/assistant-workspace-smoke.cjs": "7f5aa85dafa310700faddfa47778e02bdc5bf539252de431fa07c09209019936",
+    "scripts/smoke.cjs": "c729bd039b393f8618d1420309434958b9670aa7a45481cb84efaed9dac54881"
+  },
+  "regression": {
+    "scripts": 23,
+    "status": "all scripts passed",
+    "execution": "npm test preceding scripts, then smoke.cjs and all following scripts resumed after adding the new close-save API to the explicit bridge assertion",
+    "logs": [
+      ".runtime/assistant-redesign-full-test-final.log",
+      ".runtime/assistant-redesign-full-test-tail.log"
+    ]
+  }
+}

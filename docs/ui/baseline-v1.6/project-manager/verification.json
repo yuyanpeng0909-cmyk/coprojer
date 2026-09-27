@@ -1,0 +1,52 @@
+{
+  "passed": true,
+  "layoutChecks": [
+    {
+      "theme": "light",
+      "width": 1280,
+      "height": 840,
+      "docOverflow": false,
+      "mainOverflow": false,
+      "contentOverflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1280,
+      "height": 840,
+      "docOverflow": false,
+      "mainOverflow": false,
+      "contentOverflow": false
+    },
+    {
+      "theme": "light",
+      "width": 860,
+      "height": 600,
+      "docOverflow": false,
+      "mainOverflow": false,
+      "contentOverflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 860,
+      "height": 600,
+      "docOverflow": false,
+      "mainOverflow": false,
+      "contentOverflow": false
+    }
+  ],
+  "rendererErrors": [],
+  "checks": [
+    "actionable attention only",
+    "no transition from navigation",
+    "explicit destination tabs",
+    "resume to current phase",
+    "pin and sorting",
+    "rename preserves root and files",
+    "native folder bridge",
+    "archive and restore",
+    "active-operation guard",
+    "runtime payload validation",
+    "restart persistence",
+    "menu keyboard and compact bounds"
+  ]
+}

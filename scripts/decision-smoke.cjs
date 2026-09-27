@@ -52,7 +52,8 @@ async function closePanel(window) {
     page = await app.firstWindow()
     page.setDefaultTimeout(10000)
     page.on('pageerror', (e) => errors.push(e.message))
-    await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
+    await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
+    if (pid) await page.getByRole('button', { name: '继续开发 设备协作方案', exact: true }).click()
     await page.emulateMedia({ reducedMotion: 'reduce' })
   }
   try {
@@ -75,6 +76,7 @@ async function closePanel(window) {
       parent,
       modelId: models[0].id,
     })
+    await page.getByRole('button', { name: '继续开发 设备协作方案', exact: true }).click()
     const config = {
       participants: models.map((m, i) => ({ modelId: m.id, role: i ? '架构评审' : '产品负责人' })),
       passes: 1,

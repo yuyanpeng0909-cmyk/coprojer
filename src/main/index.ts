@@ -8,6 +8,7 @@ import { engineeringMethods, type EngineeringApi } from '../shared/engineering'
 
 let engineering: EngineeringService | undefined
 const researchPanels = new Map<number, ResearchPanelContext>()
+const closeHooks = new Set<number>(), pendingClose = new Set<number>(), readyToClose = new Set<number>()
 
 app.setName('Coprojer')
 // Give development, production, and automated tests separate application data.
@@ -33,7 +34,7 @@ function registerHandlers(): void {
   ]
   for (const channel of channels) ipcMain.removeHandler(channel)
 
-  function trustedWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+  function trustedWindow(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): BrowserWindow {
     const window = BrowserWindow.fromWebContents(event.sender)
     const frame = event.senderFrame
     if (!window || !frame || frame !== event.sender.mainFrame || frame.url !== rendererUrl) {
@@ -145,6 +146,16 @@ function registerHandlers(): void {
     } else if (action === 'close') window.close()
     else throw new Error('Unknown window action')
   })
+  ipcMain.on('window:close-hook', (event, enabled: unknown) => {
+    try { const window = trustedWindow(event); if (enabled === true) closeHooks.add(window.id); else closeHooks.delete(window.id) } catch { /* Ignore messages outside the trusted renderer. */ }
+  })
+  ipcMain.on('window:close-result', (event, saved: unknown) => {
+    try {
+      const window = trustedWindow(event)
+      if (!pendingClose.delete(window.id)) return
+      if (saved === true) { readyToClose.add(window.id); window.close() }
+    } catch { /* A renderer can disappear during application shutdown. */ }
+  })
 }
 
 function createWindow(panel?: ResearchPanelContext): void {
@@ -172,6 +183,14 @@ function createWindow(panel?: ResearchPanelContext): void {
   }
 
   window.once('ready-to-show', () => window.show())
+  window.on('close', (event) => {
+    if (!closeHooks.has(window.id) || readyToClose.has(window.id)) return
+    event.preventDefault()
+    if (!pendingClose.has(window.id)) { pendingClose.add(window.id); window.webContents.send('window:save-before-close') }
+  })
+  const clearCloseState = () => { closeHooks.delete(window.id); pendingClose.delete(window.id); readyToClose.delete(window.id) }
+  window.once('closed', clearCloseState)
+  window.webContents.on('render-process-gone', clearCloseState)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event, url) => {
     if (url !== rendererUrl) event.preventDefault()

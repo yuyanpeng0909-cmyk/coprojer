@@ -16,6 +16,12 @@ const desktop: DesktopApi = {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   selectFolder: () => ipcRenderer.invoke('dialog:folder'),
   windowControl: (action) => ipcRenderer.invoke('window:control', action),
+  onBeforeClose: (save) => {
+    const handler = () => { void Promise.resolve().then(save).then(() => ipcRenderer.send('window:close-result', true), () => ipcRenderer.send('window:close-result', false)) }
+    ipcRenderer.on('window:save-before-close', handler)
+    ipcRenderer.send('window:close-hook', true)
+    return () => { ipcRenderer.removeListener('window:save-before-close', handler); ipcRenderer.send('window:close-hook', false) }
+  },
 }
 
 contextBridge.exposeInMainWorld('desktop', desktop)

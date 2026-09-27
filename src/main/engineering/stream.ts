@@ -18,7 +18,8 @@ export async function readModelStream(
   let buffer = '',
     size = 0,
     finished = false,
-    finalResponse: any
+    finalResponse: any,
+    reportedModel: string | undefined
   const chat: any = { content: '', reasoning_content: '', tool_calls: [] }
   const blocks: any[] = [],
     items: any[] = []
@@ -38,6 +39,8 @@ export async function readModelStream(
       return
     }
     const e = JSON.parse(data)
+    if (typeof e.model === 'string') reportedModel = e.model
+    if (e.type === 'message_start' && typeof e.message?.model === 'string') reportedModel = e.message.model
     if (e.error || ['error', 'response.failed', 'response.incomplete'].includes(e.type))
       throw new Error(e.error?.message || e.response?.error?.message || '模型数据流未完成。')
     if (protocol === 'chat') {
@@ -137,9 +140,10 @@ export async function readModelStream(
     if (buffer.trim()) event(buffer)
     if (!finished) throw new Error('模型连接提前断开，已保留收到的内容，请继续讨论。')
     if (protocol === 'chat')
-      return { choices: [{ message: { ...chat, tool_calls: chat.tool_calls.filter(Boolean) } }] }
+      return { model: reportedModel, choices: [{ message: { ...chat, tool_calls: chat.tool_calls.filter(Boolean) } }] }
     if (protocol === 'anthropic')
       return {
+        model: reportedModel,
         content: blocks
           .filter(Boolean)
           .map(({ _json, ...b }) => ({ ...b, ...(_json ? { input: JSON.parse(_json) } : {}) })),

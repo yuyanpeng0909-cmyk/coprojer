@@ -22,12 +22,13 @@ export interface ModelMessage {
 }
 export interface ModelReply {
   text: string
+  model?: string
   calls: ToolCall[]
   reasoning?: string
   responseItems?: Record<string, unknown>[]
   anthropicBlocks?: Record<string, unknown>[]
 }
-export type Connection = ModelInput & { apiKey: string }
+export type Connection = ModelInput & { name: string; apiKey: string }
 
 export function normalizedBase(value: string): string {
   const url = new URL(value.trim())
@@ -226,6 +227,7 @@ export async function complete(
     )
     return {
       anthropicBlocks: result.content,
+      model: typeof result.model === 'string' ? result.model : undefined,
       reasoning: (result.content ?? [])
         .filter((p: any) => p.type === 'thinking')
         .map((p: any) => p.thinking)
@@ -274,6 +276,7 @@ export async function complete(
     )
     return {
       responseItems: result.output,
+      model: typeof result.model === 'string' ? result.model : undefined,
       text: (result.output ?? [])
         .flatMap((item: any) => item.content ?? [])
         .filter((p: any) => p.type === 'output_text')
@@ -318,6 +321,7 @@ export async function complete(
   if (!message) throw new Error('服务返回中缺少模型回复，请检查模型名称和协议。')
   return {
     text: typeof message.content === 'string' ? message.content : '',
+    model: typeof result.model === 'string' ? result.model : undefined,
     reasoning: message.reasoning_content,
     calls: (message.tool_calls ?? []).map((call: any) => ({
       id: call.id,

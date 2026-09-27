@@ -1,0 +1,67 @@
+.project-library-brand {
+  display: flex; align-items: center; gap: 9px; padding: 0 4px; margin-bottom: 15px; min-height: 36px;
+}
+.project-library-brand strong { display: block; font-size: 12px; font-weight: 550; }
+.project-library-brand small { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
+.collapsed .project-library-brand > div { display: none; }
+.project-home-nav { margin-top: 14px; }
+.project-home-link { color: var(--secondary); white-space: nowrap; font-size: 11px; border-radius: var(--radius-control); }
+.project-home-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.eng-project-content:has(> .project-manager) { overflow-y: auto; overscroll-behavior: contain; }
+.studio-main:has(.project-manager) .studio-page-heading { padding-bottom: 12px; }
+.studio-main:has(.project-manager) .studio-page-heading p { margin-bottom: 0; }
+.project-manager { flex: 0 0 auto; padding: 0 24px 24px; }
+.project-library-notice { color: var(--secondary); font-size: 11px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-attention { border: 1px solid var(--border); border-radius: var(--radius-control); margin-bottom: 16px; overflow: hidden; }
+.project-attention > header { display: flex; align-items: center; gap: 14px; justify-content: space-between; padding: 7px 12px; background: var(--panel-tint); }
+.project-attention h2, .project-library-heading h2 { margin: 0; font-size: 13px; font-weight: 550; }
+.project-attention h2 span { margin-left: 7px; color: var(--muted); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.project-attention > header > span { font-size: 11px; color: var(--muted); }
+.project-attention-row { display: flex; align-items: center; width: 100%; min-height: 34px; text-align: left; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border-subtle); }
+.project-attention-row:hover, .project-attention-more:hover { background: var(--hover); }
+.project-attention-row:focus-visible { outline-offset: -3px; }
+.project-attention-row > svg { flex-shrink: 0; color: var(--secondary); }
+.project-attention-row > .project-attention-failure { color: var(--tone-red); }
+.project-attention-row > span { flex: 1; min-width: 0; }
+.project-attention-row > span { display: flex; align-items: baseline; gap: 16px; }
+.project-attention-row strong { display: flex; align-items: baseline; gap: 10px; flex-shrink: 0; max-width: 65%; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.project-attention-row strong small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; font-weight: 400; }
+.project-attention-row > span > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--secondary); }
+.project-attention-more { display: block; width: 100%; padding: 8px 12px; border-top: 1px solid var(--border-subtle); color: var(--secondary); font-size: 11px; text-align: left; }
+.project-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.project-library-heading > div:first-child { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.project-library-heading h2, .project-library-heading .ui-tabs { flex-shrink: 0; }
+.project-manager-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.project-manager-search { flex: 1; max-width: 420px; min-width: 180px; }
+.project-manager-controls > span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.project-manager-sort { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--secondary); font-size: 11px; }
+.project-manager-sort select { min-height: 28px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-control); color: var(--text); padding: 3px 6px; font: inherit; }
+.project-manager-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--border); }
+.project-manager-row { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+.project-manager-row > .project-monogram { margin-top: 2px; }
+.project-manager-copy { flex: 1; min-width: 0; }
+.project-manager-title { display: flex; align-items: center; gap: 9px; }
+.project-manager-title h2 { min-width: 0; margin: 0; font-size: 13px; font-weight: 550; }
+.project-manager-title h2 button, .project-manager-title h2 > span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font: inherit; }
+.project-manager-title h2 button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.project-manager-title > svg, .project-manager-title .eng-tag { flex-shrink: 0; color: var(--secondary); }
+.project-manager-copy > p { margin: 5px 0 9px; color: var(--secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-manager-resume { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.project-manager-resume > div:first-child { min-width: 0; max-width: 520px; }
+.project-manager-resume strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.project-manager-resume small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
+.project-manager-actions { display: flex; align-items: center; flex-shrink: 0; gap: 5px; }
+.project-pin[aria-pressed='true'] { color: var(--accent-ink); background: var(--selected); }
+.project-manager-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 9px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.project-manager-path { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
+.project-manager-path:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.project-manager-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px; padding: 24px; gap: 10px; color: var(--muted); text-align: center; }
+.project-manager-state h2 { font-size: 14px; color: var(--text); margin: 0; }
+.project-manager-state p { font-size: 12px; margin: 0; }
+@media (max-width: 960px) {
+  .project-manager { padding: 0 18px 18px; }
+  .project-manager-row { gap: 10px; }
+  .project-manager-resume { gap: 10px; flex-wrap: wrap; }
+  .project-manager-resume > div:first-child { max-width: 100%; }
+  .studio-breadcrumb > span { max-width: 140px; }
+}

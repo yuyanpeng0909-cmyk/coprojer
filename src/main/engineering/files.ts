@@ -23,6 +23,11 @@ const object = (properties: Record<string, unknown>, required: string[]) => ({
 const string = { type: 'string' }
 export const engineeringTools: ToolDefinition[] = [
   {
+    name: 'read_skill',
+    description: '按需读取当前智能体已启用的专属技能。id 来自专属技能索引；path 可选，为技能内资源相对路径。使用 nextOffset/version 完整分页读取。其他智能体的技能不可访问。',
+    parameters: object({ id: string, path: string, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: string }, ['id']),
+  },
+  {
     name: 'read_context',
     description:
       '按上下文 ID 读取完整原文与来源，包括已确认基线、讨论分页和原型。讨论是参考材料，已确认基线才是交付依据。不填 ID 时列出索引。',
@@ -95,7 +100,7 @@ export function listFiles(root: string): string[] {
     for (const item of readdirSync(directory, { withFileTypes: true })) {
       if (
         item.isSymbolicLink() ||
-        ['node_modules', '.git', '.coprojer', 'dist', 'out', 'coverage'].includes(item.name)
+        ['node_modules', '.git', '.coprojer', 'dist', 'out', 'coverage', '.runtime', '.scratch', '.cache', '.vite'].includes(item.name.toLowerCase())
       )
         continue
       const full = join(directory, item.name)

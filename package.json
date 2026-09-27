@@ -9,7 +9,8 @@
     "start": "npm run build && electron-vite preview",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && electron-vite build",
-    "test": "npm run build && node scripts/model-errors.cjs && node scripts/context-skills.cjs && node scripts/prototype-html.cjs && node scripts/design-lifecycle.cjs && node scripts/smoke.cjs && node scripts/engineering-smoke.cjs && node scripts/research-smoke.cjs && node scripts/roundtable-smoke.cjs && node scripts/decision-smoke.cjs && node scripts/discussion-budget-smoke.cjs && node scripts/novice-smoke.cjs",
+    "test": "npm run build && node scripts/model-errors.cjs && node scripts/context-skills.cjs && node scripts/agent-skills.cjs && node scripts/general-assistant.cjs && node scripts/assistant-workspace.cjs && node scripts/general-assistant-smoke.cjs && node scripts/assistant-workspace-smoke.cjs && node scripts/model-names-smoke.cjs && node scripts/agent-configuration-smoke.cjs && node scripts/prototype-html.cjs && node scripts/design-lifecycle.cjs && node scripts/smoke.cjs && node scripts/project-manager-smoke.cjs && node scripts/project-library-smoke.cjs && node scripts/delivery-navigation-smoke.cjs && node scripts/engineering-smoke.cjs && node scripts/execution-plan-smoke.cjs && node scripts/execution-budget.cjs && node scripts/research-smoke.cjs && node scripts/roundtable-smoke.cjs && node scripts/decision-smoke.cjs && node scripts/discussion-budget-smoke.cjs && node scripts/novice-smoke.cjs",
+    "test:execution-plan": "npm run build && node scripts/execution-plan-smoke.cjs",
     "test:novice": "npm run build && node scripts/model-errors.cjs && node scripts/context-skills.cjs && node scripts/novice-smoke.cjs",
     "test:engineering": "npm run build && node scripts/engineering-smoke.cjs",
     "test:research": "npm run build && node scripts/prototype-html.cjs && node scripts/research-smoke.cjs && node scripts/roundtable-smoke.cjs && node scripts/decision-smoke.cjs && node scripts/discussion-budget-smoke.cjs"
@@ -25,7 +26,8 @@
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "simple-mind-map": "^0.14.0-fix.3"
+    "simple-mind-map": "^0.14.0-fix.3",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

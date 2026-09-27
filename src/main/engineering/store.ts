@@ -3,20 +3,27 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { defaultAgentTools } from '../../shared/engineering'
-import { builtinSkills, defaultAgents } from '../../shared/agents'
+import { builtinSkills, defaultAgents, migrateAgentSkills } from '../../shared/agents'
 import { normalizeContext } from './context'
 import { syncPrototypeBriefs } from '../../shared/prototype-workflow'
 import type { SkillDefinition } from '../../shared/engineering'
 import type { AgentConfig, EngineeringState, ModelConfig, Project } from '../../shared/engineering'
+import type { ExecutionCheckpoint } from './execution'
 
 export const uid = () => randomUUID()
 export const now = () => new Date().toISOString()
 interface DiskState {
   version: 1
+  defaultTeamAgentIds?: string[]
+  assistant?: EngineeringState['assistant']
+  defaultAssistantModelId?: EngineeringState['defaultAssistantModelId']
+  assistantChat?: EngineeringState['assistantChat']
+  skillSearches?: EngineeringState['skillSearches']
   models: (ModelConfig & { cipher: string })[]
   agents: AgentConfig[]
   skills?: SkillDefinition[]
   projects: Project[]
+  executionCheckpoints?: Record<string, ExecutionCheckpoint>
 }
 export class EngineeringStore {
   readonly path: string
@@ -45,7 +52,7 @@ export class EngineeringStore {
       this.data.skills ??= []
       for (const agent of defaultAgents(this.data.models[0]?.id || '')) {
         if (!this.data.agents.some(a => a.role === agent.role)) {
-          if (this.data.agents.some(a => a.id === agent.id)) agent.id = uid()
+          if (this.data.agents.some(a => a.id === agent.id)) { agent.id = uid(); agent.skillIds = undefined }
           this.data.agents.push(agent)
         }
       }
@@ -103,8 +110,24 @@ export class EngineeringStore {
         project.activity = null
         project.previewUrl = null
       }
-      this.save()
     }
+    this.data.assistantChat ??= []
+    if (!this.data.assistant) {
+      const id = uid(), at = now(), messages = this.data.assistantChat
+      this.data.assistant = { version: 1, activeSessionId: messages.length ? id : '', memories: [], plans: [], dismissedHints: [],
+        sessions: messages.length ? [{ id, title: '历史对话', createdAt: messages[0].at || at, updatedAt: messages.at(-1)?.at || at, draft: '', modelId: '', scrollTop: 0, pinned: false, archived: false, messages }] : [] }
+    }
+    for (const session of this.data.assistant.sessions) for (const entry of session.messages) if (entry.status === 'pending') {
+      entry.status = 'error'; entry.error = '上次回复已中断，已收到的内容已保留。可重新发送。'
+    }
+    for (const plan of this.data.assistant.plans) if (plan.status === 'preview') plan.status = 'stale'
+    this.data.assistantChat = this.data.assistant.sessions.find(s => s.id === this.data.assistant?.activeSessionId)?.messages || []
+    this.data.skillSearches ??= {}
+    for (const entry of this.data.assistantChat) if (entry.status === 'pending') {
+      entry.status = 'error'; entry.error = '上次通用助手响应已中断，请重新发送。'
+    }
+    this.data.skills = migrateAgentSkills(this.data.agents, this.data.skills || [])
+    this.save()
   }
   save(): void {
     const temp = `${this.path}.tmp`
@@ -127,15 +150,16 @@ export class EngineeringStore {
     }
   }
   snapshot(): EngineeringState {
+    const { executionCheckpoints: _checkpoints, ...visible } = this.data
     return JSON.parse(
       JSON.stringify({
-        ...this.data,
+        ...visible,
         skills: this.skills(),
         models: this.data.models.map(({ cipher, ...model }) => ({ ...model, hasKey: !!cipher })),
       }),
     )
   }
-  skills(): SkillDefinition[] { return [...builtinSkills, ...(this.data.skills || [])] }
+  skills(): SkillDefinition[] { return this.data.skills || [] }
   encrypt(key: string): string {
     if (!safeStorage.isEncryptionAvailable())
       throw new Error('系统密钥保护不可用，无法安全保存 API Key。')

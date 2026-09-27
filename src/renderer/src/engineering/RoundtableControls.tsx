@@ -129,11 +129,11 @@ export default function RoundtableControls({
                         })
                       }
                     />
-                    {model.name}
+                    {model.model}
                   </label>
                   {selected && (
                     <input
-                      aria-label={`${model.name} 的职责`}
+                      aria-label={`${model.model} 的职责`}
                       value={selected.role}
                       required
                       maxLength={500}
