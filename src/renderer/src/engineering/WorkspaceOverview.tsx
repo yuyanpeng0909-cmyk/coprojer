@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import GuidedWorkflow from './GuidedWorkflow'
+import { mergedFeatureFor } from './delivery'
 import {
   ArrowRight,
   Bot,
@@ -121,18 +122,19 @@ export default function WorkspaceOverview({
 }) {
   const [query, setQuery] = useState(''),
     [scope, setScope] = useState('all')
-  const completed = project.features.filter((f) => f.stage === 'done')
-  const attention = project.features.filter(
+  const features = project.features.filter((f) => !mergedFeatureFor(project, f))
+  const completed = features.filter((f) => f.stage === 'done')
+  const attention = features.filter(
     (f) =>
       ['requirements', 'solution', 'acceptance', 'blocked'].includes(f.stage) &&
       f.scope !== 'later',
   )
-  const active = project.features.find((f) => ['developing', 'verifying'].includes(f.stage))
+  const active = features.find((f) => ['developing', 'verifying'].includes(f.stage))
   const next =
     active ??
-    project.features.find((f) => f.stage === 'acceptance') ??
-    project.features.find((f) => f.stage === 'ready')
-  const filtered = project.features.filter(
+    features.find((f) => f.stage === 'acceptance') ??
+    features.find((f) => f.stage === 'ready')
+  const filtered = features.filter(
     (f) =>
       (scope === 'all' || f.scope === scope) &&
       `${f.title} ${f.module} ${f.description}`.toLowerCase().includes(query.toLowerCase()),
@@ -142,14 +144,14 @@ export default function WorkspaceOverview({
       <GuidedWorkflow key={project.id} project={project} state={state} onMap={onMap} onModels={onModels} onOpen={onOpen} onBoard={onBoard} />
       <div className="workspace-metrics">
         {[
-          { label: '已规划功能', value: project.features.length, detail: '项目范围' },
+          { label: '已规划功能', value: features.length, detail: '项目范围' },
           { label: '待你确认', value: attention.length, detail: '需求 · 方案 · 验收' },
           { label: '正在执行', value: active ? 1 : 0, detail: '按功能串行交付' },
           {
             label: '已验收交付',
             value: completed.length,
-            detail: project.features.length
-              ? `${Math.round((completed.length / project.features.length) * 100)}% 已完成`
+            detail: features.length
+              ? `${Math.round((completed.length / features.length) * 100)}% 已完成`
               : '尚未开始',
           },
         ].map((m) => (
@@ -192,13 +194,13 @@ export default function WorkspaceOverview({
           ) : (
             <div className="panel-empty">
               <CircleCheck size={21} />
-              <strong>{project.features.length ? '目前没有待确认事项' : '先定义第一个功能'}</strong>
+              <strong>{features.length ? '目前没有待确认事项' : '先定义第一个功能'}</strong>
               <p>
-                {project.features.length
+                {features.length
                   ? '新的需求、方案和验收会出现在这里。'
                   : '从需求讨论开始，建立可独立验收的功能。'}
               </p>
-              {!project.features.length && (
+              {!features.length && (
                 <button className="ui-button secondary small" onClick={onMap}>
                   开始讨论 <ArrowRight size={12} />
                 </button>
@@ -248,7 +250,7 @@ export default function WorkspaceOverview({
         <header>
           <div>
             <h2>
-              功能清单 <span>{project.features.length}</span>
+              功能清单 <span>{features.length}</span>
             </h2>
             <p>从需求到交付，每项功能都有完整记录。</p>
           </div>

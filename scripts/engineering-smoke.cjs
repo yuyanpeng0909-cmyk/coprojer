@@ -193,12 +193,15 @@ async function main() {
     await waitFor(async () => !(await project(pid)).designActivity, 'initial prototype ready')
     await invoke('acceptPrototypeAndPreparePrd', pid, (await project(pid)).prototypes.at(-1).id)
     await idle(pid)
+    const generatedPrd = (await project(pid)).requirementsDocument
+    const prdHeading = generatedPrd.split(/\r?\n/).find(line => /^#\s+/.test(line)).replace(/^#\s+/, '')
     await page.getByRole('button', {name:'确认完整需求',exact:true}).click()
     // The review intentionally retains its snapshot while background PRD updates arrive.
     await waitFor(async () => {
       if (await page.locator('.specification-warning').count())
         await page.getByRole('button', { name: '刷新审阅内容', exact: true }).click()
-      return page.getByRole('button', { name: '确认并保存基线', exact: true }).isEnabled()
+      return await page.locator('.specification-reader').getByRole('heading', { name: prdHeading, exact: true }).count() > 0 &&
+        await page.getByRole('button', { name: '确认并保存基线', exact: true }).isEnabled()
     }, 'fresh requirements review after PRD generation')
     await page.getByRole('button', {name:'确认并保存基线',exact:true}).click()
     await page.getByText('已确认基线', {exact:true}).waitFor()

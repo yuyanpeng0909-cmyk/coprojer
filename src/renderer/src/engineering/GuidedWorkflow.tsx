@@ -3,6 +3,7 @@ import { ArrowRight, Check, Play } from 'lucide-react'
 import { Overlay } from '../components/ui'
 import { agentRoleLabels, type EngineeringState, type Feature, type Project } from '../../../shared/engineering'
 import { activePrototypeBriefs } from '../../../shared/prototype-workflow'
+import { mergedFeatureFor } from './delivery'
 
 export function FirstRunCheck({ parent }: { parent?: string }) {
   const [checks, setChecks] = useState<{ name: string; ok: boolean; detail: string }[]>([])
@@ -32,7 +33,7 @@ export default function GuidedWorkflow({ project, state, onMap, onModels, onOpen
   const defaultAgent = (role: 'planner' | 'designer' | 'developer' | 'reviewer') => availableAgents.find(a => a.role === role && project.teamAgentIds?.includes(a.id)) || availableAgents.find(a => a.role === role && !a.ownerProjectId)
   const [team, setTeam] = useState({ plannerId: project.plannerId || defaultAgent('planner')?.id || '', designerId: project.designerId || defaultAgent('designer')?.id || '', contextBudget: project.contextBudget || 32000 })
   useEffect(() => { setTeam({ plannerId: project.plannerId || defaultAgent('planner')?.id || '', designerId: project.designerId || defaultAgent('designer')?.id || '', contextBudget: project.contextBudget || 32000 }) }, [project.id, project.plannerId, project.designerId, project.contextBudget])
-  const current = project.features.filter(f => f.scope !== 'later')
+  const current = project.features.filter(f => f.scope !== 'later' && !mergedFeatureFor(project, f))
   const teamAgents = (['planner', 'designer', 'developer', 'reviewer'] as const).flatMap(role => {
     const id = role === 'planner' ? project.plannerId : role === 'designer' ? project.designerId : undefined
     const agent = availableAgents.find(a => a.role === role && a.id === id) || defaultAgent(role)
@@ -51,7 +52,7 @@ export default function GuidedWorkflow({ project, state, onMap, onModels, onOpen
   const openReview = () => void act(async () => {
     const latest = (await api.state()).projects.find(p => p.id === project.id)
     if (!latest) throw new Error('项目已关闭，请重新打开。')
-    const plans = latest.features.filter(f => f.scope === 'current' && ['solution', 'ready'].includes(f.stage) && f.plan && f.tasks.length)
+    const plans = latest.features.filter(f => f.scope === 'current' && !mergedFeatureFor(latest, f) && ['solution', 'ready'].includes(f.stage) && f.plan && f.tasks.length)
     setReview(plans); setSelected(plans.slice(0, 8).map(f => f.id))
   })
   const connected = !!state.models.length && !!project.discussionModelId

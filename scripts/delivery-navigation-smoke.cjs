@@ -73,6 +73,9 @@ async function main() {
     for (const [width, height] of [[1280, 840], [860, 600]]) {
       await desktop.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(...size), [width, height])
       await select('待开发项目')
+      assert.equal(await page.locator('.feature-table-row').count(), 2, 'merged history does not inflate the workbench feature list')
+      assert.equal(await page.locator('.workspace-metrics > div').first().locator('strong').innerText(), '02')
+      assert.doesNotMatch(await page.locator('.attention-panel').innerText(), /旧功能|历史记录/)
       assert.equal(await page.locator('.sidebar-lifecycle ol > li').count(), 7)
       await page.getByRole('button', { name: '智能体', exact: true }).click()
       await navigate('开发执行')

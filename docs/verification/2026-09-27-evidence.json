@@ -1,0 +1,455 @@
+{
+  "date": "2026-09-27",
+  "timeZone": "Asia/Shanghai",
+  "scope": "Isolated copy of an existing real project; original data not modified",
+  "originalData": {
+    "storeUnchanged": true,
+    "files": [
+      {
+        "file": "test/番茄钟助手/.coprojer/ACTIVITY.md",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/.coprojer/CONTEXT.md",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/.coprojer/FEATURES.md",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/src/main/main.ts",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/src/renderer/app.tsx",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/src/shared/timer.ts",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/tests/_fragment.txt",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/tests/main.test.ts",
+        "unchanged": true
+      },
+      {
+        "file": "test/番茄钟助手/tests/timer.test.ts",
+        "unchanged": true
+      }
+    ]
+  },
+  "rootRegression": {
+    "command": "npm test",
+    "exitCode": 0,
+    "scriptCount": 23,
+    "scripts": [
+      "scripts/model-errors.cjs",
+      "scripts/context-skills.cjs",
+      "scripts/agent-skills.cjs",
+      "scripts/general-assistant.cjs",
+      "scripts/assistant-workspace.cjs",
+      "scripts/general-assistant-smoke.cjs",
+      "scripts/assistant-workspace-smoke.cjs",
+      "scripts/model-names-smoke.cjs",
+      "scripts/agent-configuration-smoke.cjs",
+      "scripts/prototype-html.cjs",
+      "scripts/design-lifecycle.cjs",
+      "scripts/smoke.cjs",
+      "scripts/project-manager-smoke.cjs",
+      "scripts/project-library-smoke.cjs",
+      "scripts/delivery-navigation-smoke.cjs",
+      "scripts/engineering-smoke.cjs",
+      "scripts/execution-plan-smoke.cjs",
+      "scripts/execution-budget.cjs",
+      "scripts/research-smoke.cjs",
+      "scripts/roundtable-smoke.cjs",
+      "scripts/decision-smoke.cjs",
+      "scripts/discussion-budget-smoke.cjs",
+      "scripts/novice-smoke.cjs"
+    ],
+    "localLogSha256": "bbc14d1a916bf016f217c91b0ceaae5c2afa9e73059a2cd75725e3f09d067216"
+  },
+  "realRun": {
+    "startedAt": "2026-09-27T15:09:59Z",
+    "finalObservedAt": "2026-09-27T15:32:53.077Z",
+    "feature": "本地数据统计与复盘",
+    "stage": "done",
+    "repairRounds": 0,
+    "unitTests": 32,
+    "statsUnitTests": 9,
+    "acceptanceEvidenceCount": 7,
+    "features": [
+      {
+        "title": "番茄计时核心（专注/短休/长休状态机）",
+        "stage": "done",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "周期切换提醒（通知+音效）",
+        "stage": "done",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "浅色/深色主题切换",
+        "stage": "ready",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "本地数据统计与复盘",
+        "stage": "done",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "历史数据清空",
+        "stage": "solution",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "免打扰模式",
+        "stage": "solution",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "开机自启（历史记录，已合并至 384a3831）",
+        "stage": "blocked",
+        "excludedMergedHistory": true
+      },
+      {
+        "title": "最小化到托盘后台运行",
+        "stage": "ready",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "开机自启",
+        "stage": "done",
+        "excludedMergedHistory": false
+      },
+      {
+        "title": "番茄钟核心计时与本地复盘",
+        "stage": "done",
+        "excludedMergedHistory": false
+      }
+    ],
+    "currentFeatureCounts": {
+      "done": 5,
+      "ready": 2,
+      "solution": 2,
+      "total": 9
+    }
+  },
+  "independentUI": {
+    "passed": true,
+    "checks": [
+      "pause freezes remaining time",
+      "first focus completes and transitions to short break",
+      "four focus cycles trigger long break",
+      "statistics, date filter and history.json agree for four actual timer completions",
+      "reload preserves theme and statistics",
+      "history clear requires confirmation and clears statistics"
+    ],
+    "rendererErrors": [],
+    "httpRequestCount": 0,
+    "clock": "Playwright renderer virtual clock; configured test durations 1/1/2 minutes",
+    "scope": "Windows real Electron; renderer clock accelerated; no OS reboot, audible-sound or macOS claim",
+    "localLogSha256": "c2f43dda686edd3e0952a6620b3f10fa051078b6bbfb97feccad589b5ff1ba2a"
+  },
+  "screenshots": [
+    {
+      "file": "docs/screenshots/pomodoro/00-create-project.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "010c0d782cdf6872a37c524bf83a01eb3c6ab50ed13511b9d5703afe1a2eff8c",
+      "maximized": true,
+      "category": "首次创建入口演示，未重新生成真实项目",
+      "capturedAt": "2026-09-27T15:24:18.441Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/01-project-library.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "210d7734c4e789647c7a1bb17e3b0c42800440d77ca8f95dc886c0cac1983ccb",
+      "maximized": true,
+      "category": "历史真实项目入口，本轮重新打开",
+      "capturedAt": "2026-09-27T15:08:33.634Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/02-workbench.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "3b3d8bdde281a7b8dfc71f3cf37f3153a3443a4e5452152427a5ef17703acdf5",
+      "maximized": true,
+      "category": "修复后工作台：排除历史合并记录，真实统计功能待验收",
+      "capturedAt": "2026-09-27T15:19:55.232Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/03-discussion-map.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "00a70f48608e7952c1e4015ca3e8dab5ab3dc866edfb833ffac1ad4ddae08ed3",
+      "maximized": true,
+      "category": "历史成果复查",
+      "capturedAt": "2026-09-27T15:11:54.920Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/04-prototype-panel.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "77cd9337228bef90e2207357d2f19e2be6292ca26ea4607b7d8b059c82426631",
+      "maximized": true,
+      "category": "历史成果复查",
+      "capturedAt": "2026-09-27T15:15:49.199Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/05-prototype-window.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "df005f56f8741c463b4903f09a3c16d4e48e89999ff32aa47321c514bd21ac0d",
+      "maximized": true,
+      "category": "历史成果复查",
+      "capturedAt": "2026-09-27T15:15:52.592Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/06-specification.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "457265399be3e1c58380000b61fe3b702df1bba523dba5f0aa1f0acb262c1b83",
+      "maximized": true,
+      "category": "历史成果复查",
+      "capturedAt": "2026-09-27T15:15:55.588Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/07-board-before.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "cdb06bbcaa0ee05071433b791d486d83984b4f18058e537e8d5669a633c001fd",
+      "maximized": true,
+      "category": "本次续跑前的真实工程状态",
+      "capturedAt": "2026-09-27T15:09:20.004Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/08-feature-plan.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "92ec1c3ef0ee9aca584674de58734bc829b338157f52e9f7dcfac67b1e9c0f41",
+      "maximized": true,
+      "category": "历史成果复查",
+      "capturedAt": "2026-09-27T15:09:59.556Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/08-plans-overview.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "9f932d00dd45fdb7ca0dcdec2587195f14d4461af09ffb7cb521294dc7a1fcd1",
+      "maximized": true,
+      "category": "本次真实方案与任务总览",
+      "capturedAt": "2026-09-27T15:15:56.344Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/09-development-running.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "cc689a65fd93186052a65e6905f4a1ad902dc634fb3e23c8c0d54494c8393612",
+      "maximized": true,
+      "category": "本次真实模型续跑：本地数据统计与复盘",
+      "capturedAt": "2026-09-27T15:10:00.816Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/10-independent-verification.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "fbc259cab0d7c889b7aeebe84864b6f2d9318c256f02f0d62ec21e8807b65834",
+      "maximized": true,
+      "category": "本次真实模型独立校验阶段",
+      "capturedAt": "2026-09-27T15:17:31.723Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/11-acceptance-evidence.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "7ccc4b935ae067d4917d700c6c7af7c0ddd7b0d3dd3c12ad98d983eb18068fc8",
+      "maximized": true,
+      "category": "本次真实模型检查结果，尚未替代运行验收",
+      "capturedAt": "2026-09-27T15:22:05.980Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/12-code-changes.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "c2b91077a7b2c4b165babeab63e6d88d2e0748b1a28d46fbba43a49146e22cb4",
+      "maximized": true,
+      "category": "本次真实代码差异；验收后展开复查",
+      "capturedAt": "2026-09-27T15:40:09.275Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/13-pomodoro-timer.png",
+      "width": 1920,
+      "height": 1017,
+      "sha256": "ad59f7f09eda0398276c19c3d6043d724f22867bdf541da85461ee3feda1a699",
+      "maximized": true,
+      "category": "真实番茄钟应用；测试使用缩短时长和渲染器虚拟时钟",
+      "capturedAt": null,
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/14-pomodoro-statistics.png",
+      "width": 1920,
+      "height": 1017,
+      "sha256": "aa18e03beff1f628cffcc03f7359d78cfcee2c540d51aaafe931e97787f22551",
+      "maximized": true,
+      "category": "真实番茄钟应用；测试使用缩短时长和渲染器虚拟时钟",
+      "capturedAt": null,
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/14a-pomodoro-history.png",
+      "width": 1920,
+      "height": 1017,
+      "sha256": "752f2e51a42b8c26ad06c9f6c17a32711eaa0d260d824da1f5eb727129098f8a",
+      "maximized": true,
+      "category": "真实番茄钟应用；测试使用缩短时长和渲染器虚拟时钟",
+      "capturedAt": null,
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/15-pomodoro-settings-dark.png",
+      "width": 1920,
+      "height": 1017,
+      "sha256": "fb161c83da2189cb0a907a866623fa7d5a5066cf88c5e02fe81c2fac4ce61ecc",
+      "maximized": true,
+      "category": "真实番茄钟应用；测试使用缩短时长和渲染器虚拟时钟",
+      "capturedAt": null,
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/15a-pomodoro-durations.png",
+      "width": 1920,
+      "height": 1017,
+      "sha256": "bdc42e00969ec547fedfeeaa8dd2456e6a9e6b2de91c8f5f052e5ec25750f76d",
+      "maximized": true,
+      "category": "真实番茄钟应用；测试使用缩短时长和渲染器虚拟时钟",
+      "capturedAt": null,
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/16-shared-context.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "c12e95c6c71d771b1f7df08d24d6ee9d36316f693ca7d33011bfc4207493f280",
+      "maximized": true,
+      "category": "真实项目共享上下文与确认基线",
+      "capturedAt": "2026-09-27T15:17:32.645Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/17-model-connections.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "72be16c6f4ae965421f9c7db0df60017e347d2ef30360059ad1fb26cea8096c8",
+      "maximized": true,
+      "category": "配置入口；服务地址已遮罩",
+      "capturedAt": "2026-09-27T15:32:51.470Z",
+      "masked": true
+    },
+    {
+      "file": "docs/screenshots/pomodoro/17a-model-setup.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "6c3bdb526dbb26d6ae9da8a38f033172f8d02853bdc6160dcece8c9f4eb834d6",
+      "maximized": true,
+      "category": "新增连接表单展示；未保存；背景服务地址已遮罩",
+      "capturedAt": "2026-09-27T15:32:52.427Z",
+      "masked": true
+    },
+    {
+      "file": "docs/screenshots/pomodoro/18-agents.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "e28ae5014990394efb337d79c0d6ff3cfa5ddb8b0f00713f6a2c57f7e814703f",
+      "maximized": true,
+      "category": "真实工程成员与配置入口",
+      "capturedAt": "2026-09-27T15:17:34.018Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/19-agent-skills.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "5fa88394a97c0d31acab613a7645e915196c893301e6fd1f4b4b240b3c698ca9",
+      "maximized": true,
+      "category": "真实验证智能体的技能配置入口",
+      "capturedAt": "2026-09-27T15:26:02.647Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/20-appearance.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "d3b69ebee47d7aeeb3c3b1d1187d585c5b05a14c6b2fea6ba85c472108d0330f",
+      "maximized": true,
+      "category": "本次实际打开外观设置",
+      "capturedAt": "2026-09-27T15:17:34.921Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/21-assistant.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "68d36351ead1d07d3c43063e57c87355340f4097fd62b8090dbb0006d4f0d4be",
+      "maximized": true,
+      "category": "本次真实操作",
+      "capturedAt": "2026-09-27T15:31:41.918Z",
+      "masked": false
+    },
+    {
+      "file": "docs/screenshots/pomodoro/22-acceptance-complete.png",
+      "width": 1920,
+      "height": 1040,
+      "sha256": "271c0b6d7d87b0d111e2881313e7c94ee6bddb9bbd00767f76228d32769fa12f",
+      "maximized": true,
+      "category": "本次真实操作",
+      "capturedAt": "2026-09-27T15:32:13.782Z",
+      "masked": false
+    }
+  ],
+  "directTargetChecks": {
+    "at": "2026-09-27T23:39:53+08:00",
+    "cwd": "isolated projects/番茄钟助手",
+    "commands": [
+      "npm run typecheck",
+      "npm test",
+      "npm run build"
+    ],
+    "exitCode": 0,
+    "testFiles": 3,
+    "testCases": 32,
+    "breakdown": {
+      "timer": 20,
+      "stats": 9,
+      "main": 3
+    }
+  },
+  "screenshotReview": {
+    "count": 27,
+    "method": "Contact sheet review of every image plus full-resolution review of important and recaptured images; full application content captured",
+    "nativeTitlebar": "Pomodoro has 23 px OS titlebar excluded from page bitmap; application content is complete"
+  }
+}
