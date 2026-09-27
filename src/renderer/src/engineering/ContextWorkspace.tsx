@@ -102,12 +102,18 @@ function stageForFeature(feature: Feature): ContextStageKey {
 }
 
 function featureForEntry(entry: ContextEntry, features: Feature[]): Feature | undefined {
+  if (entry.featureId) return features.find(f => f.id === entry.featureId)
   // Only accept an ID that exists in the current feature list. This prevents the
   // project-wide requirements baseline UUID from being mistaken for a feature.
   return features.find((feature) => entry.source.includes(feature.id) || entry.title.includes(feature.id))
 }
 
 function stageForEntry(entry: ContextEntry, feature?: Feature): ContextStageKey {
+  if (entry.kind === 'goal') return 'discussion'
+  if (entry.kind === 'requirements' || entry.kind === 'decision') return 'requirements'
+  if (entry.kind === 'result') return 'verification'
+  if (entry.kind === 'acceptance') return 'acceptance'
+  if (entry.kind === 'manual') return 'manual'
   const text = `${entry.title} ${entry.source}`
   if (/用户创建项目|项目目标/.test(text)) return 'discussion'
   if (/用户最终验收|已交付|最终验收/.test(text)) return 'acceptance'
@@ -192,6 +198,8 @@ export default function ContextWorkspace({
     [tree],
   )
   const [selectedId, setSelectedId] = useState<string | null>(() => allEntries[0]?.id ?? null)
+  const [archiveBusy, setArchiveBusy] = useState(false)
+  const [archiveError, setArchiveError] = useState('')
   const [expandedStages, setExpandedStages] = useState<Set<ContextStageKey>>(
     () => new Set(stageKeys),
   )
@@ -220,6 +228,14 @@ export default function ContextWorkspace({
   }, [tree])
 
   const selected = allEntries.find((entry) => entry.id === selectedId)
+  const canArchive = selected && !['goal', 'requirements', 'acceptance'].includes(selected.kind || '') && !/用户需求确认|用户最终验收|用户创建项目/.test(selected.source)
+  const archiveSelected = async () => {
+    if (!selected || archiveBusy) return
+    setArchiveBusy(true); setArchiveError('')
+    try { await window.desktop.engineering.archiveContext(project.id, selected.id, selected.status !== 'archived') }
+    catch (error) { setArchiveError(error instanceof Error ? error.message : String(error)) }
+    finally { setArchiveBusy(false) }
+  }
   const selectedFeature = selected ? featureForEntry(selected, project.features ?? []) : undefined
   const selectedStage = selected
     ? tree.find((stage) => stage.entries.some((entry) => entry.id === selected.id) || stage.features.some((feature) => feature.entries.some((entry) => entry.id === selected.id)))
@@ -247,6 +263,10 @@ export default function ContextWorkspace({
 
   return (
     <div className="eng-context-workspace">
+      {!!project.agentRuns?.length && <details className="eng-context-run"><summary>最近任务的上下文 · {project.agentRuns.at(-1)!.contextCharacters.toLocaleString()} 字符 · {project.agentRuns.at(-1)!.contextIds.length} 条资料</summary>
+        <p>按当前功能和依赖取材；未注入的历史仍保留，可按 ID 分页读取。字符数不是模型 token 用量。</p>
+        {project.agentRuns.slice(-6).reverse().map(run => <p key={run.id}>{run.role} · {run.contextCharacters.toLocaleString()} 字符 · {run.omittedCount} 条未注入 · 技能 {run.skills.map(s => s.id + '@' + s.version).join('、') || '无'}<br />资料：{run.contextIds.map(id => project.context.find(c => c.id === id)?.title || id).join('、') || '当前任务约束'}</p>)}
+      </details>}
       <div className="eng-context-heading">
         <div>
           <p>按交付阶段查看项目知识，目录会随着模型开发与用户补充动态更新。</p>
@@ -395,7 +415,9 @@ export default function ContextWorkspace({
                 <div>
                   <span className="eng-context-detail-stage">{selectedStage?.label ?? '工程记录'}</span>
                   <h2>{selected.title}</h2>
+                  <small>{selected.status === 'archived' ? '已归档 · 不自动注入新任务' : selected.status === 'superseded' ? '已被后续基线替代 · 旧任务仍可引用' : '有效资料'} · 修订 {selected.revision || 1}</small>
                 </div>
+                {canArchive && <button className="ui-button secondary small" disabled={archiveBusy || !!project.activity || !!project.designActivity} onClick={() => void archiveSelected()}>{selected.status === 'archived' ? '恢复使用' : '归档'}</button>}
                 <button
                   className="ui-button secondary small"
                   type="button"
@@ -409,6 +431,7 @@ export default function ContextWorkspace({
                   编辑
                 </button>
               </header>
+              {archiveError && <p role="alert" className="eng-inline-error">{archiveError}</p>}
               <p className="eng-context-detail-content">{selected.content}</p>
               <footer>
                 <span>来源：{selected.source}</span>

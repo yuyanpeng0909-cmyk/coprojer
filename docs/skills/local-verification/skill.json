@@ -1,0 +1,8 @@
+{
+  "id": "local-verification",
+  "name": "业务边界检查",
+  "version": "1.0.0",
+  "description": "按已确认验收标准检查正常流程、空状态与错误输入。",
+  "roles": ["reviewer"],
+  "requiredTools": ["read_file", "run_command"]
+}

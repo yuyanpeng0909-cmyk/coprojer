@@ -18,6 +18,7 @@ async function closePanel(window) {
     // Native panel close can destroy the page before Playwright finishes the click.
     if (!window.isClosed()) throw error
   }
+  await waitFor(() => window.isClosed(), 'native panel closed')
 }
 ;(async () => {
   const output = path.resolve('output/playwright')
@@ -116,6 +117,7 @@ async function closePanel(window) {
     await graph.locator('.smm-node').filter({ hasText: '设备状态' }).waitFor()
     await closePanel(graph)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(860, 600))
+    await page.waitForFunction(() => innerWidth === 860 && innerHeight === 600)
     await waitFor(
       () =>
         page.locator('.mindmap-canvas').evaluate((el) => {
@@ -133,6 +135,7 @@ async function closePanel(window) {
       'graph fits compact canvas after resize',
     )
     await screenshot('decision-live-compact.png')
+    assert.equal(await page.locator('.prototype-opinion').count(), 0, 'resolve pending decisions before asking for design preferences')
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     const submitBox = await card().getByRole('button', { name: '提交并继续' }).boundingBox()
     assert.ok(submitBox && submitBox.y + submitBox.height <= 600)

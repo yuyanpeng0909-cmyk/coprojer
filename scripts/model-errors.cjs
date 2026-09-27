@@ -14,6 +14,11 @@ const connection = { model: 'test', protocol: 'chat', baseUrl: 'http://localhost
 async function main() {
   const original = global.fetch
   try {
+    let oversizeRequests = 0
+    global.fetch = async () => { oversizeRequests++; throw new Error('must not send') }
+    for (const protocol of ['chat', 'responses', 'anthropic'])
+      await assert.rejects(complete({ ...connection, protocol }, 'x'.repeat(160001), []), /160000 字符上限/)
+    assert.equal(oversizeRequests, 0)
     for (const [code, label] of [
       ['UND_ERR_HEADERS_TIMEOUT', '底层网络超时'], ['ECONNRESET', '连接中断'],
       ['ENOTFOUND', '域名解析失败'], ['CERT_HAS_EXPIRED', 'TLS 或证书校验失败'],

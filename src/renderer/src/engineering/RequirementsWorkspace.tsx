@@ -33,6 +33,7 @@ import {
 } from '../../../shared/engineering'
 import FeatureMindMap from './FeatureMindMap'
 import PrototypePreview from './PrototypePreview'
+import PrototypeWorkflow from './PrototypeWorkflow'
 import RoundtableControls from './RoundtableControls'
 import DecisionCard, { DecisionHistory } from './DecisionCard'
 import ProjectTargets from './ProjectTargets'
@@ -377,7 +378,7 @@ export default function RequirementsWorkspace({
   )
   const [designOpen, setDesignOpen] = useState(false),
     [instruction, setInstruction] = useState(''),
-    [designModel, setDesignModel] = useState(project.designModelId || project.discussionModelId)
+    [designModel, setDesignModel] = useState(project.designModelId || state.agents.find(a => a.role === 'designer')?.modelId || project.discussionModelId)
   const [documentOpen, setDocumentOpen] = useState(false),
     [documentDraft, setDocumentDraft] = useState(''),
     [documentPrevious, setDocumentPrevious] = useState('')
@@ -450,7 +451,7 @@ export default function RequirementsWorkspace({
     }
   }
   const openDesign = () => {
-    setDesignModel(project.designModelId || project.discussionModelId)
+    setDesignModel(project.designModelId || state.agents.find(a => a.role === 'designer')?.modelId || project.discussionModelId)
     setDesignOpen(true)
   }
   const preview = (
@@ -543,6 +544,7 @@ export default function RequirementsWorkspace({
           </button>
         </div>
       </div>
+      <PrototypeWorkflow project={project} targetId={targetId || undefined} onPreview={id => { setTargetId(id || ''); setPanel('prototype'); onTab('prototype') }} onReview={() => void openConfirmation()} />
       {tab === 'requirements' ? (
         <div
           className="research-split"
@@ -934,6 +936,15 @@ export default function RequirementsWorkspace({
               >
                 确认并保存基线
               </button>
+              <button className="ui-button primary" disabled={pending} onClick={() => {
+                setPending(true)
+                void perform(async () => {
+                  const results = await window.desktop.engineering.confirmRequirementsAndPrepare(project.id, confirmation.fingerprint, confirmation.count)
+                  const failures = results.filter(r => !r.success)
+                  setConfirmOpen(false)
+                  if (failures.length) throw new Error('需求已确认，' + failures.length + ' 项方案未生成；成功项已保留，可到工作台重试。')
+                }, '需求已确认，方案已准备好，可到工作台审阅并开始。').finally(() => setPending(false))
+              }}>确认需求并准备方案</button>
             </footer>
           </div>
         </Overlay>

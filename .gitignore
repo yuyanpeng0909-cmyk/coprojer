@@ -22,6 +22,25 @@ output/
 Thumbs.db
 Desktop.ini
 
+# Local credentials, private keys, and application profiles
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+*.p8
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+credentials.json
+credentials.*.json
+secrets.json
+secrets.*.json
+engineering-v[0-9]*.json
+
 # Editor settings
 .idea/
 .vscode/

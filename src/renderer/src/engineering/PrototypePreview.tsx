@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, Monitor, Smartphone, RefreshCw } from 'lucide-react'
 import type { Project } from '../../../shared/engineering'
 import DesignProcess from './DesignProcess'
@@ -23,6 +23,7 @@ export default function PrototypePreview({ project }: { project: Project }) {
     [error, setError] = useState('')
   const revision =
     project.prototypes?.find((p) => p.id === revisionId) ?? project.prototypes?.at(-1)
+  useEffect(() => { setError('') }, [revision?.id, project.prd?.status])
   const prepared = useMemo(() => {
     try {
       return { document: revision ? isolatedDocument(revision.html) : '', error: '' }
@@ -48,6 +49,9 @@ export default function PrototypePreview({ project }: { project: Project }) {
           ))}
         </select>
         <div>
+          {revision && <button className="ui-button secondary small" disabled={!!project.activity || !!project.designActivity || project.prototypeBriefs?.[revision.targetId || '']?.status === 'accepted' && project.selectedPrototypeIds?.[revision.targetId || ''] === revision.id} onClick={() => { setError(''); void window.desktop.engineering.acceptPrototypeAndPreparePrd(project.id, revision.id).catch(e => setError(String(e))) }}>
+            {project.prototypeBriefs?.[revision.targetId || '']?.status === 'accepted' && project.selectedPrototypeIds?.[revision.targetId || ''] === revision.id ? '已验收 · 开发依据' : '验收此原型'}
+          </button>}
           <button
             className={`eng-icon ${!mobile ? 'selected' : ''}`}
             aria-label="桌面原型"
@@ -132,7 +136,7 @@ export default function PrototypePreview({ project }: { project: Project }) {
             <p>
               {project.designActivity
                 ? '完成后自动呈现，你可以继续讨论需求。'
-                : '点击「设计原型」，把讨论变成可交互的界面。'}
+                : '描述项目目标后，系统会征集设计意见并生成原型；原型验收后自动整理 PRD。'}
             </p>
           </div>
         )}

@@ -287,6 +287,22 @@
 
 ![UI 1.6 暗色决策卡](ui/baseline-v1.6/decision-live-dark.png)
 
+### 9.1 新手流程补充基线（2026-09-27）
+
+沿用 UI 1.6 的中性配色、字号与密度。初步想法阶段主动收集设计意见；提交后进入完整原型视图，试用验收后自动生成 PRD，再进入需求审阅与方案设计。窄窗口合并状态提示，次要模型统计收进已有「查看过程」，保留试用和反馈空间。
+
+以下截图来自隔离资料目录中的真实 Electron、本地确定性协议服务；原型业务内容为测试资料，不代表真实供应商输出或使用者项目已验收。完整截图在 [novice](ui/baseline-v1.6/novice/) 中。
+
+![新手设计意见](ui/baseline-v1.6/novice/design-opinion-1280-light.png)
+
+![紧凑原型验收](ui/baseline-v1.6/novice/prototype-review-860-light.png)
+
+![原型确定后自动生成 PRD](ui/baseline-v1.6/novice/prd-ready-1280-light.png)
+
+![紧凑方案审阅](ui/baseline-v1.6/novice/plan-review-860-light.png)
+
+智能体技能配置、上下文取材记录及工作台的明暗主题也保存在同一目录；1280 × 840 与 860 × 600 的操作和布局均纳入新手流程测试。
+
 ## 10. 开发验收与变更
 
 新增或修改 UI 时核对：

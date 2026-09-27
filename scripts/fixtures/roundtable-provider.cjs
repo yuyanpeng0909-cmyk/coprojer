@@ -1,4 +1,5 @@
 const http = require('node:http')
+const { prdReply, sendPrdJson } = require('./prd-reply.cjs')
 const targets = [
   {
     id: 'web',
@@ -40,6 +41,7 @@ async function startRoundtableProvider() {
     for await (const chunk of req) raw += chunk
     const body = JSON.parse(raw)
     control.requests.push(body)
+    if (sendPrdJson(body, res, control)) return
     if (control.fail || control.failModel === body.model) {
       res.writeHead(503)
       res.end('fixture unavailable')
@@ -96,13 +98,14 @@ async function startRoundtableProvider() {
         output.push({ type: 'function_call', call_id: call.id, ...call.function })
     }
     emit({ reasoning_content: '先核对端边界，再检查各端功能和接口。' })
-    const prose = design
+    const prd = prdReply(body, control)
+    const prose = prd?.text ?? (design
       ? '<!doctype html><html><body><h1>子项目专属原型</h1></body></html>'
       : chair
         ? toolsDone
           ? '## 第一版完整方案\n\n四个子项目边界已整理。需要人工确认设备离线策略与移动端范围。\n\n请给出反馈，我们会在下一轮共同修订。'
           : '正在整理各位意见，合并多端项目边界与功能。'
-        : `### ${body.model} 的意见\n\n${system.includes('交叉') || system.includes('针对其他') ? '已复核其他成员的意见，补充离线数据冲突与移动端权限。' : '建议分别建立前端、后台、移动应用、IoT 设备项目。'}\n\n- 各端职责独立，接口版本必须明确。\n- 需要人工决定离线可用范围。`
+        : `### ${body.model} 的意见\n\n${system.includes('交叉') || system.includes('针对其他') ? '已复核其他成员的意见，补充离线数据冲突与移动端权限。' : '建议分别建立前端、后台、移动应用、IoT 设备项目。'}\n\n- 各端职责独立，接口版本必须明确。\n- 需要人工决定离线可用范围。`)
     emit({ content: prose.slice(0, 20) })
     if (control.hold && !chair && !design)
       await new Promise((resolve) => {
@@ -122,7 +125,8 @@ async function startRoundtableProvider() {
           ],
         }),
       )
-    if (
+    if (prd) emitCalls(prd.calls.map(c => ({ name: c.name, args: JSON.parse(c.arguments) })))
+    if (!prd &&
       ['long', 'reserved', 'endless', 'errors'].includes(control.decisions) &&
       !chair &&
       !design

@@ -36,7 +36,7 @@ async function main() {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     page.on('pageerror', (e) => errors.push(e.message))
     await page.getByRole('heading', { name: '工作台', exact: true }).waitFor()
-    await waitFor(async () => (await state()).agents.length === 2, 'main service')
+    await waitFor(async () => (await state()).agents.length === 4, 'main service')
   }
   const featureInput = (title, dependencies = []) => ({
     title,
@@ -50,6 +50,9 @@ async function main() {
   })
   const prepare = async (pid, title) => {
     const id = await invoke('saveFeature', pid, null, featureInput(title))
+    await invoke('submitPrototypePreferences', pid, '保持现有记账界面，按新功能更新原型。')
+    await waitFor(async () => !(await project(pid)).designActivity, 'prototype ready')
+    await invoke('acceptPrototypeAndPreparePrd', pid, (await project(pid)).prototypes.at(-1).id)
     await invoke('confirmRequirements', pid, id)
     await invoke('savePlan', pid, id, '使用已有模块，运行测试。', ['实现', '测试'])
     await invoke('confirmPlan', pid, id)
@@ -186,6 +189,9 @@ async function main() {
       path: join(output, 'engineering-map-light.png'),
     })
 
+    await invoke('submitPrototypePreferences', pid, '简洁的记账界面，突出金额输入与结余。')
+    await waitFor(async () => !(await project(pid)).designActivity, 'initial prototype ready')
+    await invoke('acceptPrototypeAndPreparePrd', pid, (await project(pid)).prototypes.at(-1).id)
     await page.getByRole('button', {name:'确认完整需求',exact:true}).click()
     await page.getByRole('button', {name:'确认并保存基线',exact:true}).click()
     await page.getByRole('dialog',{name:'确认完整需求',exact:true}).waitFor({state:'hidden'})

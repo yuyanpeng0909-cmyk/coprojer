@@ -3,6 +3,10 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { defaultAgentTools } from '../../shared/engineering'
+import { builtinSkills, defaultAgents } from '../../shared/agents'
+import { normalizeContext } from './context'
+import { syncPrototypeBriefs } from '../../shared/prototype-workflow'
+import type { SkillDefinition } from '../../shared/engineering'
 import type { AgentConfig, EngineeringState, ModelConfig, Project } from '../../shared/engineering'
 
 export const uid = () => randomUUID()
@@ -11,6 +15,7 @@ interface DiskState {
   version: 1
   models: (ModelConfig & { cipher: string })[]
   agents: AgentConfig[]
+  skills?: SkillDefinition[]
   projects: Project[]
 }
 export class EngineeringStore {
@@ -23,25 +28,8 @@ export class EngineeringStore {
       version: 1,
       models: [],
       projects: [],
-      agents: [
-        {
-          id: 'developer',
-          name: '开发智能体',
-          role: 'developer',
-          tools: defaultAgentTools('developer'),
-          modelId: '',
-          instructions: '实现已确认需求，复用项目公共内容，修改后运行必要检查。',
-        },
-        {
-          id: 'reviewer',
-          name: '验证智能体',
-          role: 'reviewer',
-          tools: defaultAgentTools('reviewer'),
-          modelId: '',
-          instructions:
-            '独立检查实际代码，运行测试并逐项核对验收标准。不要仅复述开发者的完成声明。',
-        },
-      ],
+      agents: defaultAgents(),
+      skills: [],
     }
     if (existsSync(this.path)) {
       const saved = JSON.parse(readFileSync(this.path, 'utf8'))
@@ -54,11 +42,21 @@ export class EngineeringStore {
         throw new Error('工程资料格式无法识别，原文件已保留。')
       this.data = saved
       for (const agent of this.data.agents) agent.tools ??= defaultAgentTools(agent.role)
+      this.data.skills ??= []
+      for (const agent of defaultAgents(this.data.models[0]?.id || '')) {
+        if (!this.data.agents.some(a => a.role === agent.role)) {
+          if (this.data.agents.some(a => a.id === agent.id)) agent.id = uid()
+          this.data.agents.push(agent)
+        }
+      }
+      for (const agent of this.data.agents)
+        agent.skillIds ??= builtinSkills.filter(s => s.roles.includes(agent.role) && s.requiredTools.every(t => agent.tools.includes(t))).map(s => s.id)
       for (const project of this.data.projects) {
         project.features ??= []
         project.context ??= []
         project.events ??= []
         project.changes ??= []
+        project.agentRuns ??= []
         project.prototypes ??= []
         project.targets ??= []
         for (const feature of project.features) {
@@ -71,6 +69,7 @@ export class EngineeringStore {
           feature.repairRound ??= 0
           feature.feedback ??= ''
         }
+        normalizeContext(project)
         if (
           project.roundtable &&
           ['running', 'awaiting-decision'].includes(project.roundtable.status)
@@ -79,6 +78,10 @@ export class EngineeringStore {
           project.roundtable.phase = '上次圆桌已中断，可补充反馈后继续'
         }
         project.designActivity = false
+        for (const brief of Object.values(project.prototypeBriefs || {}))
+          if (brief.status === 'designing') { brief.status = 'error'; brief.error = '上次设计已中断，设计意见与已有版本保留；提交意见后继续。' }
+        syncPrototypeBriefs(project)
+        if (project.prd?.status === 'generating') { project.prd.status = 'error'; project.prd.error = '上次 PRD 生成已中断，已确认原型保留，可重新整理。' }
         for (const entry of project.chat)
           if (entry.status === 'streaming') {
             entry.status = 'stopped'
@@ -127,10 +130,12 @@ export class EngineeringStore {
     return JSON.parse(
       JSON.stringify({
         ...this.data,
+        skills: this.skills(),
         models: this.data.models.map(({ cipher, ...model }) => ({ ...model, hasKey: !!cipher })),
       }),
     )
   }
+  skills(): SkillDefinition[] { return [...builtinSkills, ...(this.data.skills || [])] }
   encrypt(key: string): string {
     if (!safeStorage.isEncryptionAvailable())
       throw new Error('系统密钥保护不可用，无法安全保存 API Key。')

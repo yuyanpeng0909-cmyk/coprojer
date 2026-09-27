@@ -93,6 +93,13 @@ async function request(
   signal?: AbortSignal,
   onDelta?: DeltaListener,
 ): Promise<any> {
+  // Bound the serialized request across all protocols, including skills and tools.
+  // This is a character guard, not a provider token estimate.
+  const payload = body === undefined ? undefined : JSON.stringify(onDelta
+    ? { ...(body as object), stream: true, ...(needsToolStream(c, body) ? { tool_stream: true } : {}) }
+    : body)
+  if (payload && payload.length > 160_000)
+    throw new Error('本次模型请求超过 160000 字符上限（含资料、技能、工具和对话，并非 token 数）。请减少技能、缩小功能或降低资料预算后重试；原始资料已保留。')
   const startedAt = Date.now()
   const transportError = (error: unknown): Error => {
     const codes: string[] = []
@@ -124,18 +131,7 @@ async function request(
     response = await fetch(endpoint(normalizedBase(c.baseUrl), path), {
       method: body === undefined ? 'GET' : 'POST',
       headers: headers(c),
-      body:
-        body === undefined
-          ? undefined
-          : JSON.stringify(
-              onDelta
-                ? {
-                    ...(body as object),
-                    stream: true,
-                    ...(needsToolStream(c, body) ? { tool_stream: true } : {}),
-                  }
-                : body,
-            ),
+      body: payload,
       redirect: 'error',
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })

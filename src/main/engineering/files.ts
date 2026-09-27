@@ -12,6 +12,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import type { Project } from '../../shared/engineering'
 import type { EngineeringStore } from './store'
 import type { ToolDefinition } from './model'
+import { readContext, readPage } from './context'
 
 const object = (properties: Record<string, unknown>, required: string[]) => ({
   type: 'object',
@@ -25,7 +26,7 @@ export const engineeringTools: ToolDefinition[] = [
     name: 'read_context',
     description:
       '按上下文 ID 读取完整原文与来源，包括已确认基线、讨论分页和原型。讨论是参考材料，已确认基线才是交付依据。不填 ID 时列出索引。',
-    parameters: object({ id: string }, []),
+    parameters: object({ id: string, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: string }, []),
   },
   {
     name: 'list_files',
@@ -34,8 +35,8 @@ export const engineeringTools: ToolDefinition[] = [
   },
   {
     name: 'read_file',
-    description: '读取项目中的 UTF-8 文本文件。',
-    parameters: object({ path: string }, ['path']),
+    description: '分页读取 UTF-8 文件；传 offset=nextOffset 和 version 继续，直到 nextOffset 为空。',
+    parameters: object({ path: string, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: string }, ['path']),
   },
   {
     name: 'write_file',
@@ -226,50 +227,12 @@ export async function executeTool(
   signal: AbortSignal,
 ): Promise<string> {
   signal.throwIfAborted()
-  if (name === 'read_context') {
-    if (!args.id)
-      return JSON.stringify([
-        ...project.context.map(({ id, title, source }) => ({ id, title, source })),
-        ...Array.from({ length: Math.ceil(project.chat.length / 10) }, (_, i) => ({
-          id: `discussion:${i}`,
-          title: `原始讨论 ${i * 10 + 1}–${Math.min((i + 1) * 10, project.chat.length)}`,
-          source: '完整讨论记录，仅作追溯参考',
-        })),
-        ...(project.prototypes ?? []).map((p) => ({
-          id: `prototype:${p.id}`,
-          title: p.title,
-          source: '设计原型，仅作界面参考',
-        })),
-      ])
-    if (/^discussion:\d+$/.test(args.id)) {
-      const start = Number(args.id.split(':')[1]) * 10
-      return JSON.stringify(
-        project.chat
-          .slice(start, start + 10)
-          .map(({ id, role, text, at, modelName, status }) => ({
-            id,
-            role,
-            text,
-            at,
-            modelName,
-            status,
-          })),
-      )
-    }
-    if (typeof args.id === 'string' && args.id.startsWith('prototype:')) {
-      const prototype = project.prototypes?.find((p) => p.id === args.id.slice(10))
-      if (!prototype) throw new Error('原型记录不存在。')
-      return JSON.stringify(prototype)
-    }
-    const context = project.context.find((c) => c.id === args.id)
-    if (!context) throw new Error('上下文记录不存在，请先读取索引。')
-    return JSON.stringify(context)
-  }
+  if (name === 'read_context') return readContext(project, args)
   if (name === 'list_files') return JSON.stringify(listFiles(project.root))
   if (name === 'read_file') {
     const file = safePath(project.root, args.path)
     if (lstatSync(file).size > 400_000) throw new Error('文件过大，请拆分文件。')
-    return readFileSync(file, 'utf8')
+    return readPage(readFileSync(file, 'utf8'), args)
   }
   if (name === 'write_file') {
     if (role !== 'developer') throw new Error('验证角色不能修改工程文件。')

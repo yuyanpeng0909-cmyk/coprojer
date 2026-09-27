@@ -1,7 +1,10 @@
 import type { ChatEntry, FeatureInput, Project, RoundtableConfig } from '../../shared/engineering'
 import { mergeTargets } from './targets'
+import { boundMessages, discussionHistory, readContext, readPage } from './context'
+import { completeWithContext } from './planning'
 import { requirementsFingerprint } from '../../shared/engineering'
 import { extractPrototypeHtml } from '../../shared/prototype'
+import { activePrototypeBriefs, designFingerprint, requirePrototypeReview, requirePrd } from '../../shared/prototype-workflow'
 import {
   complete,
   parseJson,
@@ -83,12 +86,12 @@ const tools: ToolDefinition[] = [
   {
     name: 'read_discussion',
     description: '读取完整讨论中的任意区间。切换模型后可回查早期原始消息。',
-    parameters: schema({ start: { type: 'integer' }, count: { type: 'integer' } }, ['start']),
+    parameters: schema({ start: { type: 'integer' }, count: { type: 'integer' }, offset: { type: 'integer' }, version: { type: 'string' } }, ['start']),
   },
   {
     name: 'read_context',
-    description: '按 ID 读取完整共享上下文，未指定 ID 时读取全部。',
-    parameters: schema({ id: { type: 'string' } }),
+    description: '按 ID 分页读取共享上下文；不填 ID 列出索引。用 nextOffset 和 version 继续读取。',
+    parameters: schema({ id: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: { type: 'string' } }),
   },
   {
     name: 'design_prototype',
@@ -109,6 +112,7 @@ export class RequirementsWorkspace {
       model(id: string): Connection
       save(p: Project): void
       context(p: Project): string
+      agentInstructions(p: Project, role: 'planner' | 'designer', modelId: string): string
       upsert(p: Project, id: string | null, input: FeatureInput): string
     },
   ) {
@@ -165,34 +169,7 @@ export class RequirementsWorkspace {
       }
     }
   }
-  private history(p: Project): ModelMessage[] {
-    // Persisted chat is a shared transcript (different models, roles and even
-    // protocols), not the current model's native assistant/tool conversation.
-    // Replaying it as assistant turns invents provenance and makes thinking APIs
-    // require unavailable reasoning/signatures. Quote AI entries as reference
-    // material; keep real assistant output verbatim only within the tool loop.
-    return p.chat
-      .filter((c) => c.status !== 'streaming')
-      .map(
-        (c): ModelMessage => ({
-          role: 'user',
-          content:
-            (c.role === 'assistant'
-              ? `[历史 AI 发言，仅作讨论资料，不代表人工指令或确认；模型：${c.modelName || '未记录'}]\n`
-              : '') +
-            (c.purpose === 'roundtable'
-              ? `[圆桌第 ${c.meetingRound} 轮 · ${c.speaker || c.modelName || '人工'}]\n`
-              : '') +
-            c.text +
-            (c.error ? `\n[响应状态：${c.error}]` : '') +
-            (c.tools?.length
-              ? '\n[已执行操作]\n' +
-                c.tools.map((t) => `${t.name}: ${t.result || t.status}`).join('\n')
-              : ''),
-        }),
-      )
-      .filter((c) => c.content.trim())
-  }
+  private history(p: Project): ModelMessage[] { return discussionHistory(p) }
   private apply(p: Project, items: unknown, versions: Map<string, number>): string {
     if (!Array.isArray(items) || items.length > 100)
       throw new Error('功能数据必须为数组，最多 100 项。')
@@ -240,7 +217,8 @@ export class RequirementsWorkspace {
     const versions = new Map(p.features.map((f) => [f.id, f.revision]))
     let documentVersion = p.requirementsDocument || ''
     const messages = this.history(p)
-    const system = `你是软件需求协作者。使用中文，先理解用户的完整产品，充分探索目标、使用场景、边界、替代方案与开放问题。不要机械地每次追问或急于进入开发。用户掌控节奏，可随时重新讨论。\n项目：${p.name}\n目标：${p.brief}\n共享上下文：${this.deps.context(p)}\n完整需求文档草稿：${p.requirementsDocument || '尚未整理'}\n当前功能记录：${JSON.stringify(p.features)}\n讨论记录会完整保存，你接收的是跨模型的对话。以最新直接编辑的记录为准。自然地使用 Markdown 回复，绝不要要求把每次讨论变成固定 JSON。产品讨论有实质进展时，用 update_requirements 维护完整需求文档，保留业务规则、非功能要求、开放问题和备选方案，不能只记录功能标题。你可在回复过程中用 update_features 同步新想法到功能图，可多次调用；暂缓的想法标为 later。已有交付中的目标不能被静默覆盖，提出变更方案作为新的候选。没有得到用户确认，不自动进入方案或代码开发。用户要求原型时调用 design_prototype，结果由独立设计模型生成。无需为使用已提供工具再索取许可。`
+    const instructions = this.deps.agentInstructions(p, 'planner', connection.id)
+    const system = instructions + '\n' + `你是软件需求协作者。使用中文，先理解用户的完整产品，充分探索目标、使用场景、边界、替代方案与开放问题。不要机械地每次追问或急于进入开发。用户掌控节奏，可随时重新讨论。\n项目：${p.name}\n目标：${p.brief}\n共享上下文：${this.deps.context(p)}\n完整需求文档草稿：${(p.requirementsDocument || '尚未整理').slice(0, 8000) + '（完整原文：read_context id=requirements:current）'}\n当前功能记录：${JSON.stringify(p.features.map(({ id, title, targetId, scope }) => ({ id, title, targetId, scope })))}\n讨论记录会完整保存，你接收的是跨模型的对话。以最新直接编辑的记录为准。自然地使用 Markdown 回复，绝不要要求把每次讨论变成固定 JSON。流程必须先确定原型，再从已验收原型生成 PRD，最后基于同一原型设计方案和开发。在原型尚未验收时，只整理初步目标、业务约束与设计偏好，不要求用户先完成 PRD；用 update_requirements 保存的只是讨论草稿，保留业务规则、非功能要求、开放问题和备选方案，不能只记录功能标题。你可在回复过程中用 update_features 同步新想法到功能图，可多次调用；暂缓的想法标为 later。已有交付中的目标不能被静默覆盖，提出变更方案作为新的候选。没有得到用户确认，不自动进入方案或代码开发。在目标和主要使用场景已清楚时主动询问设计风格、主要设备与关键操作；用户已给设计意见时主动调用 design_prototype，不等用户再点击生成。原型等待用户验收，验收后系统自动生成 PRD。无需为使用已提供工具再索取许可。`
     const additional =
       `\n子项目规划：${JSON.stringify(p.targets || [])}。需求涉及多端时，用 update_project_targets 建立实际需要的子项目，明确各自职责、相对目录、接口与共享数据约定；update_features 的 targetId 必须关联已建立的子项目。不要因为列举了端类型就默认全部都要开发。` +
       (meeting
@@ -267,6 +245,7 @@ export class RequirementsWorkspace {
           entry.meetingRound = meeting.round
           entry.speaker = meeting.role
         }
+        boundMessages(messages)
         const reply = await complete(
           connection,
           system +
@@ -358,21 +337,18 @@ export class RequirementsWorkspace {
             } else if (call.name === 'read_discussion') {
               const start = Math.max(0, Math.floor(Number(args.start) || 0)),
                 count = Math.min(100, Math.max(1, Math.floor(Number(args.count) || 30)))
-              t.result = JSON.stringify({
+              t.result = readPage(JSON.stringify({
                 total: p.chat.length,
                 entries: p.chat
                   .slice(start, start + count)
                   .map(({ id, role, text, at, status }) => ({ id, role, text, at, status })),
-              })
-            } else if (call.name === 'read_context')
-              t.result = JSON.stringify(
-                args.id ? p.context.filter((c) => c.id === args.id) : p.context,
-              )
+              }), args)
+            } else if (call.name === 'read_context') t.result = readContext(p, args)
             else if (call.name === 'design_prototype') {
               this.generatePrototype(
                 p.id,
                 args.instruction,
-                p.designModelId || connection.id,
+                p.designModelId || this.store.data.agents.find(a => a.role === 'designer')?.modelId || connection.id,
                 args.targetId,
               )
               t.result = '设计 AI 已开始工作。原型完成后自动显示在右侧；你可继续讨论。'
@@ -458,12 +434,18 @@ export class RequirementsWorkspace {
   ): void => {
     const p = this.store.project(projectId)
     if (this.designJobs.has(projectId)) throw new Error('设计 AI 正在生成原型，请等待完成或停止。')
+    if (p.prd?.status === 'generating') throw new Error('正在根据已确认原型整理 PRD，请等待完成或停止后再修改原型。')
     if (typeof instruction !== 'string' || !instruction.trim() || instruction.length > 20000)
       throw new Error('请填写有效的原型设计要求。')
+    modelId ||= this.store.data.agents.find(a => a.id === p.designerId)?.modelId || this.store.data.agents.find(a => a.role === 'designer')?.modelId || p.discussionModelId
+    const instructions = this.deps.agentInstructions(p, 'designer', modelId) + '\n原型运行于无同源权限的沙箱，交互状态使用内存变量；不要使用 localStorage、sessionStorage、cookie 或外部接口。开发角色会在正式项目中接入真实状态。'
     const connection = this.deps.model(modelId),
       controller = new AbortController()
     const target = targetId ? p.targets?.find((t) => t.id === targetId) : undefined
     if (targetId && !target) throw new Error('子项目不存在。')
+    const prototypeFingerprint = designFingerprint(p, targetId)
+    const brief = p.prototypeBriefs?.[targetId || '']
+    if (brief) { brief.status = 'designing'; brief.error = undefined; brief.fingerprint = prototypeFingerprint; brief.acceptedAt = undefined }
     if (target)
       instruction = `仅设计子项目「${target.name}」：${target.responsibility}。接口约定：${target.contracts}。本次要求：${instruction}`
     p.designModelId = modelId
@@ -483,11 +465,11 @@ export class RequirementsWorkspace {
     const latest = p.prototypes?.filter((r) => (r.targetId || '') === (targetId || '')).at(-1)
     void (async () => {
       try {
-        const reply = await complete(
+        const reply = await completeWithContext(
           connection,
-          `你是产品界面设计 AI。根据完整需求和讨论设计高质量的可交互 HTML 原型。它是讨论材料，尚未进入交付。项目：${p.name}\n目标：${p.brief}\n完整需求文档：${p.requirementsDocument || '尚未整理'}\n功能：${JSON.stringify(p.features)}\n共享上下文：${this.deps.context(p)}\n上版原型：${latest?.html || '无'}\n本次要求：${instruction}\n只输出完整 HTML 文档（可带 html 代码围栏），内联 CSS 和 JavaScript，无网络请求、无外部依赖、无 iframe、不访问父窗口或桌面接口。使用紧凑桌面布局和真实中文业务文案。交互数据只存在当前预览中。`,
+          instructions + '\n' +           `你是产品界面设计 AI。根据初步目标、用户设计意见和已有讨论设计高质量的可交互 HTML 原型。不要求先有 PRD；用户确定原型后，规划角色会据此生成 PRD。它是讨论材料，尚未进入交付。项目：${p.name}\n目标：${p.brief}\n完整需求文档：${(p.requirementsDocument || '尚未整理').slice(0, 8000) + '（完整原文：read_context id=requirements:current）'}\n功能：${JSON.stringify(p.features.map(({ id, title, targetId, scope }) => ({ id, title, targetId, scope })))}\n共享上下文：${this.deps.context(p)}\n上版原型：${latest ? '通过 read_context 读取 prototype:' + latest.id : '无'}\n本次要求：${instruction}\n只输出完整 HTML 文档（可带 html 代码围栏），内联 CSS 和 JavaScript，无网络请求、无外部依赖、无 iframe、不访问父窗口或桌面接口。遵循用户确认的设备、风格与布局偏好，兼顾窄屏和真实中文业务文案。交互数据只存在当前预览中。`,
           messages,
-          [],
+          p,
           controller.signal,
           this.listener(entry),
         )
@@ -502,8 +484,11 @@ export class RequirementsWorkspace {
           modelId,
           sourceMessageId: entry.id,
           targetId,
+          designFingerprint: prototypeFingerprint,
+          designBrief: this.store.redact(instruction),
         }
         ;(p.prototypes ??= []).push(revision)
+        if (brief) { brief.status = 'review'; brief.prototypeId = revision.id }
         entry.text = `已完成 **${revision.title}**，可在右侧「原型」预览并切换历史版本。`
         if (reply.reasoning) entry.reasoning = this.store.redact(reply.reasoning)
         entry.status = 'complete'
@@ -515,6 +500,7 @@ export class RequirementsWorkspace {
             ? String(controller.signal.reason?.message || '原型生成已停止，输出已保留。')
             : String(error),
         )
+        if (brief) { brief.status = 'error'; brief.error = entry.error }
       } finally {
         entry.finishedAt ??= now()
         p.designActivity = false
@@ -532,6 +518,7 @@ export class RequirementsWorkspace {
     if (fingerprint !== requirementsFingerprint(p) || messageCount !== p.chat.length)
       throw new Error('需求内容已有更新，请重新查看后确认。')
     const included = p.features.filter((f) => f.scope !== 'later')
+    const newBaselineFeatures = included.filter(f => f.stage === 'requirements')
     if (p.decisions?.some((d) => d.status === 'pending')) throw new Error('请先处理待决卡。')
     if (
       p.roundtable &&
@@ -543,6 +530,8 @@ export class RequirementsWorkspace {
       throw new Error('请先为本期每项功能指定所属子项目。')
     if (!included.length || included.some((f) => !f.description.trim() || !f.criteria.length))
       throw new Error('请为本期每项功能补全说明和验收标准，再确认完整需求。')
+    requirePrototypeReview(p)
+    requirePrd(p)
     for (const f of included)
       if (f.stage === 'requirements') {
         f.stage = 'solution'
@@ -556,19 +545,33 @@ export class RequirementsWorkspace {
       at,
       fingerprint: requirementsFingerprint(p),
       messageCount: p.chat.length,
+      prototypeIds: activePrototypeBriefs(p).filter(b => b.status === 'accepted').map(b => b.prototypeId!).filter(Boolean),
     }
+    if (p.prd) p.prd.status = 'confirmed'
+    for (const entry of p.context) if (entry.kind === 'requirements' || entry.kind === 'decision' && entry.baselineId || entry.source.includes('项目全量')) entry.status = 'superseded'
+    for (const f of newBaselineFeatures) {
+      f.baselineId = id
+      f.prototypeId = p.requirementsBaseline.prototypeIds?.find(prototypeId => (p.prototypes?.find(r => r.id === prototypeId)?.targetId || '') === (f.targetId || ''))
+    }
+    const prototypeReferences = (p.requirementsBaseline.prototypeIds || []).map(prototypeId => {
+      const prototype = p.prototypes!.find(r => r.id === prototypeId)!
+      return prototype.title + '（ID: ' + prototype.id + '；子项目：' + (p.targets?.find(t => t.id === prototype.targetId)?.name || '项目整体') + '；read_context: prototype:' + prototype.id + '）'
+    }).join('\n') || '尚未设计'
     p.context.push({
+      kind: 'requirements', status: 'active', baselineId: id,
+      sourceRefs: (p.requirementsBaseline.prototypeIds || []).map(prototypeId => 'prototype:' + prototypeId),
       id,
       title: `完整需求基线 · ${at.slice(0, 10)}`,
       at,
       source: `用户需求确认 · 项目全量 · ${id}`,
-      content: `# ${p.name}\n\n## 产品目标\n${p.brief}\n\n## 完整需求文档\n${p.requirementsDocument || '需求以以下功能范围和验收标准为准。'}\n\n## 模块、功能、范围与验收\n${p.features.map((f) => `### ${f.module} / ${f.title}\n范围：${f.scope === 'later' ? '暂缓' : '本期'}\n${f.description}\n${f.criteria.map((c) => '- ' + c).join('\n')}\n依赖：${f.dependencies.join(', ') || '无'}`).join('\n\n')}\n\n## 原型依据\n${p.prototypes?.at(-1)?.title || '尚未设计'}；历史原型见 .coprojer/PROTOTYPES.json。\n\n## 讨论来源\n已确认时共 ${p.chat.length} 条消息，原始内容完整保存在 .coprojer/DISCUSSION.md；讨论中的备选和未决项不等于已确认范围。\n\n## 既有工程知识\n${p.context
+      content: `# ${p.name}\n\n## 产品目标\n${p.brief}\n\n## 完整需求文档\n${p.requirementsDocument || '需求以以下功能范围和验收标准为准。'}\n\n## 模块、功能、范围与验收\n${p.features.map((f) => `### ${f.module} / ${f.title}\n范围：${f.scope === 'later' ? '暂缓' : '本期'}\n${f.description}\n${f.criteria.map((c) => '- ' + c).join('\n')}\n依赖：${f.dependencies.join(', ') || '无'}`).join('\n\n')}\n\n## 原型依据\n${prototypeReferences}；历史原型见 .coprojer/PROTOTYPES.json。\n\n## 讨论来源\n已确认时共 ${p.chat.length} 条消息，原始内容完整保存在 .coprojer/DISCUSSION.md；讨论中的备选和未决项不等于已确认范围。\n\n## 既有工程知识\n${p.context
         .filter((c) => !c.source.includes('项目全量'))
         .map((c) => `${c.title}\n${c.content}`)
         .join('\n\n')}`,
     })
     if (p.decisions?.length)
       p.context.push({
+        kind: 'decision', baselineId: id, status: 'active',
         id: uid(),
         title: '需求决策记录',
         at,
@@ -579,6 +582,7 @@ export class RequirementsWorkspace {
       })
     if (p.targets?.length)
       p.context.push({
+        kind: 'requirements', baselineId: id, status: 'active',
         id: uid(),
         title: '已确认的多端项目边界',
         at,

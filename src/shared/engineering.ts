@@ -18,17 +18,44 @@ export const toolLabels = {
   run_command: '运行命令与测试',
 }
 export type EngineeringToolName = keyof typeof toolLabels
-export const defaultAgentTools = (role: 'developer' | 'reviewer'): EngineeringToolName[] =>
+export type AgentRole = 'planner' | 'designer' | 'developer' | 'reviewer'
+export const agentRoleLabels: Record<AgentRole, string> = {
+  planner: '任务规划', designer: '原型前端', developer: '开发', reviewer: '测试校验',
+}
+export const defaultAgentTools = (role: AgentRole): EngineeringToolName[] =>
   (Object.keys(toolLabels) as EngineeringToolName[]).filter(
-    (name) => role === 'developer' || name !== 'write_file',
+    (name) => role === 'developer' || (role === 'reviewer' ? name !== 'write_file' : !['write_file', 'run_command'].includes(name)),
   )
 export interface AgentConfig {
   id: string
   name: string
-  role: 'developer' | 'reviewer'
+  role: AgentRole
   modelId: string
   instructions: string
   tools: EngineeringToolName[]
+  skillIds?: string[]
+}
+export interface SkillDefinition {
+  id: string
+  name: string
+  version: string
+  description: string
+  roles: AgentRole[]
+  requiredTools: EngineeringToolName[]
+  content: string
+  origin: 'builtin' | 'local'
+}
+export interface AgentRunSnapshot {
+  id: string
+  at: string
+  role: AgentRole
+  agentId: string
+  modelId: string
+  featureId?: string
+  skills: { id: string; version: string; hash: string }[]
+  contextIds: string[]
+  contextCharacters: number
+  omittedCount: number
 }
 export type FeatureStage =
   | 'requirements'
@@ -51,6 +78,7 @@ export interface CriterionResult {
   evidence: string
 }
 export interface Feature {
+  prototypeResult?: { prototypeId: string; passed: boolean; evidence: string }
   targetId?: string
   id: string
   module: string
@@ -71,6 +99,8 @@ export interface Feature {
   planSource?: 'manual' | 'llm'
   planGenerationError?: string
   planConfirmationError?: string
+  baselineId?: string
+  prototypeId?: string
 }
 export interface ChatEntry {
   id: string
@@ -99,6 +129,8 @@ export interface DiscussionToolEvent {
   status: 'receiving' | 'running' | 'complete' | 'error'
 }
 export interface PrototypeRevision {
+  designBrief?: string
+  designFingerprint?: string
   targetId?: string
   id: string
   title: string
@@ -112,6 +144,7 @@ export interface RequirementsBaseline {
   at: string
   fingerprint: string
   messageCount: number
+  prototypeIds?: string[]
 }
 export interface ContextEntry {
   id: string
@@ -119,6 +152,13 @@ export interface ContextEntry {
   content: string
   source: string
   at: string
+  kind?: 'goal' | 'requirements' | 'decision' | 'result' | 'acceptance' | 'manual'
+  featureId?: string
+  targetId?: string
+  baselineId?: string
+  status?: 'active' | 'superseded' | 'stale' | 'archived'
+  revision?: number
+  sourceRefs?: string[]
 }
 export interface ExecutionEvent {
   id: string
@@ -158,6 +198,17 @@ export interface BatchConfirmResult {
   error?: string
 }
 export interface Project {
+  prd?: {
+    status: 'generating' | 'review' | 'confirmed' | 'error' | 'stale'
+    sources: { prototypeId: string; targetId?: string; fingerprint: string; derivedFingerprint?: string }[]
+    error?: string
+  }
+  prototypeBriefs?: Record<string, PrototypeBrief>
+  plannerId?: string
+  designerId?: string
+  selectedPrototypeIds?: Record<string, string>
+  agentRuns?: AgentRunSnapshot[]
+  contextBudget?: number
   targets?: ProjectTarget[]
   roundtable?: Roundtable
   decisions?: RoundtableDecision[]
@@ -181,6 +232,15 @@ export interface Project {
   requirementsBaseline?: RequirementsBaseline
   requirementsDocument?: string
   executionPlan?: ExecutionPlan
+}
+export interface PrototypeBrief {
+  targetId?: string
+  status: 'preferences' | 'designing' | 'review' | 'accepted' | 'error'
+  preferences: string
+  fingerprint: string
+  prototypeId?: string
+  acceptedAt?: string
+  error?: string
 }
 export const targetKinds = {
   web: '前端 Web',
@@ -255,13 +315,14 @@ export function requirementsFingerprint(project: Project): string {
       scope: f.scope,
       dependencies: f.dependencies,
     })),
-    prototype: project.prototypes?.at(-1)?.id ?? null,
+    prototype: project.selectedPrototypeIds?.[''] || project.prototypes?.filter(p => !p.targetId).at(-1)?.id || null,
     targetPrototypes: (project.targets || []).map(
-      (t) => project.prototypes?.filter((p) => p.targetId === t.id).at(-1)?.id || null,
+      (t) => project.selectedPrototypeIds?.[t.id] || project.prototypes?.filter((p) => p.targetId === t.id).at(-1)?.id || null,
     ),
   })
 }
 export interface EngineeringState {
+  skills?: SkillDefinition[]
   models: ModelConfig[]
   agents: AgentConfig[]
   projects: Project[]
@@ -278,6 +339,19 @@ export interface FeatureInput {
   dependencies: string[]
 }
 export interface EngineeringApi {
+  acceptPrototypeAndPreparePrd(projectId: string, prototypeId: string): Promise<void>
+  preparePrd(projectId: string): Promise<void>
+  submitPrototypePreferences(projectId: string, preferences: string, targetId?: string): Promise<void>
+  confirmRequirementsAndPrepare(projectId: string, fingerprint: string, messageCount: number): Promise<BatchPlanResult[]>
+  configureProject(projectId: string, input: { plannerId: string; designerId: string; contextBudget: number }): Promise<void>
+  archiveContext(projectId: string, id: string, archived: boolean): Promise<void>
+  importSkill(directory: string): Promise<void>
+  selectPrototype(projectId: string, prototypeId: string): Promise<void>
+  preparePlans(projectId: string): Promise<BatchPlanResult[]>
+  confirmPlansAndStart(projectId: string, featureIds: string[], revisions: number[]): Promise<BatchConfirmResult[]>
+  acceptAndContinue(projectId: string, featureId: string): Promise<void>
+  preflight(parent?: string): Promise<{ ready: boolean; checks: { name: string; ok: boolean; detail: string }[] }>
+  testCapabilities(input: ModelInput): Promise<string>
   state(): Promise<EngineeringState>
   saveModel(input: ModelInput): Promise<ModelConfig>
   deleteModel(id: string): Promise<void>
@@ -355,6 +429,11 @@ export const scopeLabels: Record<Scope, string> = {
   later: '暂缓',
 }
 export const engineeringMethods: (keyof EngineeringApi)[] = [
+  'acceptPrototypeAndPreparePrd',
+  'preparePrd',
+  'submitPrototypePreferences',
+  'confirmRequirementsAndPrepare', 'configureProject', 'archiveContext',
+  'importSkill', 'selectPrototype', 'preparePlans', 'confirmPlansAndStart', 'acceptAndContinue', 'preflight', 'testCapabilities',
   'state',
   'saveModel',
   'deleteModel',

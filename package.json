@@ -9,7 +9,8 @@
     "start": "npm run build && electron-vite preview",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && electron-vite build",
-    "test": "npm run build && node scripts/model-errors.cjs && node scripts/prototype-html.cjs && node scripts/design-lifecycle.cjs && node scripts/smoke.cjs && node scripts/engineering-smoke.cjs && node scripts/research-smoke.cjs && node scripts/roundtable-smoke.cjs && node scripts/decision-smoke.cjs && node scripts/discussion-budget-smoke.cjs",
+    "test": "npm run build && node scripts/model-errors.cjs && node scripts/context-skills.cjs && node scripts/prototype-html.cjs && node scripts/design-lifecycle.cjs && node scripts/smoke.cjs && node scripts/engineering-smoke.cjs && node scripts/research-smoke.cjs && node scripts/roundtable-smoke.cjs && node scripts/decision-smoke.cjs && node scripts/discussion-budget-smoke.cjs && node scripts/novice-smoke.cjs",
+    "test:novice": "npm run build && node scripts/model-errors.cjs && node scripts/context-skills.cjs && node scripts/novice-smoke.cjs",
     "test:engineering": "npm run build && node scripts/engineering-smoke.cjs",
     "test:research": "npm run build && node scripts/prototype-html.cjs && node scripts/research-smoke.cjs && node scripts/roundtable-smoke.cjs && node scripts/decision-smoke.cjs && node scripts/discussion-budget-smoke.cjs"
   },

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import GuidedWorkflow from './GuidedWorkflow'
 import {
   ArrowRight,
   Bot,
@@ -87,7 +88,7 @@ export function WelcomeWorkspace({
           </span>
           <span>
             <strong>工程智能体</strong>
-            <small>为开发与独立验证配置模型和工作要求</small>
+            <small>四个默认角色已装配技能，连接一个模型即可开始</small>
           </span>
           <span className="workspace-count">{state.agents.length}</span>
           <ArrowRight size={15} />
@@ -105,6 +106,8 @@ export default function WorkspaceOverview({
   onMap,
   onActivity,
   onContext,
+  onModels,
+  onBoard,
 }: {
   project: Project
   state: EngineeringState
@@ -113,6 +116,8 @@ export default function WorkspaceOverview({
   onMap(): void
   onActivity(): void
   onContext(): void
+  onModels(): void
+  onBoard(): void
 }) {
   const [query, setQuery] = useState(''),
     [scope, setScope] = useState('all')
@@ -134,6 +139,7 @@ export default function WorkspaceOverview({
   )
   return (
     <div className="workspace-overview">
+      <GuidedWorkflow key={project.id} project={project} state={state} onMap={onMap} onModels={onModels} onOpen={onOpen} onBoard={onBoard} />
       <div className="workspace-metrics">
         {[
           { label: '已规划功能', value: project.features.length, detail: '项目范围' },

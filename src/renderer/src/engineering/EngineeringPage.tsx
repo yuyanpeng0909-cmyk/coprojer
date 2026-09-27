@@ -50,6 +50,8 @@ import WorkspaceOverview, { WelcomeWorkspace } from './WorkspaceOverview'
 import WorkspaceSettings from './WorkspaceSettings'
 import RequirementsWorkspace, { type ResearchTab } from './RequirementsWorkspace'
 import ContextWorkspace from './ContextWorkspace'
+import { FirstRunCheck } from './GuidedWorkflow'
+import { agentRoleLabels } from '../../../shared/engineering'
 import {
   defaultAgentTools,
   toolLabels,
@@ -612,7 +614,7 @@ export default function EngineeringPage({
               <div className="eng-section-heading">
                 <div>
                   <h2>你的工程成员</h2>
-                  <p>按职责选择模型与工作要求，开发和验证分别执行。</p>
+                  <p>默认团队按阶段接力。一个模型即可使用，也可为每个角色装配不同技能。</p>
                 </div>
                 <button
                   className="ui-button primary"
@@ -636,10 +638,11 @@ export default function EngineeringPage({
                   <article className="eng-agent-card" key={a.id}>
                     <div className="eng-section-heading">
                       <Bot size={21} />
-                      <span className="eng-tag">{a.role === 'developer' ? '开发' : '验证'}</span>
+                      <span className="eng-tag">{agentRoleLabels[a.role]}</span>
                     </div>
                     <h3>{a.name}</h3>
                     <p>{a.instructions}</p>
+                    <small>已装配：{(a.skillIds || []).map(id => state.skills?.find(s => s.id === id)?.name || id).join('、') || '未装配技能'}</small>
                     <footer>
                       <span>
                         {state.models.find((m) => m.id === a.modelId)?.name ?? '尚未选择模型'}
@@ -651,6 +654,11 @@ export default function EngineeringPage({
                   </article>
                 ))}
               </div>
+              <button className="ui-button secondary" disabled={busy} onClick={() => void perform(async () => {
+                const directory = await window.desktop.selectFolder()
+                if (directory) await api().importSkill(directory)
+              }, '本地技能已导入，可在智能体配置中装配。')}>导入本地技能</button>
+              <p className="eng-hint">选择包含 skill.json 和 SKILL.md 的目录。导入后按角色装配，不会自动执行技能中的命令。</p>
             </div>
           )}
           {section === 'projects' && (
@@ -695,6 +703,8 @@ export default function EngineeringPage({
                         onMap={() => navigate('map')}
                         onActivity={() => navigate('activity')}
                         onContext={() => navigate('context')}
+                        onModels={() => openModel()}
+                        onBoard={() => navigate('board')}
                       />
                     )}
                     {view === 'map' && (
@@ -1127,7 +1137,8 @@ export default function EngineeringPage({
               onClick={() =>
                 model &&
                 void perform(async () => {
-                  await api().saveModel(model)
+                  const saved = await api().saveModel(model)
+                  setProjectDraft(draft => draft && !draft.modelId ? { ...draft, modelId: saved.id } : draft)
                   setModel(null)
                 }, '模型配置已保存。')
               }
@@ -1157,6 +1168,7 @@ export default function EngineeringPage({
                 <option value="glm">GLM / 智谱</option>
               </select>
             </Field>
+            <button className="ui-button secondary" disabled={busy || !model.model} onClick={() => void perform(async () => setModelStatus(await api().testCapabilities(model)))}>检查开发能力</button>
             <Field label="显示名称">
               <input
                 value={model.name}
@@ -1301,11 +1313,11 @@ export default function EngineeringPage({
                     ...agent,
                     role: e.target.value as AgentConfig['role'],
                     tools: defaultAgentTools(e.target.value as AgentConfig['role']),
+                    skillIds: state.skills?.filter(s => s.origin === 'builtin' && s.roles.includes(e.target.value as AgentConfig['role'])).map(s => s.id) || [],
                   })
                 }
               >
-                <option value="developer">开发</option>
-                <option value="reviewer">验证</option>
+                {Object.entries(agentRoleLabels).map(([role, label]) => <option key={role} value={role}>{label}</option>)}
               </select>
             </Field>
             <Field label="使用模型">
@@ -1337,7 +1349,7 @@ export default function EngineeringPage({
                     checked={agent.tools.includes(name)}
                     disabled={
                       !['write_file', 'run_command'].includes(name) ||
-                      (agent.role === 'reviewer' && name === 'write_file')
+                      !defaultAgentTools(agent.role).includes(name)
                     }
                     onChange={(e) =>
                       setAgent({
@@ -1345,6 +1357,7 @@ export default function EngineeringPage({
                         tools: e.target.checked
                           ? [...agent.tools, name]
                           : agent.tools.filter((t) => t !== name),
+                        skillIds: e.target.checked ? agent.skillIds : agent.skillIds?.filter(id => !state.skills?.find(s => s.id === id)?.requiredTools.includes(name)),
                       })
                     }
                   />
@@ -1353,8 +1366,15 @@ export default function EngineeringPage({
               ))}
               <small>基础读取工具始终可用，验证角色不提供文件修改工具。</small>
             </fieldset>
+            <fieldset className="eng-skill-options">
+              <legend>装配技能</legend>
+              {state.skills?.filter(s => s.roles.includes(agent.role)).map(skill => {
+                const missing = skill.requiredTools.filter(t => !agent.tools.includes(t))
+                return <label key={skill.id}><input type="checkbox" checked={agent.skillIds?.includes(skill.id) || false} disabled={!!missing.length} onChange={e => setAgent({ ...agent, skillIds: e.target.checked ? [...(agent.skillIds || []), skill.id] : agent.skillIds?.filter(id => id !== skill.id) })} /><span>{skill.name} · {skill.version}<small>{skill.description}{missing.length ? ' · 需要启用：' + missing.map(t => toolLabels[t]).join('、') : ''}</small></span></label>
+              })}
+            </fieldset>
             <p className="eng-hint">
-              开发角色可读写文件和运行工程命令；验证角色独立读取代码并执行检查。
+              规划与原型只读取资料；开发可以修改代码；测试校验独立执行检查。关闭工具时会取消依赖该工具的技能。
             </p>
             {error && (
               <p role="alert" className="eng-inline-error">
@@ -1365,7 +1385,7 @@ export default function EngineeringPage({
         )}
       </Overlay>
       <Overlay
-        open={!!projectDraft}
+        open={!!projectDraft && !model}
         onClose={() => {
           if (!busy) setProjectDraft(null)
         }}
@@ -1395,6 +1415,9 @@ export default function EngineeringPage({
       >
         {projectDraft && (
           <div className="eng-form">
+            <FirstRunCheck parent={projectDraft.parent} />
+            <p className="eng-hint">默认配备任务规划、原型前端、开发和测试校验智能体，各自已装配基础技能。</p>
+            {!state.models.length && <button className="ui-button secondary" onClick={() => openModel()}>先连接模型</button>}
             <Field label="项目名称">
               <input
                 value={projectDraft.name}
@@ -1710,6 +1733,9 @@ function FeatureDrawer({
             </button>
           ) : null}
           {feature?.stage === 'acceptance' && (
+            <>
+            <button className="ui-button secondary" disabled={busy || running} onClick={() => act(async () => { await api().startPreview(project.id, 'dev'); await api().openPreview(project.id) })}>启动并打开预览</button>
+            {project.executionPlan?.status === 'waiting-acceptance' && <button className="ui-button primary" disabled={busy || running} onClick={() => act(() => api().acceptAndContinue(project.id, feature.id))}>验收通过并继续</button>}
             <button
               className="ui-button primary"
               disabled={busy || running}
@@ -1718,6 +1744,7 @@ function FeatureDrawer({
               <Check size={13} />
               验收通过
             </button>
+            </>
           )}
         </>
       }
@@ -1927,6 +1954,11 @@ function FeatureDrawer({
         )}
         {tab === 'results' && (
           <div className="eng-results">
+            {feature?.prototypeId && <article>
+              <h3 className={feature.prototypeResult?.passed ? 'passed' : 'failed'}>已验收原型对照 · {project.prototypes?.find(p => p.id === feature.prototypeId)?.title || feature.prototypeId}</h3>
+              <p>{feature.prototypeResult?.evidence || '开发与独立校验将读取此原型，等待对照检查。'}</p>
+              <small>自动检查不代替你的实际页面试用和最终验收。</small>
+            </article>}
             {feature?.results.length ? (
               feature.results.map((r, i) => (
                 <article key={i}>

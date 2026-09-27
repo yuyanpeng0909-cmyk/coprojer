@@ -127,7 +127,7 @@ async function main() {
         dependencies: [],
       })
     const a = await add('共享上下文索引', 'current')
-    await invoke('confirmRequirements', pid, a)
+    await assert.rejects(invoke('confirmRequirements', pid, a), /验收原型/)
     const b = await add('需求版本记录', 'discussion')
     await add('后续统计模块', 'later')
     await page.waitForFunction(

@@ -1644,3 +1644,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.prototype-opinion { flex: 0 0 auto; margin: 0 12px 10px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); font-size: 12px; }
+.prototype-opinion p { margin: 6px 0; color: var(--secondary); line-height: 1.6; }
+.prototype-opinion-heading, .prototype-opinion-actions, .prototype-opinion.accepted { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.prototype-opinion-heading { justify-content: space-between; }
+.prototype-opinion textarea { width: 100%; min-height: 48px; max-height: 100px; margin-bottom: 6px; }
+.prototype-opinion.accepted span { flex: 1; color: var(--secondary); }
+.prototype-opinion-copy { flex: 1; min-width: 180px; }
+@media (max-height: 680px) { .prototype-opinion { padding: 7px 10px; margin-bottom: 6px; } .prototype-opinion p { font-size: 11px; margin: 4px 0; } }
+@media (max-height: 680px) {
+  .research-full-preview .design-process { padding: 5px 8px; }
+  .research-full-preview .design-process-meta { display: none; }
+  .prototype-opinion.accepted .prototype-opinion-copy > p:not([role='alert']) { display: none; }
+}

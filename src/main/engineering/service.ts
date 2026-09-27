@@ -2,10 +2,15 @@ import { shell } from 'electron'
 import { RequirementsWorkspace } from './requirements'
 import { mergeTargets } from './targets'
 import type { DecisionAnswer, ProjectTarget, RoundtableConfig } from '../../shared/engineering'
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
+import { assembleContext, boundMessages, normalizeContext, readContext } from './context'
+import { agentSkills, loadLocalSkill } from './skills'
+import { completeWithContext } from './planning'
+import { activePrototypeBriefs, designFingerprint, rawDesignFingerprint, pinnedPrototype, requirePrototypeReview, requirePrd, syncPrototypeBriefs } from '../../shared/prototype-workflow'
+import { agentRoleLabels, type AgentRole } from '../../shared/engineering'
 import type {
   AgentConfig,
   BatchConfirmResult,
@@ -44,26 +49,240 @@ function lines(value: unknown, label: string): string[] {
   if (!Array.isArray(value) || value.length > 80) throw new Error(`${label}格式无效。`)
   return value.map((v) => text(v, label, 3000)).filter(Boolean)
 }
-/**
- * Tool results are written to the durable activity log in full, but sending a
- * multi-page requirements document back on every subsequent model turn can
- * exhaust a provider's effective context window before the agent reaches its
- * first write. Keep the conversational copy bounded; the model can always
- * call the same read tool again and the log remains the complete record.
- */
+// Reads are losslessly paged. Other tool output is bounded and may be truncated.
 function agentToolMessage(name: string, output: string): string {
-  const limit = name === 'read_context' ? 12_000 : name === 'read_file' ? 24_000 : 12_000
+  if (name === 'read_context' || name === 'read_file') return output
+  const limit = 12_000
   if (output.length <= limit) return output
   const head = Math.max(1, limit - 1_200)
-  return `${output.slice(0, head)}\n\n[工具结果过长，当前回合仅保留前 ${head} 个字符和末尾摘要；完整内容已记入活动记录，可再次调用该工具读取。]\n\n${output.slice(-1_000)}`
+  return `${output.slice(0, head)}\n\n[工具输出已截断，仅保留前 ${head} 个字符与末尾 1000 字符；活动记录也可能截断。不要仅为找回输出而重复执行有副作用的命令；需完整证据时让检查程序写入项目文件，再用 read_file 分页读取。]\n\n${output.slice(-1_000)}`
 }
 export class EngineeringService {
+  acceptPrototypeAndPreparePrd = async (projectId: string, prototypeId: string) => {
+    this.selectPrototype(projectId, prototypeId)
+    const p = this.store.project(projectId)
+    if (activePrototypeBriefs(p).every(b => b.status === 'accepted')) await this.preparePrd(projectId)
+  }
+  preparePrd = async (projectId: string) => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    if (p.designActivity) throw new Error('请等待原型设计完成。')
+    syncPrototypeBriefs(p)
+    const briefs = activePrototypeBriefs(p)
+    if (!briefs.length || briefs.some(b => b.status !== 'accepted' || !b.prototypeId || b.fingerprint !== designFingerprint(p, b.targetId))) throw new Error('请先确定并验收各界面原型，再生成 PRD。')
+    const sources = briefs.map(b => ({ prototypeId: b.prototypeId!, targetId: b.targetId, fingerprint: b.fingerprint,
+      derivedFingerprint: p.prd?.sources.find(s => (s.targetId || '') === (b.targetId || '') && s.fingerprint === b.fingerprint)?.derivedFingerprint,
+    }))
+    const snapshot = () => JSON.stringify({ document: p.requirementsDocument, features: p.features, brief: p.brief, targets: p.targets, selected: p.selectedPrototypeIds })
+    const original = snapshot()
+    const agent = this.roleAgent(p, 'planner'), connection = this.model(agent.modelId)
+    p.prd = { status: 'generating', sources }
+    return this.beginResult(p, '根据已确认原型生成 PRD', async signal => {
+      try {
+        const reply = await completeWithContext(connection,
+          this.agentInstructions(p, 'planner', agent.modelId) + '\nPRD_FROM_APPROVED_PROTOTYPE：你是产品需求规划者。必须先使用 read_context 完整分页读取输入 sources 中每个 prototype:ID，然后基于已确认原型生成中文 PRD，不得自行另起界面。覆盖产品目标、页面结构、组件、交互与状态、数据与业务规则、范围、验收标准、待确认问题；区分原型已呈现行为和推导的后端实现。保留用户已有业务约束，不变更已开工功能。仅输出 JSON：{"document":"Markdown PRD 正文","features":[{"id":"已有功能可填原ID","title":"功能名","module":"模块","description":"说明","criteria":["可验证标准"],"targetId":"所属子项目，可省略"}]}。已有候选功能保留 ID；新功能按可独立验收的单位拆分。PRD 仍待用户审阅，不自行确认需求。',
+          [{ role: 'user', content: JSON.stringify({ goal: p.brief, sharedContext: this.agentContext(p), sources: sources.map(({ prototypeId, targetId }) => ({ prototypeId, targetId })), currentDocument: p.requirementsDocument || '', currentFeatures: p.features.map(({ id, title, module, description, criteria, targetId, scope, stage, dependencies }) => ({ id, title, module, description, criteria, targetId, scope, stage, dependencies })), targets: p.targets || [] }) }], p, signal, undefined, sources.map(s => 'prototype:' + s.prototypeId))
+        signal.throwIfAborted()
+        if (snapshot() !== original) throw new Error('原型或需求在生成期间已有修改，请重新生成 PRD。')
+        const result = parseJson(reply.text)
+        const document = text(result.document, 'PRD 文档', 80000)
+        if (!document || !Array.isArray(result.features) || !result.features.length || result.features.length > 100) throw new Error('PRD 缺少有效正文或功能清单。')
+        const draft = structuredClone(p)
+        for (const item of result.features) {
+          const existing = draft.features.find(f => f.id === item.id || f.title === item.title && (f.targetId || '') === (item.targetId || ''))
+          if (existing && existing.stage !== 'requirements') continue
+          this.upsertFeature(draft, existing?.id || null, {
+            title: item.title, module: item.module || existing?.module || '未分组', description: item.description, criteria: item.criteria,
+            targetId: item.targetId || existing?.targetId, scope: existing?.scope || 'discussion', dependencies: existing?.dependencies || [],
+            developerId: existing?.developerId || this.roleAgent(p, 'developer').id, reviewerId: existing?.reviewerId || this.roleAgent(p, 'reviewer').id,
+          })
+        }
+        draft.requirementsDocument = document
+        p.prd = { status: 'review', sources: sources.map(s => ({ ...s, derivedFingerprint: rawDesignFingerprint(draft, s.targetId) })) }
+        p.requirementsDocument = document
+        p.features = draft.features
+        this.store.event(p, 'prd', '已根据验收原型生成 PRD 和候选功能，等待你审阅。原型版本已绑定。')
+        this.save(p)
+      } catch (error) {
+        p.prd = { status: 'error', sources, error: this.store.redact(String(error)) }
+        throw error
+      }
+    })
+  }
+  submitPrototypePreferences = (projectId: string, input: string, targetId?: string) => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    if (p.designActivity) throw new Error('正在设计，请等待本次结果。')
+    syncPrototypeBriefs(p)
+    const brief = p.prototypeBriefs?.[targetId || '']
+    if (!brief) throw new Error('请先描述项目目标或该界面的初步想法。')
+    const preferences = text(input, '设计意见', 8000)
+    if (!preferences) throw new Error('请填写设计意见，或选择推荐设计。')
+    const previous = brief.preferences
+    const modelId = this.roleAgent(p, 'designer').modelId || p.designModelId || p.discussionModelId
+    this.generatePrototype(projectId, '用户设计意见：' + preferences + (previous ? '\n此前设计意见：' + previous : '') + '\n请主动完成原型，覆盖已讨论的主要页面与状态，完成后等待用户试用验收。', modelId, targetId)
+    brief.preferences = preferences
+    this.save(p)
+  }
   readonly store = new EngineeringStore()
+  private workflowActions = new Set<string>()
+  configureProject = (projectId: string, input: { plannerId: string; designerId: string; contextBudget: number }) => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    if (p.designActivity) throw new Error('请等待当前设计完成。')
+    for (const [role, id] of [['planner', input.plannerId], ['designer', input.designerId]]) {
+      const agent = this.store.data.agents.find(a => a.id === id && a.role === role)
+      if (!agent) throw new Error('请选择有效的规划与原型智能体。')
+      this.model(agent.modelId)
+    }
+    if (!Number.isSafeInteger(input.contextBudget) || input.contextBudget < 8000 || input.contextBudget > 64000) throw new Error('上下文预算必须为 8000–64000 字符。')
+    p.plannerId = input.plannerId; p.designerId = input.designerId; p.contextBudget = input.contextBudget
+    p.discussionModelId = this.roleAgent(p, 'planner').modelId
+    p.designModelId = this.roleAgent(p, 'designer').modelId
+    this.save(p)
+  }
+  archiveContext = (projectId: string, id: string, archived: boolean) => {
+    const p = this.store.project(projectId); this.idle(p)
+    const entry = p.context.find(c => c.id === id)
+    if (!entry || ['requirements', 'acceptance', 'goal'].includes(entry.kind || '') || /用户需求确认|用户最终验收|用户创建项目/.test(entry.source)) throw new Error('确认基线、验收和项目目标不能归档；可新增补充说明。')
+    entry.status = archived ? 'archived' : 'active'
+    this.save(p)
+  }
+  confirmRequirementsAndPrepare = async (projectId: string, fingerprint: string, messageCount: number) => {
+    this.confirmProjectRequirements(projectId, fingerprint, messageCount)
+    return this.preparePlans(projectId)
+  }
+  private roleAgent(project: Project, role: AgentRole): AgentConfig {
+    const id = role === 'planner' ? project.plannerId : role === 'designer' ? project.designerId : undefined
+    const agent = this.store.data.agents.find(a => a.id === id && a.role === role) || this.store.data.agents.find(a => a.role === role)
+    if (!agent) throw new Error('请配置' + agentRoleLabels[role] + '智能体。')
+    return agent
+  }
+  private agentInstructions(project: Project, role: AgentRole, modelId: string, feature?: Feature, override?: AgentConfig): string {
+    const agent = override || this.roleAgent(project, role)
+    const skills = agentSkills(agent, this.store.skills())
+    if (skills.text.length > 16000) throw new Error('本阶段装配的技能正文超过 16000 字符，请减少技能。')
+    const context = assembleContext(project, feature)
+    ;(project.agentRuns ??= []).push({ id: uid(), at: now(), role, agentId: agent.id, modelId, featureId: feature?.id, skills: skills.snapshots, contextIds: context.contextIds, contextCharacters: context.characters, omittedCount: context.omittedCount })
+    if (project.agentRuns.length > 200) project.agentRuns.splice(0, project.agentRuns.length - 200)
+    this.store.save()
+    return agent.instructions + '\n本阶段装配技能（仅提供方法，不扩大工具权限或替代人工确认）：\n' + skills.text
+  }
+  importSkill = (directory: string) => {
+    const skill = loadLocalSkill(directory)
+    skill.content = this.store.redact(skill.content)
+    const current = this.store.data.skills ??= []
+    const index = current.findIndex(s => s.id === skill.id)
+    if (index >= 0) current[index] = skill
+    else current.push(skill)
+    this.store.save()
+  }
+  preflight = async (parent?: string) => {
+    const checks: { name: string; ok: boolean; detail: string }[] = []
+    for (const name of ['node', 'npm']) {
+      try {
+        const command = nodeCommand(name, ['--version'])
+        const result = spawnSync(command.executable, command.args, { encoding: 'utf8', timeout: 10000, windowsHide: true, env: commandEnvironment() })
+        const version = result.stdout?.trim() || ''
+        const [major, minor] = version.replace(/^v/, '').split('.').map(Number)
+        const supported = name !== 'node' || major > 22 || major === 22 && minor >= 12
+        checks.push({ name: name === 'node' ? 'Node.js' : 'npm', ok: result.status === 0 && supported, detail: result.error?.message || (!supported ? version + '；需要 Node.js 22.12 或更高版本。' : version) || result.stderr || '请检查本机安装。' })
+      } catch (error) { checks.push({ name, ok: false, detail: String(error) }) }
+    }
+    if (parent) {
+      try {
+        if (!isAbsolute(parent) || !existsSync(parent) || !lstatSync(parent).isDirectory()) throw new Error('请选择已存在的绝对目录。')
+        accessSync(parent, constants.W_OK)
+        checks.push({ name: '项目目录', ok: true, detail: parent })
+      } catch (error) { checks.push({ name: '项目目录', ok: false, detail: String(error) }) }
+    }
+    return { ready: checks.every(c => c.ok), checks }
+  }
+  testCapabilities = async (input: ModelInput) => {
+    const connection = this.connection(input), signal = AbortSignal.timeout(60000)
+    const marker = uid()
+    const tools = [{ name: 'connection_probe', description: '无副作用的连接检测；调用一次获取标记。', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } }]
+    const messages: ModelMessage[] = [{ role: 'user', content: '请调用 connection_probe，然后输出 JSON 对象，字段 marker 必须等于工具返回的 marker。' }]
+    const first = await complete(connection, '这是开发能力检查。必须调用提供的工具，然后准确返回 JSON。', messages, tools, signal)
+    if (first.calls.length !== 1 || first.calls[0].name !== 'connection_probe') throw new Error('文本连接可用，但未完成工具调用；请选用支持工具的模型。')
+    messages.push({ role: 'assistant', content: first.text, calls: first.calls, reasoning: first.reasoning, responseItems: first.responseItems, anthropicBlocks: first.anthropicBlocks }, { role: 'tool', callId: first.calls[0].id, content: JSON.stringify({ marker }) })
+    const second = await complete(connection, '请只输出包含工具标记的 JSON 对象。', messages, [], signal)
+    if (second.calls.length || parseJson(second.text).marker !== marker) throw new Error('工具往返已完成，但结构化结果校验失败。')
+    return '开发能力检查通过：工具调用、结果回传和 JSON 均可用。'
+  }
+  selectPrototype = (projectId: string, prototypeId: string) => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    if (p.designActivity) throw new Error('请等待原型生成完成。')
+    const prototype = p.prototypes?.find(r => r.id === prototypeId)
+    if (!prototype) throw new Error('原型版本不存在。')
+    if (p.targets?.length && !p.targets.some(t => t.id === prototype.targetId && ['web', 'admin', 'mobile', 'desktop'].includes(t.kind))) throw new Error('该原型不属于当前界面，请选择当前子项目的原型。')
+    const fingerprint = designFingerprint(p, prototype.targetId)
+    if (prototype.designFingerprint && prototype.designFingerprint !== fingerprint) throw new Error('该原型对应的需求已更新，请先提交意见更新原型。')
+    ;(p.prototypeBriefs ??= {})[prototype.targetId || ''] = {
+      ...(p.prototypeBriefs?.[prototype.targetId || ''] || { preferences: '' }),
+      targetId: prototype.targetId, fingerprint, status: 'accepted', prototypeId, acceptedAt: now(), error: undefined,
+    }
+    ;(p.selectedPrototypeIds ??= {})[prototype.targetId || ''] = prototype.id
+    if (p.prd && !p.prd.sources.some(s => s.prototypeId === prototype.id)) p.prd.status = 'stale'
+    this.store.event(p, 'prototype', '用户已验收原型：' + prototype.title + '；后续开发与校验将读取此版本，已开工功能保持原有基线。')
+    this.save(p)
+  }
+  preparePlans = async (projectId: string): Promise<BatchPlanResult[]> => {
+    const p = this.store.project(projectId)
+    const ids = p.features.filter(f => f.scope === 'current' && f.stage === 'solution' && (!f.plan || !f.tasks.length || f.planGenerationError)).map(f => f.id)
+    const results: BatchPlanResult[] = []
+    for (let i = 0; i < ids.length; i += 20) results.push(...await this.generatePlans(projectId, ids.slice(i, i + 20)))
+    return results
+  }
+  confirmPlansAndStart = async (projectId: string, featureIds: string[], revisions: number[]): Promise<BatchConfirmResult[]> => {
+    const p = this.store.project(projectId)
+    this.idle(p)
+    if (this.workflowActions.has(projectId)) throw new Error('正在处理此操作，请等待。')
+    if (!Array.isArray(featureIds) || featureIds.length < 1 || featureIds.length > 8 || new Set(featureIds).size !== featureIds.length || !Array.isArray(revisions) || revisions.length !== featureIds.length) throw new Error('请选择 1–8 个方案。')
+    if (p.features.some(f => f.stage === 'acceptance')) throw new Error('请先验收当前功能。')
+    const features = featureIds.map((id, i) => {
+      const f = this.feature(p, id)
+      if (f.revision !== revisions[i] || !['solution', 'ready'].includes(f.stage)) throw new Error('方案已有更新，请重新审阅。')
+      return f
+    })
+    const selected = new Set(featureIds), ordered: string[] = [], visiting = new Set<string>()
+    const visit = (f: Feature) => {
+      if (ordered.includes(f.id)) return
+      if (visiting.has(f.id)) throw new Error('功能依赖不能形成循环。')
+      visiting.add(f.id)
+      for (const id of f.dependencies) {
+        const dep = this.feature(p, id)
+        if (dep.stage !== 'done') {
+          if (!selected.has(id)) throw new Error('请一并选择前置功能：' + dep.title)
+          visit(dep)
+        }
+      }
+      visiting.delete(f.id); ordered.push(f.id)
+    }
+    features.forEach(visit)
+    this.workflowActions.add(projectId)
+    try {
+      const pending = features.filter(f => f.stage === 'solution').map(f => f.id)
+      const results = pending.length ? await this.confirmPlans(projectId, pending) : []
+      if (results.some(r => !r.success)) return results
+      p.executionPlan = { id: uid(), featureIds, orderedFeatureIds: ordered, rationale: '根据已确认功能依赖排序，逐项开发与验收。', currentIndex: 0, status: 'planned', at: now() }
+      this.save(p)
+      await this.runExecutionPlan(projectId)
+      return results
+    } finally { this.workflowActions.delete(projectId) }
+  }
+  acceptAndContinue = async (projectId: string, featureId: string) => {
+    const p = this.store.project(projectId)
+    this.accept(projectId, featureId)
+    if (p.executionPlan?.status === 'planned') await this.runExecutionPlan(projectId)
+  }
   private research = new RequirementsWorkspace({
     store: this.store,
     model: (id) => this.model(id),
     save: (p) => this.save(p),
     context: (p) => this.context(p),
+    agentInstructions: (p, role, modelId) => this.agentInstructions(p, role, modelId),
     upsert: (p, id, input) => this.upsertFeature(p, id, input),
   })
   generatePrototype = (
@@ -221,15 +440,16 @@ export class EngineeringService {
     feature: Feature,
     signal: AbortSignal,
   ): Promise<{ plan: string; tasks: string[] }> {
-    const agent = this.agent(feature.developerId, 'developer')
+    const agent = this.roleAgent(project, 'planner')
+    const prototype = pinnedPrototype(project, feature)
     const connection = this.model(agent.modelId)
     const format = JSON.stringify({
       plan: '可实现的方案、公共模块复用、检查方式和本地启动方式',
       tasks: ['具体任务'],
     })
-    const reply = await complete(
+    const reply = await completeWithContext(
       connection,
-      `你是软件方案设计者。输出中文 JSON ${format}。不改动已确认需求、验收标准和依赖关系。首次创建项目时使用本机 npm/Node 网页技术栈，提供 npm run dev/build/test。已有文件：${JSON.stringify(listFiles(project.root))}\n共享上下文：${this.context(project)}\n职责：${agent.instructions}`,
+      `你是软件方案设计者。输出中文 JSON ${format}。不改动已确认需求、验收标准和依赖关系。首次创建项目时使用本机 npm/Node 网页技术栈，提供 npm run dev/build/test。已有文件：${JSON.stringify(listFiles(project.root))}\n共享上下文：${this.agentContext(project, feature)}\n职责：${this.agentInstructions(project, "planner", agent.modelId, feature)}` + (prototype ? '\n验收原型ID：' + prototype.id + '\n必须先 read_context 完整分页读取 prototype:' + prototype.id + '。以这个原型为基础设计实现方案，说明页面、组件、状态如何复用并接入业务，不能另起界面。' : ''),
       [
         {
           role: 'user',
@@ -242,8 +462,10 @@ export class EngineeringService {
           }),
         },
       ],
-      [],
+      project,
       signal,
+      undefined,
+      prototype ? ['prototype:' + prototype.id] : [],
     )
     signal.throwIfAborted()
     const parsed = parseJson(reply.text)
@@ -253,6 +475,8 @@ export class EngineeringService {
     return { plan, tasks }
   }
   private save(project: Project): void {
+    normalizeContext(project)
+    syncPrototypeBriefs(project)
     this.store.save()
     this.store.export(project)
   }
@@ -295,6 +519,7 @@ export class EngineeringService {
     if (index >= 0) this.store.data.models[index] = saved
     else this.store.data.models.push(saved)
     for (const agent of this.store.data.agents) if (!agent.modelId) agent.modelId = saved.id
+    for (const project of this.store.data.projects) if (!project.discussionModelId) project.discussionModelId = saved.id
     this.store.save()
     const { cipher, ...publicModel } = saved
     return publicModel
@@ -327,14 +552,14 @@ export class EngineeringService {
   }
   listModels = (input: ModelInput) => getModels(this.connection(input))
   saveAgent = (input: AgentConfig) => {
-    if (!['developer', 'reviewer'].includes(input.role)) throw new Error('智能体角色无效。')
+    if (!Object.hasOwn(agentRoleLabels, input.role)) throw new Error('智能体角色无效。')
     this.model(input.modelId)
     const tools = input.tools ?? defaultAgentTools(input.role)
     if (
       !Array.isArray(tools) ||
       tools.some(
         (name) =>
-          !Object.hasOwn(toolLabels, name) || (input.role === 'reviewer' && name === 'write_file'),
+          !Object.hasOwn(toolLabels, name) || !defaultAgentTools(input.role).includes(name),
       )
     )
       throw new Error('智能体工具配置无效。验证角色不提供文件修改工具。')
@@ -344,6 +569,7 @@ export class EngineeringService {
       role: input.role,
       modelId: input.modelId,
       instructions: text(input.instructions, '工作要求', 10000),
+      skillIds: [...new Set(input.skillIds || [])],
       tools: [
         ...new Set([
           ...defaultAgentTools(input.role).filter(
@@ -354,6 +580,7 @@ export class EngineeringService {
       ],
     }
     if (!agent.name) throw new Error('请填写智能体名称。')
+    agentSkills(agent, this.store.skills())
     const index = this.store.data.agents.findIndex((a) => a.id === agent.id)
     if (index >= 0 && this.store.data.agents[index].role !== agent.role)
       throw new Error('已有智能体不能更改职责类型，请新增智能体。')
@@ -391,6 +618,9 @@ export class EngineeringService {
       events: [],
       changes: [],
       discussionModelId: input.modelId || '',
+      plannerId: this.store.data.agents.find(a => a.role === 'planner')?.id,
+      designerId: this.store.data.agents.find(a => a.role === 'designer')?.id,
+      agentRuns: [],
       activity: null,
       previewUrl: null,
     }
@@ -492,7 +722,11 @@ export class EngineeringService {
     const f = this.feature(p, featureId)
     if (f.stage !== 'requirements' || !f.description || !f.criteria.length)
       throw new Error('请先补充需求说明和至少一项验收标准。')
+    requirePrototypeReview(p, f)
+    requirePrd(p)
     f.scope = 'current'
+    const acceptedPrototype = p.prototypeBriefs?.[f.targetId || '']
+    if (acceptedPrototype?.status === 'accepted') f.prototypeId = acceptedPrototype.prototypeId
     f.stage = 'solution'
     f.revision++
     p.context.push({
@@ -542,6 +776,7 @@ export class EngineeringService {
         try {
           const generated = await this.generatePlanContent(p, f, signal)
           f.plan = generated.plan
+          f.revision++
           f.tasks = generated.tasks.map((title) => ({
             id: uid(),
             title,
@@ -566,6 +801,7 @@ export class EngineeringService {
     const f = this.feature(p, featureId)
     if (f.stage !== 'solution') throw new Error('当前阶段不能编辑初始方案。')
     f.plan = text(plan, '方案', 40000)
+    f.revision++
     f.tasks = lines(tasks, '实现任务').map((title) => ({ id: uid(), title, done: false }))
     f.planSource = 'manual'
     f.planGenerationError = undefined
@@ -606,6 +842,7 @@ export class EngineeringService {
     try {
       const generated = await this.generatePlanContent(project, feature, signal)
       feature.plan = generated.plan
+      feature.revision++
       feature.tasks = generated.tasks.map((title) => ({ id: uid(), title, done: false }))
       feature.planSource = 'llm'
       feature.planGenerationError = undefined
@@ -760,9 +997,7 @@ export class EngineeringService {
           throw new Error(`「${feature.title}」依赖「${dependency.title}」，请一并选择或先完成前置功能。`)
       }
     }
-    const modelId =
-      p.discussionModelId ||
-      this.store.data.agents.find((agent) => agent.id === features[0].developerId)?.modelId
+    const modelId = this.roleAgent(p, 'planner').modelId
     if (!modelId) throw new Error('请先为项目配置规划模型。')
     const connection = this.model(modelId)
     return this.beginResult(p, 'LLM 正在规划批量执行', async (signal) => {
@@ -776,8 +1011,8 @@ export class EngineeringService {
       }))
       const reply = await complete(
         connection,
-        '你是软件项目执行规划器。只规划顺序，不修改代码。根据功能依赖、方案和任务，给出可执行的顺序。必须返回 JSON：{"orderedFeatureIds":["功能ID"],"rationale":"中文说明"}。orderedFeatureIds 必须包含输入中的全部 ID，不能新增或遗漏。优先安排依赖更少、能为其他功能提供基础的功能。',
-        [{ role: 'user', content: JSON.stringify({ project: p.name, features: payload }) }],
+        this.agentInstructions(p, 'planner', modelId) + ' 你是软件项目执行规划器。只规划顺序，不修改代码。根据功能依赖、方案和任务，给出可执行的顺序。必须返回 JSON：{"orderedFeatureIds":["功能ID"],"rationale":"中文说明"}。orderedFeatureIds 必须包含输入中的全部 ID，不能新增或遗漏。优先安排依赖更少、能为其他功能提供基础的功能。',
+        [{ role: 'user', content: JSON.stringify({ project: p.name, features: payload, context: this.agentContext(p) }) }],
         [],
         signal,
       )
@@ -866,18 +1101,24 @@ export class EngineeringService {
     feedback: string,
     signal: AbortSignal,
   ): Promise<{ text: string; commands: { code: number; output: string; isTest: boolean }[] }> {
-    const role = agent.role,
+    const role = agent.role as 'developer' | 'reviewer',
       connection = this.model(agent.modelId),
       commands: { code: number; output: string; isTest: boolean }[] = []
+    const skillInstructions = this.agentInstructions(p, role, agent.modelId, f, agent)
+    const prototype = pinnedPrototype(p, f)
+    const prototypeLength = prototype ? JSON.stringify(prototype).length : 0
+    let prototypeReadUntil = 0
     const schema = JSON.stringify({
       summary: '结论',
       results: [{ criterion: '原验收条件逐字保留', passed: false, evidence: '实际证据或不足' }],
+      ...(prototype ? { prototypeReview: { prototypeId: prototype.id, passed: false, evidence: '逐项说明页面结构、关键交互与原型的对应文件和检查结果；未实测视觉需明确说明。' } } : {}),
     })
     const rolePrompt =
       role === 'developer'
         ? '实现完整可运行功能；首次从零建立网页工程时提供 npm run dev、build、test，测试须真实验证行为，执行 npm install 和必要检查。完成后简要报告所做修改和检查。'
         : `只检查实际工程，不得修改源代码、测试代码或通过降低测试标准使检查通过。必须运行实际测试（npm test、npm run test:* 或项目中的 test 脚本）并按需构建。最后只输出 JSON ${schema}，覆盖每一项标准，passed 为布尔值；无法确认的标 false。`
-    const system = `你是 Coprojer 的${role === 'developer' ? '开发' : '验证'}智能体。\n${agent.instructions}\n当前项目根目录：${p.root}。操作仅限当前项目。只能通过已提供工具执行，不可声称未发生的操作。不能修改已确认目标、验收标准、.coprojer 管理资料或项目外文件。\n先使用 list_files/read_file 检查实际项目，再开展工作。使用 npm 和 Node；run_command 的参数是数组，不使用 shell 连接符。不要运行永久驻留的服务，应用通过预览按钮启动 npm run dev。\n共享上下文索引：${this.agentContext(p)}\n已确认功能：${JSON.stringify({ title: f.title, description: f.description, criteria: f.criteria, plan: f.plan, tasks: f.tasks.map((t) => t.title) })}\n${rolePrompt}\n上一轮反馈：${feedback || '无'}`
+    const system = `你是 Coprojer 的${role === 'developer' ? '开发' : '验证'}智能体。\n${skillInstructions}\n当前项目根目录：${p.root}。操作仅限当前项目。只能通过已提供工具执行，不可声称未发生的操作。不能修改已确认目标、验收标准、.coprojer 管理资料或项目外文件。\n先使用 list_files/read_file 检查实际项目，再开展工作。使用 npm 和 Node；run_command 的参数是数组，不使用 shell 连接符。不要运行永久驻留的服务，应用通过预览按钮启动 npm run dev。\n共享上下文索引：${this.agentContext(p, f)}\n已确认功能：${JSON.stringify({ title: f.title, description: f.description, criteria: f.criteria, plan: f.plan, tasks: f.tasks.map((t) => t.title) })}\n${rolePrompt}\n上一轮反馈：${feedback || '无'}`
+    const prototypeInstruction = prototype ? '\n验收原型ID：' + prototype.id + '\n必须先完整分页读取 read_context id=prototype:' + prototype.id + '（连续使用 nextOffset/version），才能修改文件或运行命令。开发必须复用该原型的页面结构、视觉样式与核心交互，替换演示数据并接入实际业务；不能自行换一套界面。校验必须对照原型检查实际文件，填写 prototypeReview，明确指出未实测的视觉与交互。用户的最终试用验收仍不可省略。' : ''
     const messages: ModelMessage[] = [
       {
         role: 'user',
@@ -905,7 +1146,8 @@ export class EngineeringService {
       // send headers and progress before the final tool-call payload is ready.
       // Individual deltas are intentionally not persisted as activity events:
       // tool boundaries and final replies remain the durable engineering log.
-      const reply = await complete(connection, system, messages, offered, signal, () => {})
+      boundMessages(messages)
+      const reply = await complete(connection, system + prototypeInstruction, messages, offered, signal, () => {})
       signal.throwIfAborted()
       if (reply.text)
         this.store.event(p, role === 'reviewer' ? 'review' : 'developer', reply.text, f.id)
@@ -916,7 +1158,10 @@ export class EngineeringService {
         reasoning: reply.reasoning,
         responseItems: reply.responseItems,
       })
-      if (!reply.calls.length) return { text: reply.text, commands }
+      if (!reply.calls.length) {
+        if (prototypeReadUntil < prototypeLength) throw new Error('智能体未完整读取已验收原型，不能提交开发或校验结果。')
+        return { text: reply.text, commands }
+      }
       for (const call of reply.calls) {
         signal.throwIfAborted()
         let output: string
@@ -924,6 +1169,8 @@ export class EngineeringService {
           if (!offered.some((t) => t.name === call.name))
             throw new Error('当前角色不可使用此工具。')
           const args = parseJson(call.arguments)
+          if (['write_file', 'run_command'].includes(call.name) && prototypeReadUntil < prototypeLength)
+            throw new Error('请先完整分页读取已验收原型 prototype:' + prototype!.id + '；当前已连续读取到 ' + prototypeReadUntil + ' 字符。')
           this.store.event(
             p,
             'tool',
@@ -931,6 +1178,10 @@ export class EngineeringService {
             f.id,
           )
           output = await executeTool(this.store, p, f.id, role, call.name, args, signal)
+          if (prototype && call.name === 'read_context' && args.id === 'prototype:' + prototype.id) {
+            const page = JSON.parse(output)
+            if (page.offset <= prototypeReadUntil) prototypeReadUntil = Math.max(prototypeReadUntil, page.offset + page.content.length)
+          }
           if (call.name === 'run_command')
             commands.push({
               ...JSON.parse(output),
@@ -986,6 +1237,7 @@ export class EngineeringService {
       async (signal) => {
         f.repairRound = 0
         f.results = []
+        f.prototypeResult = undefined
         let feedback = f.feedback
         for (let round = 0; round <= 3; round++) {
           signal.throwIfAborted()
@@ -1031,7 +1283,11 @@ export class EngineeringService {
               ),
             }
           })
-          if (f.results.every((r) => r.passed)) {
+          if (f.prototypeId) {
+            const review = result.prototypeReview
+            f.prototypeResult = { prototypeId: f.prototypeId, passed: !!(evidence && review?.prototypeId === f.prototypeId && review.passed === true && typeof review.evidence === 'string' && review.evidence.trim()), evidence: this.store.redact(typeof review?.evidence === 'string' ? review.evidence.slice(0, 6000) : '缺少与已验收原型的对照证据。') }
+          }
+          if (f.results.every((r) => r.passed) && (!f.prototypeId || f.prototypeResult?.passed)) {
             f.stage = 'acceptance'
             f.tasks.forEach((task) => {
               task.done = true
@@ -1062,6 +1318,7 @@ export class EngineeringService {
             .map((c) => c.output)
             .join('\n')
             .slice(-10000)}`
+          if (f.prototypeResult && !f.prototypeResult.passed) feedback += '\n原型对照未通过：' + f.prototypeResult.evidence
           f.feedback = feedback
           this.store.event(
             p,
@@ -1158,11 +1415,13 @@ export class EngineeringService {
     const index = p.context.findIndex((c) => c.id === id)
     const existing = index >= 0 ? p.context[index] : undefined
     const item = {
+      ...existing,
       id: id || uid(),
       title: text(title, '上下文标题', 120),
       content: text(content, '上下文内容', 40000),
       source: existing?.source ?? '用户编辑',
       at: now(),
+      revision: (existing?.revision || 0) + 1,
     }
     if (!item.title || !item.content) throw new Error('请填写标题和内容。')
     if (index >= 0) {
@@ -1281,25 +1540,8 @@ export class EngineeringService {
     p.discussionModelId = modelId
     this.save(p)
   }
-  private context(project: Project): string {
-    const content = project.context
-      .map((c) => `[${c.title}]（来源：${c.source}）\n${c.content}`)
-      .join('\n\n')
-    const sources =
-      '\n原始讨论与原型可通过 read_context 不填 ID 获取完整索引，再按 discussion:页码 或 prototype:ID 读取。讨论材料不覆盖已确认基线。' +
-      `\n多端子项目边界（目录均相对工作区，按功能所属子项目实现）：${JSON.stringify(project.targets || [])}\n功能归属：${JSON.stringify(project.features.map((f) => ({ id: f.id, title: f.title, targetId: f.targetId })))}`
-    if (content.length <= 60000) return content + sources
-    return `上下文较长，以下是完整索引与最近内容。执行时请用 read_context 按 ID 读取需要复用的早期记录。\n${JSON.stringify(project.context.map(({ id, title, source }) => ({ id, title, source })))}\n最近内容：\n${content.slice(-50000)}`
-  }
-  private agentContext(project: Project): string {
-    const summaries = project.context.map(({ id, title, source, content }) => ({
-      id,
-      title,
-      source,
-      summary: content.slice(0, 1200),
-    }))
-    return `${JSON.stringify(summaries)}\n需要完整资料时，先调用 read_context 查看索引，再按 ID 或 discussion:页码 / prototype:ID 读取；不要把整份历史材料重复带入当前回合。`
-  }
+  private context(project: Project): string { return assembleContext(project).text }
+  private agentContext(project: Project, feature?: Feature): string { return assembleContext(project, feature).text }
   private beginResult<T>(
     project: Project,
     activity: string,

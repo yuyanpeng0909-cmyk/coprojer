@@ -19,6 +19,7 @@ async function closePanel(window) {
     // That is the expected outcome for this control, not a test failure.
     if (!window.isClosed()) throw error
   }
+  await waitFor(() => window.isClosed(), 'native panel closed')
 }
 ;(async () => {
   const output = path.resolve('output/playwright'),
@@ -171,6 +172,7 @@ async function closePanel(window) {
     await closePanel(apiWindow)
     await closePanel(webWindow)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(860, 600))
+    await page.waitForFunction(() => innerWidth === 860 && innerHeight === 600)
     await screenshot('roundtable-targets-compact.png')
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     await page.getByRole('button', { name: '切换主题' }).click()
@@ -190,6 +192,11 @@ async function closePanel(window) {
     const request = provider.control.requests.at(-1)
     assert.ok(JSON.stringify(request).includes('FIRST_ROUND_MARKER'))
     assert.ok(JSON.stringify(request).includes('HUMAN_FEEDBACK_MARKER'))
+    for (const brief of Object.values((await project()).prototypeBriefs || {}).filter(b => p.targets.some(t => t.id === b.targetId && ['web', 'admin', 'mobile', 'desktop'].includes(t.kind)))) {
+      await call('submitPrototypePreferences', pid, '清晰的业务布局，按此端需求呈现主要信息。', brief.targetId)
+      await waitFor(async () => !(await project()).designActivity, 'review prototype')
+      await call('acceptPrototypeAndPreparePrd', pid, (await project()).prototypes.at(-1).id)
+    }
     await page.getByRole('button', { name: '审阅完整方案' }).click()
     const review = page.getByRole('dialog', { name: '确认完整需求' })
     await review.waitFor()

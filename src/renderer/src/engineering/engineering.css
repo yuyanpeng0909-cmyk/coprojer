@@ -1264,3 +1264,25 @@
     animation: none;
   }
 }
+/* Guided actions use the existing UI 1.6 surfaces and density. */
+.eng-guided-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); }
+.eng-guided-copy { flex: 1 1 220px; min-width: 0; }
+.eng-guided-copy h2 { margin: 3px 0 6px; font-size: 16px; font-weight: 550; }
+.eng-guided-copy p { margin: 0; color: var(--secondary); font-size: 12px; overflow-wrap: anywhere; }
+.eng-guided-actions, .eng-team-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.eng-team-summary { width: 100%; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--secondary); }
+.eng-team-summary span { display: inline-flex; align-items: center; gap: 3px; }
+.eng-readiness { display: grid; gap: 5px; padding: 10px; background: var(--panel-tint); border-radius: var(--radius-control); font-size: 11px; overflow-wrap: anywhere; }
+.eng-plan-review article { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.eng-plan-review label { display: flex; align-items: center; gap: 6px; font-weight: 550; }
+.eng-plan-review p { color: var(--secondary); overflow-wrap: anywhere; }
+.eng-plan-review details { margin-top: 8px; }
+.eng-plan-text { white-space: pre-wrap; }
+.eng-skill-options { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.eng-skill-options label { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; }
+.eng-skill-options small { display: block; color: var(--secondary); }
+.eng-context-run { margin-bottom: 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-control); font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .eng-guided-actions { width: 100%; } .eng-team-summary { gap: 6px 12px; } }
+.eng-guided-settings { flex-basis: 100%; font-size: 11px; color: var(--secondary); }
+.eng-guided-settings > div { max-width: 480px; padding-top: 10px; }
+.eng-guided-settings label { display: grid; gap: 5px; }

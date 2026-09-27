@@ -1,5 +1,6 @@
 const http = require('node:http')
 const assert = require('node:assert/strict')
+const { prdReply, sendPrdJson } = require('./prd-reply.cjs')
 const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;font:13px system-ui;color:#202020;background:#fafafa}header{padding:22px 25px;border-bottom:1px solid #e7e7e7;background:white;display:flex;justify-content:space-between}header span{font-size:11px;color:#777}main{padding:24px}h1{font-size:19px;font-weight:550;margin:0 0 6px}p{color:#777;font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;border:1px solid #eee;border-radius:8px;margin:22px 0}.stats section{padding:16px}.stats small{color:#777;font-size:11px}.stats strong{display:block;font-size:23px;font-weight:450;margin-top:9px}.list{background:white;border:1px solid #eee;border-radius:8px;padding:18px}button{background:#202020;color:white;border:0;border-radius:6px;padding:8px 13px;cursor:pointer}article{padding:14px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between}footer{padding:15px 0;display:flex;justify-content:flex-end}</style></head><body><header><b>轻记 / Ledger</b><span>个人账本 · 九月</span></header><main><h1>把生活，记得清楚。</h1><p>本月的每一笔收支，都有迹可循。</p><div class="stats"><section><small>月度收入</small><strong>8,500</strong></section><section><small>月度支出</small><strong>2,360</strong></section><section><small>本月结余</small><strong>6,140</strong></section></div><div class="list"><b>最近账目</b><article><span>午间餐饮</span><span>− 32.00</span></article><article><span>日常交通</span><span>− 18.00</span></article><footer><button id="add">记一笔</button></footer><p id="result"></p></div></main><script>document.getElementById('add').onclick=()=>document.getElementById('result').textContent='已打开记账表单';try{parent.document.body.dataset.escape='yes'}catch{document.body.dataset.isolated='yes'}document.body.dataset.bridge=typeof window.desktop;</script></body></html>`
 async function startResearchProvider() {
   const control = {
@@ -19,6 +20,7 @@ async function startResearchProvider() {
       for await (const chunk of req) raw += chunk
       const body = JSON.parse(raw)
       control.requests.push(body)
+      if (sendPrdJson(body, res, control)) return
       assert.equal(body.stream, true)
       const protocol = req.url.endsWith('messages')
         ? 'anthropic'
@@ -39,7 +41,8 @@ async function startResearchProvider() {
       const lastUser = input.filter((m) => m.role === 'user').at(-1)?.content || ''
       const long = typeof lastUser === 'string' && lastUser.includes('测试中断')
       const short = typeof lastUser === 'string' && lastUser.startsWith('补充历史')
-      const calls =
+      const prd = prdReply(body, control)
+      const calls = prd?.calls ?? (
         !isDesign && !prior.length && !long && !short
           ? [
               {
@@ -72,8 +75,8 @@ async function startResearchProvider() {
                 }),
               },
             ]
-          : []
-      if (calls.length)
+          : [])
+      if (!prd && calls.length)
         calls.push({
           id: 'document_call',
           name: 'update_requirements',
@@ -82,7 +85,7 @@ async function startResearchProvider() {
               '# 轻记产品需求\n\n## 目标与用户\n帮助个人用户掌握收支。\n\n## 业务规则\n金额保留两位小数，支持收入和支出。\n\n## 数据与隐私\n数据只保存在本机，导出由用户主动操作。\n\n## 非功能要求\n无需账号，首屏快速可用。\n\n## 开放问题\n多账本先作为备选，不自动列入本期。',
           }),
         })
-      const text = isDesign
+      const text = prd?.text ?? (isDesign
         ? control.invalidDesign
           ? '这次只返回了说明，没有完整原型。'
           : 'PROTOTYPE_INTRO_MARKER：这是设计说明，应保留在过程记录中。\n\n```html\n' +
@@ -94,7 +97,7 @@ async function startResearchProvider() {
             ? '已保存这条补充信息。'
             : prior.length
               ? '### 本轮整理\n\n功能图已经更新。我们可以继续探索使用场景，也可以开始讨论界面原型。\n\n- 收支记录与本地账本作为本期候选。\n- 消费趋势先放在暂缓范围。'
-              : '可以先围绕**记录习惯**和**数据归属**展开。\n\n我会把已谈到的功能同步到右侧，暂时不进入开发。'
+              : '可以先围绕**记录习惯**和**数据归属**展开。\n\n我会把已谈到的功能同步到右侧，暂时不进入开发。')
       res.writeHead(200, {
         'content-type': 'text/event-stream; charset=utf-8',
         'cache-control': 'no-cache',

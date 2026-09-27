@@ -116,7 +116,12 @@ async function main() {
     await detached.locator('.smm-node').filter({ hasText: '收支记录' }).waitFor()
     await invoke('saveFeature', pid, p.features[0].id, { ...p.features[0], title: '快捷收支记录' })
     await detached.locator('.smm-node').filter({ hasText: '快捷收支记录' }).waitFor()
-    await detached.getByRole('button', { name: '关闭窗口', exact: true }).click()
+    const detachedClosed = detached.waitForEvent('close')
+    await detached.getByRole('button', { name: '关闭窗口', exact: true }).click().catch(error => {
+      if (!detached.isClosed() || !/Target page, context or browser has been closed/.test(error.message)) throw error
+    })
+    await detachedClosed
+    assert.equal(page.isClosed(), false)
     // Native save dialogs retain explicit format choice; verify actual artifact contents.
     await desktop.evaluate(({ dialog }, folder) => {
       dialog.showSaveDialog = async (_window, options) => ({
@@ -270,6 +275,9 @@ async function main() {
     }
     p = await project()
     assert.ok(p.chat.length > 20)
+    await invoke('generatePrototype', pid, '按最终需求更新已讨论的首页。', designer.id)
+    await waitFor(async () => !(await project()).designActivity, 'final prototype')
+    await invoke('acceptPrototypeAndPreparePrd', pid, (await project()).prototypes.at(-1).id)
     await page.getByRole('button', { name: '确认完整需求', exact: true }).click()
     dialog = page.getByRole('dialog', { name: '确认完整需求', exact: true })
     await dialog.getByRole('button', { name: '确认并保存基线', exact: true }).click()
@@ -317,6 +325,7 @@ async function main() {
       'PASS: all three streaming protocols, signed/encrypted tool continuation, full cross-model history, whole-project baseline, revision and stop preserving partial output',
     )
     await page.getByRole('button', { name: '原型子模块' }).click()
+    const retainedPrototypeCount = (await project()).prototypes.length
     provider.control.holdDesign = true
     await invoke('generatePrototype', pid, '再设计一版，用于验证停止保留过程', designer.id)
     await waitFor(() => provider.control.waitingDesign.length > 0, 'second design streaming')
@@ -328,7 +337,7 @@ async function main() {
     await waitFor(async () => !(await project()).designActivity, 'design stopped')
     assert.equal((await project()).chat.at(-1).status, 'stopped')
     assert.match((await project()).chat.at(-1).text, /doctype html/)
-    assert.equal((await project()).prototypes.length, 1)
+    assert.equal((await project()).prototypes.length, retainedPrototypeCount)
     await processPanel.getByText('设计已停止', { exact: true }).waitFor()
     await processPanel.getByRole('button', { name: '查看过程' }).click()
     await page.getByLabel('设计过程记录').selectOption(designEntry.id)
@@ -343,7 +352,7 @@ async function main() {
     await processPanel.getByRole('button', { name: '查看过程' }).click()
     await inspector.getByRole('alert').filter({ hasText: '未返回完整 HTML' }).waitFor()
     await page.keyboard.press('Escape')
-    assert.equal((await project()).prototypes.length, 1)
+    assert.equal((await project()).prototypes.length, retainedPrototypeCount)
     assert.match((await project()).chat.at(-1).designOutput, /没有完整原型/)
     provider.control.invalidDesign = false
     console.log(
@@ -393,7 +402,7 @@ async function main() {
     )
     assert.match((await project()).prototypes[0].html, /PROTOTYPE_INTRO_MARKER/)
     assert.equal((await project()).chat.length, savedCount)
-    assert.equal((await project()).prototypes.length, 1)
+    assert.equal((await project()).prototypes.length, retainedPrototypeCount)
     assert.match(
       (await project()).chat.find((e) => e.id === designEntry.id).designOutput,
       /doctype html/,

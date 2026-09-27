@@ -1,6 +1,7 @@
 // Deterministic protocol fixture. Never imported by application code.
 const http = require('node:http')
 const assert = require('node:assert/strict')
+const { prdReply } = require('./prd-reply.cjs')
 
 const ledgerFiles = {
   'package.json': JSON.stringify(
@@ -156,7 +157,7 @@ async function startProvider() {
             ? body.instructions
             : body.system
       const input = protocol === 'responses' ? body.input : body.messages
-      const priorTools =
+      let priorTools =
         protocol === 'chat'
           ? input.filter((m) => m.role === 'tool')
           : protocol === 'responses'
@@ -164,9 +165,31 @@ async function startProvider() {
             : input.flatMap((m) =>
                 Array.isArray(m.content) ? m.content.filter((p) => p.type === 'tool_result') : [],
               )
+      const prototypeId = system.match(/验收原型ID：([^\n]+)/)?.[1]
+      let approvedPrototype
+      priorTools = priorTools.filter(result => {
+        try {
+          const page = JSON.parse(result.content || result.output)
+          const record = JSON.parse(page.content)
+          if (record.id === prototypeId && record.html) { approvedPrototype = record; return false }
+        } catch {}
+        return true
+      })
       let text = '',
         calls = []
-      if (system.includes('连接测试'))
+      const prd = prdReply(body, control)
+      if (prd) { text = prd.text; calls = prd.calls }
+      else if (prototypeId && !approvedPrototype) calls = [call('read_context', { id: 'prototype:' + prototypeId })]
+      else if (system.includes('开发能力检查')) calls = [call('connection_probe', {})]
+      else if (system.includes('工具标记')) {
+        const result = priorTools.at(-1)
+        text = result?.content || result?.output || '{}'
+      }
+      else if (system.includes('产品界面设计 AI')) text = ledgerFiles['index.html']
+        .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-prototype-layout="approved-ledger">')
+        .replace("JSON.parse(localStorage.getItem('entries')||'[]')", '[]')
+        .replace("localStorage.setItem('entries',JSON.stringify(data));", '/*PERSIST_LEDGER*/')
+      else if (system.includes('连接测试'))
         text =
           '连接成功 ' +
           (req.headers['x-api-key'] || req.headers.authorization?.replace('Bearer ', '') || '')
@@ -212,6 +235,7 @@ async function startProvider() {
           else
             text = JSON.stringify({
               summary: '已读取代码并运行测试与构建。',
+              ...(prototypeId ? { prototypeReview: { prototypeId, passed: true, evidence: '已分页读取验收原型，并对照 index.html 的布局、表单与结余区域；fixture 测试运行金额与持久化检查，未进行真实供应商视觉验收。' } } : {}),
               results: feature.criteria.map((criterion) => ({
                 criterion,
                 passed: true,
@@ -225,6 +249,9 @@ async function startProvider() {
             calls = [call('list_files', {})]
           } else if (priorTools.length === 1) {
             const files = { ...ledgerFiles }
+            if (approvedPrototype) files['index.html'] = approvedPrototype.html
+              .replace('const data=[]', "const data=JSON.parse(localStorage.getItem('entries')||'[]')")
+              .replace('/*PERSIST_LEDGER*/', "localStorage.setItem('entries',JSON.stringify(data));")
             if (control.failing)
               files['ledger.test.cjs'] += "\ntest('deliberate failure',()=>assert.equal(1,2));"
             calls = [
