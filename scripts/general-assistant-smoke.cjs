@@ -1,5 +1,7 @@
 const assert=require('node:assert/strict'), fs=require('node:fs/promises'), {join,resolve}=require('node:path'), http=require('node:http')
 const {_electron:electron}=require('playwright')
+const {arenaHtml,categories}=require('./fixtures/arena.cjs')
+const {aaHtml}=require('./fixtures/aa.cjs')
 async function main(){
   const output=resolve('output/playwright/general-assistant');await fs.mkdir(output,{recursive:true})
   const profile=await fs.mkdtemp(join(output,'profile-')), requests=[],failures=[],errors=[]
@@ -29,14 +31,16 @@ async function main(){
     desktop=await electron.launch({args:['.','--disable-gpu'],env,timeout:30000});page=await desktop.firstWindow()
     page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));await page.emulateMedia({reducedMotion:'reduce'})
     await page.getByRole('heading',{name:'项目管理',exact:true}).waitFor()
-    await desktop.evaluate(()=>{const original=globalThis.fetch;globalThis.fetch=async(input,init)=>{
+    await desktop.evaluate((_,{arenaFixtures,aaFixture})=>{const original=globalThis.fetch;globalThis.fetch=async(input,init)=>{
       const url=String(input),sha='a'.repeat(40)
+      if(url.startsWith('https://artificialanalysis.ai/'))return new Response(aaFixture,{headers:{'content-type':'text/html'}})
+      if(url.startsWith('https://arena.ai/'))return new Response(arenaFixtures[new URL(url).pathname],{headers:{'content-type':'text/html'}})
       if(url.startsWith('https://skills.sh/'))return new Response(JSON.stringify({skills:[{name:'fixture-skill',source:'fixture/skills'}]}))
       if(url.includes('api.github.com')&&url.includes('/commits/'))return new Response(JSON.stringify({sha}))
       if(url.includes('api.github.com')&&url.includes('/git/trees/'))return new Response(JSON.stringify({tree:[{path:'skills/fixture-skill/SKILL.md',type:'blob',mode:'100644',size:100}]}))
       if(url.startsWith('https://raw.githubusercontent.com/fixture/skills/'))return new Response(['---','name: fixture-skill','description: 技能恢复测试','---','辅助当前实例。'].join(String.fromCharCode(10)))
       return original(input,init)
-    }})
+    }},{arenaFixtures:Object.fromEntries(Object.entries(categories).map(([p,c])=>[p,arenaHtml(c,[{model:'execution-model',score:1500,input:1,output:2}])])),aaFixture:aaHtml([],[])})
   }
   const screenshot=async(name,width,height)=>{
     await desktop.evaluate(({BrowserWindow},{width,height})=>BrowserWindow.getAllWindows()[0].setSize(width,height),{width,height})

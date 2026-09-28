@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "startedAt": "2026-09-28T10:48:57.056Z",
+  "sourceAndBuild": {
+    "src\\main\\main.ts": "8987df3d54245180f97b496780003eb7fcfabb70063d1ed5189e2b2d53426025",
+    "src\\main\\preload.ts": "f88134b4226865733b0a152d78752502d7dfd9b61e748257af2b7ad726be9333",
+    "src\\renderer\\app.tsx": "1e0ec810ad1fa9f745d42d2c4e96af546e95e5199bc848ced2ec6a22e4112dad",
+    "src\\renderer\\index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+    "src\\renderer\\style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+    "src\\shared\\stats.ts": "3fc9a80892e82d446002b0cf8652f2b6bcccf0e61bfa703bf57165ff50921e1d",
+    "src\\shared\\timer.ts": "1ba9e5f96fbb56912735df72591b1204c36e359ab2cb9464385d0ebb683ae123",
+    "src\\shared\\tray.ts": "9258f2df2dd5583e255368e413a525dfd33f8458176052e0168a6d5449242470",
+    "dist\\index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+    "dist\\main.js": "35071845102d011cbb1b45d4fc520a87d00e3dd94c7dc5863ce70203a67d0fe0",
+    "dist\\preload.js": "b1b17690093b2c9c68acfe26ae83eecb52b6d5d211b3094af11bbe3b2643ce9d",
+    "dist\\renderer.js": "54f9bc217bf971439054f3d0daed50ab14233ce83944174e1c11f1b061ed0997",
+    "dist\\style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b"
+  },
+  "status": "blocked",
+  "inputEvidence": [
+    {
+      "label": "native-hover-paused-container",
+      "events": [
+        {
+          "y": 1060,
+          "at": "2026-09-28T10:49:09.0147184Z",
+          "target": {
+            "name": "通知 V 形",
+            "className": "Button",
+            "pid": 11004,
+            "offscreen": false,
+            "type": "ControlType.Button",
+            "rect": {
+              "y": 1040,
+              "width": 24,
+              "height": 40,
+              "x": 1640
+            },
+            "runtimeId": [
+              42,
+              65876
+            ]
+          },
+          "action": "native-open-owned-tray-container",
+          "x": 1652
+        }
+      ],
+      "windows": [
+        {
+          "name": "",
+          "className": "NotifyIconOverflowWindow",
+          "pid": 11004,
+          "offscreen": false,
+          "type": "ControlType.Pane",
+          "rect": {
+            "y": 880,
+            "width": 160,
+            "height": 160,
+            "x": 1572
+          },
+          "runtimeId": [
+            42,
+            65882
+          ]
+        },
+        {
+          "name": "",
+          "className": "Shell_TrayWnd",
+          "pid": 11004,
+          "offscreen": false,
+          "type": "ControlType.Pane",
+          "rect": {
+            "y": 1040,
+            "width": 1920,
+            "height": 40,
+            "x": 0
+          },
+          "runtimeId": [
+            42,
+            65808
+          ]
+        },
+        {
+          "name": "",
+          "className": "Shell_SecondaryTrayWnd",
+          "pid": 11004,
+          "offscreen": false,
+          "type": "ControlType.Pane",
+          "rect": {
+            "y": 824,
+            "width": 1536,
+            "height": 40,
+            "x": 1920
+          },
+          "runtimeId": [
+            42,
+            132612
+          ]
+        }
+      ]
+    }
+  ],
+  "rendererErrors": [],
+  "capability": {
+    "screens": [
+      {
+        "primary": false,
+        "bounds": {
+          "y": 0,
+          "width": 1536,
+          "height": 864,
+          "x": 1920
+        },
+        "device": "\\\\.\\DISPLAY1",
+        "workArea": {
+          "y": 0,
+          "width": 1536,
+          "height": 824,
+          "x": 1920
+        }
+      },
+      {
+        "primary": true,
+        "bounds": {
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "x": 0
+        },
+        "device": "\\\\.\\DISPLAY2",
+        "workArea": {
+          "y": 0,
+          "width": 1920,
+          "height": 1040,
+          "x": 0
+        }
+      }
+    ],
+    "interactive": true,
+    "inputDesktop": "Default",
+    "shellWindows": [
+      {
+        "name": "",
+        "className": "Shell_TrayWnd",
+        "pid": 11004,
+        "offscreen": false,
+        "type": "ControlType.Pane",
+        "rect": {
+          "y": 1040,
+          "width": 1920,
+          "height": 40,
+          "x": 0
+        },
+        "runtimeId": [
+          42,
+          65808
+        ]
+      },
+      {
+        "name": "",
+        "className": "Shell_SecondaryTrayWnd",
+        "pid": 11004,
+        "offscreen": false,
+        "type": "ControlType.Pane",
+        "rect": {
+          "y": 824,
+          "width": 1536,
+          "height": 40,
+          "x": 1920
+        },
+        "runtimeId": [
+          42,
+          132612
+        ]
+      }
+    ],
+    "uia": true
+  },
+  "display": {
+    "primary": true,
+    "bounds": {
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "x": 0
+    },
+    "device": "\\\\.\\DISPLAY2",
+    "workArea": {
+      "y": 0,
+      "width": 1920,
+      "height": 1040,
+      "x": 0
+    },
+    "reason": "Native notification area is on Shell_TrayWnd on the primary display; use primary fallback before first show."
+  },
+  "runtime": {
+    "pid": 2664,
+    "userData": "D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\.runtime\\coprojer-checks\\6d9698f9-7398-484f-bf94-8211aa971d12\\user-data",
+    "electron": "31.7.7",
+    "windowBounds": {
+      "x": -8,
+      "y": -8,
+      "width": 1936,
+      "height": 1056
+    }
+  },
+  "error": "Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803\n    at desktop (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:30:31)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async trayAction (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:64:20)\n    at async main (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:68:17)",
+  "finishedAt": "2026-09-28T10:49:14.130Z",
+  "cleanupProcessProbes": [
+    {
+      "pid": 2664,
+      "status": "absent",
+      "error": "ESRCH"
+    },
+    {
+      "pid": 20556,
+      "status": "absent",
+      "error": "ESRCH"
+    },
+    {
+      "pid": 11908,
+      "status": "absent",
+      "error": "ESRCH"
+    },
+    {
+      "pid": 23424,
+      "status": "absent",
+      "error": "ESRCH"
+    },
+    {
+      "pid": 29608,
+      "status": "absent",
+      "error": "ESRCH"
+    }
+  ],
+  "driverPid": 29608
+}

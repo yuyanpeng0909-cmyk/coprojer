@@ -1,0 +1,76 @@
+{
+  "developmentDate": "2026-09-28",
+  "checkedAt": "2026-09-28T15:56:46.293Z",
+  "status": "passed",
+  "baseCommit": "ff11a67a1f773e5fa3eb088138457f0493ce8690",
+  "target": {
+    "remote": "origin",
+    "branch": "main"
+  },
+  "includedScopes": [
+    "AGENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "package.json",
+    "docs/ (except docs/test/)",
+    "src/",
+    "scripts/"
+  ],
+  "excludedScopes": [
+    "test/番茄钟助手/ working changes",
+    ".runtime/",
+    "output/",
+    ".scratch/",
+    "docs/test/",
+    "application user profiles",
+    "real API keys, private keys and credential files"
+  ],
+  "stagedFiles": 179,
+  "textFiles": 132,
+  "imageFiles": 47,
+  "secretReview": {
+    "scope": "Complete staged blobs in the release diff, not only added lines",
+    "forbiddenPaths": 0,
+    "unreviewedFindings": 0,
+    "realCredentialsFound": 0,
+    "reviewedSyntheticFixtureFindings": 25,
+    "methods": [
+      "provider token patterns",
+      "private keys",
+      "literal authentication values",
+      "credential-bearing URLs",
+      "JWT and dotted keys",
+      "high-entropy JSON values"
+    ],
+    "note": "Fixed synthetic test fixtures are retained. Source configuration logic and credential field names are not account credentials. No live user profile is included."
+  },
+  "imageReview": {
+    "images": 47,
+    "withOcrText": 46,
+    "withoutOcrText": 1,
+    "visualReview": "All 47 images reviewed; the three newly embedded README screenshots also checked at full size",
+    "unreviewedOrChangedImageHashes": 0,
+    "visibleCredentialTokensFound": 0,
+    "note": "Staged image SHA-256 values match the reviewed original image manifest. OCR key-label findings were form labels, not visible keys."
+  },
+  "documentation": {
+    "markdownFiles": 21,
+    "localLinks": 271,
+    "imageReferences": 100,
+    "localLinkErrors": 0,
+    "publishedLinkTargetsChecked": 264,
+    "unpublishedTargets": 0,
+    "directoryTargets": "Validated against tracked file prefixes"
+  },
+  "verification": {
+    "mode": "segmented",
+    "rootScripts": 46,
+    "primaryNpmTestExitCode": 1,
+    "finalBuildExitCode": 0,
+    "finalRecheckScripts": 18,
+    "finalRecheckExitCode": 0,
+    "sourceInputsUnchanged": 161,
+    "details": "2026-09-28-release-results.json"
+  },
+  "releaseBoundary": "Source and documentation publication only; no installer, GitHub Release, live paid-model regression or human acceptance is claimed."
+}

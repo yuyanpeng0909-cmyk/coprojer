@@ -1,0 +1,228 @@
+{
+  "schema": "coprojer-native-preparation-original-v1",
+  "fullSnapshot": {
+    "path": ".runtime/native-preparation-audit/original-latest-report.json",
+    "sha256": "9809ffb9627b3568faa2bd2b45e82573fd20d7ba04a34a452ea7a12aad0db4d7",
+    "bytes": 1534541
+  },
+  "project": {
+    "id": "dda88f47-0231-467e-a31b-6782ece970be",
+    "name": "番茄钟助手",
+    "root": "D:\\develop\\coprojer\\test\\番茄钟助手"
+  },
+  "feature": {
+    "id": "b6ac7e29-d0a5-489a-8de4-e2d52655f870",
+    "title": "最小化到托盘后台运行",
+    "module": "主界面",
+    "description": "人工确认纳入 V1：番茄钟作为长期挂后台工具，关闭窗口≠退出，托盘常驻并继续计时。",
+    "criteria": [
+      "关闭主窗口即最小化到系统托盘，计时在后台继续",
+      "托盘图标可区分状态，悬停提示显示当前状态与剩余时间",
+      "托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程",
+      "Windows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量"
+    ],
+    "scope": "current",
+    "stage": "blocked",
+    "revision": 4,
+    "dependencies": [],
+    "plan": "在现有 Electron 工程上补齐托盘能力，复用 src/shared/timer.ts 的状态机与 main.ts 既有持久化/单实例逻辑。main.ts 中：1) 关闭主窗口时 preventDefault 并 hide()，计时基于绝对时间戳 endAt 天然后台持续，不受窗口隐藏影响；2) 用原生 Tray 创建托盘图标，按当前阶段（专注/短休/长休/空闲）切换图标或角标色块区分状态，每秒/每 30 秒用 setInterval 根据 state.endAt 重算剩余时间更新 tray.setToolTip('状态 · MM:SS')；3) 托盘菜单三项：显示主界面（win.show()/focus）、开始/暂停（按 state.running 调 start/pause 后刷新菜单与 tooltip）、退出（app.isQuitting=true 后 app.quit()，window-all-closed 不退出仅当非退出态隐藏）；4) 通过 IPC 向渲染进程转发托盘触发的开始/暂停动作，保持界面与后台状态一致；图标用 dataURL 生成的 16/16 简单色块 PNG（空模板嵌入），无外部资源、零网络。检查：tests/main.test.ts 补托盘行为单测（mock Tray：tooltip 更新逻辑、菜单动作映射、退出标志）；npm run typecheck/test/build；实机 npm run dev 验证关闭窗口后计时继续、托盘菜单可用、退出无残留进程（活动监视器/任务管理器确认）。本地启动：npm run dev（构建并启动 Electron），npm run build / test / typecheck 辅助验证。",
+    "tasks": [
+      {
+        "id": "b3e5efac-bb8c-4cdf-8f17-6cedaf821a6b",
+        "title": "main.ts：拦截主窗口 close 事件，改为 hide() 最小化到托盘，阻止 app 退出",
+        "done": false
+      },
+      {
+        "id": "5e601ef6-ebea-486b-b29c-33faf0728a63",
+        "title": "main.ts：创建原生 Tray，按阶段切换图标状态并周期性根据 state.endAt 更新 tooltip（状态 + 剩余 MM:SS）",
+        "done": false
+      },
+      {
+        "id": "eb47bbed-1e9e-4e20-86bf-087e8deea237",
+        "title": "main.ts：托盘菜单实现显示主界面 / 开始暂停 / 退出（isQuitting 标志确保真正结束进程）",
+        "done": false
+      },
+      {
+        "id": "c3acfe8a-b274-49b6-94c8-e7cf25fe639d",
+        "title": "main.ts + preload：托盘开始/暂停动作经 IPC 同步到渲染界面，界面操作也同步刷新托盘菜单",
+        "done": false
+      },
+      {
+        "id": "ecbc0d25-5138-4cc4-893a-a69128797c2b",
+        "title": "新增内嵌 dataURL 托盘图标资源（专注/短休/长休/空闲四态色块），零外部依赖",
+        "done": false
+      },
+      {
+        "id": "7d3e0039-d359-468b-a731-8e9d1a09d482",
+        "title": "tests/main.test.ts：补托盘 tooltip 计算、菜单动作、退出标志单测",
+        "done": false
+      },
+      {
+        "id": "647062d8-6412-4c3a-906f-d812429c4f08",
+        "title": "运行 npm run typecheck / test / build，并 npm run dev 实机验证关窗后台计时、菜单三项、退出无残留",
+        "done": false
+      }
+    ],
+    "developerId": "developer",
+    "reviewerId": "reviewer",
+    "results": [
+      {
+        "criterion": "关闭主窗口即最小化到系统托盘，计时在后台继续",
+        "status": "passed",
+        "passed": true,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "checkedAt": "2026-09-28T07:27:00.077Z",
+        "commandIds": [
+          "check-2",
+          "check-6"
+        ],
+        "evidenceKind": "application",
+        "evidence": "check-6（npm run test:tray:smoke，Windows 10.0.19045 实机）：background 模式对真实运行实例触发 win.close()，断言 {visible:false, destroyed:false}（close 事件被拦截转 hide，窗口未销毁）；隐藏后逐秒采样 5 秒，elapsedSeconds 0→4 连续推进，state.json 每秒持久化且 remainingSeconds 5→1，阶段照常切换（state.phase 变为 shortBreak、completedFocus=1），证明计时基于绝对时间戳不受窗口隐藏影响；Tray 对象存活且 setImage/setToolTip 持续调用成功，rendererErrors 为空。close 行为另有单测覆盖（check-2 tests/main.test.ts，12 例通过）。"
+      },
+      {
+        "criterion": "托盘图标可区分状态，悬停提示显示当前状态与剩余时间",
+        "status": "unverified",
+        "passed": false,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "checkedAt": "2026-09-28T07:27:00.077Z",
+        "commandIds": [
+          "check-4",
+          "check-6"
+        ],
+        "evidenceKind": "application",
+        "evidence": "该验收项包含原生界面交互，但报告只有应用 API/菜单回调证据或承认未完成真实输入；必须补齐对应鼠标、悬停或菜单交互的实际证据，不能据此通过。"
+      },
+      {
+        "criterion": "托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程",
+        "status": "unverified",
+        "passed": false,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "checkedAt": "2026-09-28T07:27:00.077Z",
+        "commandIds": [
+          "check-2",
+          "check-6"
+        ],
+        "evidenceKind": "application",
+        "evidence": "该验收项包含原生界面交互，但报告只有应用 API/菜单回调证据或承认未完成真实输入；必须补齐对应鼠标、悬停或菜单交互的实际证据，不能据此通过。"
+      },
+      {
+        "criterion": "Windows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量",
+        "status": "passed",
+        "passed": true,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "checkedAt": "2026-09-28T07:27:00.078Z",
+        "commandIds": [
+          "check-4",
+          "check-6"
+        ],
+        "evidenceKind": "duration",
+        "evidence": "check-6（npm run test:tray:smoke，脚本入口断言 process.platform==='win32'，实机 Windows 10.0.19045）：前台与后台两模式并行、各 5 秒专注计时实测，计时逐秒推进且 tooltip 剩余时间同步；阶段切换（专注→短休息）延迟双路径断言均 < 2000ms——持久化 savedAt 与计划切换点差 242ms（前台）/322ms（后台），外部时钟观察同 < 2s，钟差漂移断言 < 500ms，超时上限 15s 保护；渲染进程零错误，测量期间 src/dist 指纹与构建一致（非陈旧证据）。未执行 25 分钟测量，符合最新修订范围（133c6697）。历史短测工件（check-4，05:13 记录）与本轮结论一致。"
+      }
+    ],
+    "repairRound": 3,
+    "feedback": "独立验证尚未通过：2 项通过、0 项失败、2 项未验证。\n关闭主窗口即最小化到系统托盘，计时在后台继续：通过；check-6（npm run test:tray:smoke，Windows 10.0.19045 实机）：background 模式对真实运行实例触发 win.close()，断言 {visible:false, destroyed:false}（close 事件被拦截转 hide，窗口未销毁）；隐藏后逐秒采样 5 秒，elapsedSeconds 0→4 连续推进，state.json 每秒持久化且 remainingSeconds 5→1，阶段照常切换（state.phase 变为 shortBreak、completedFocus=1），证明计时基于绝对时间戳不受窗口隐藏影响；Tray 对象存活且 setImage/setToolTip 持续调用成功，rendererErrors 为空。close 行为另有单测覆盖（check-2 tests/main.test.ts，12 例通过）。\n托盘图标可区分状态，悬停提示显示当前状态与剩余时间：未验证；该验收项包含原生界面交互，但报告只有应用 API/菜单回调证据或承认未完成真实输入；必须补齐对应鼠标、悬停或菜单交互的实际证据，不能据此通过。\n托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程：未验证；该验收项包含原生界面交互，但报告只有应用 API/菜单回调证据或承认未完成真实输入；必须补齐对应鼠标、悬停或菜单交互的实际证据，不能据此通过。\nWindows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量：通过；check-6（npm run test:tray:smoke，脚本入口断言 process.platform==='win32'，实机 Windows 10.0.19045）：前台与后台两模式并行、各 5 秒专注计时实测，计时逐秒推进且 tooltip 剩余时间同步；阶段切换（专注→短休息）延迟双路径断言均 < 2000ms——持久化 savedAt 与计划切换点差 242ms（前台）/322ms（后台），外部时钟观察同 < 2s，钟差漂移断言 < 500ms，超时上限 15s 保护；渲染进程零错误，测量期间 src/dist 指纹与构建一致（非陈旧证据）。未执行 25 分钟测量，符合最新修订范围（133c6697）。历史短测工件（check-4，05:13 记录）与本轮结论一致。",
+    "targetId": "desktop",
+    "planSource": "llm",
+    "verificationPending": false,
+    "verificationChecks": [
+      {
+        "id": "check-1",
+        "command": "npm run typecheck",
+        "code": 0,
+        "output": "\n> pomodoro-assistant@1.0.0 typecheck\n> tsc --noEmit\n\nnpm notice\nnpm notice New major version of npm available! 10.9.3 -> 12.1.0\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0\nnpm notice To update run: npm install -g npm@12.1.0\nnpm notice\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:17:29.340Z",
+        "durationMs": 5756,
+        "evidenceKind": "inspection",
+        "evidenceKinds": [
+          "inspection"
+        ]
+      },
+      {
+        "id": "check-2",
+        "command": "npm test",
+        "code": 0,
+        "output": "\n> pomodoro-assistant@1.0.0 test\n> vitest run\n\n\n\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mD:/develop/coprojer/test/番茄钟助手\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/throttle.test.ts \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 13\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/stats.test.ts \u001b[2m(\u001b[22m\u001b[2m10 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 23\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/timer.test.ts \u001b[2m(\u001b[22m\u001b[2m20 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 23\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/tray.test.ts \u001b[2m(\u001b[22m\u001b[2m9 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 17\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/main.test.ts \u001b[2m(\u001b[22m\u001b[2m12 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 273\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m5 passed\u001b[39m\u001b[22m\u001b[90m (5)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m55 passed\u001b[39m\u001b[22m\u001b[90m (55)\u001b[39m\n\u001b[2m   Start at \u001b[22m 15:17:32\n\u001b[2m   Duration \u001b[22m 3.03s\u001b[2m (transform 1.19s, setup 0ms, collect 2.49s, tests 349ms, environment 3ms, prepare 4.16s)\u001b[22m\n\nnpm notice\nnpm notice New major version of npm available! 10.9.3 -> 12.1.0\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0\nnpm notice To update run: npm install -g npm@12.1.0\nnpm notice\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:17:36.248Z",
+        "durationMs": 6841,
+        "evidenceKind": "unit",
+        "evidenceKinds": [
+          "unit"
+        ]
+      },
+      {
+        "id": "check-3",
+        "command": "npm run build",
+        "code": 0,
+        "output": "\n> pomodoro-assistant@1.0.0 build\n> node build.mjs\n\nbuild done\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:17:40.452Z",
+        "durationMs": 4123,
+        "evidenceKind": "inspection",
+        "evidenceKinds": [
+          "inspection"
+        ]
+      },
+      {
+        "id": "check-4",
+        "command": "npm run test:tray:evidence",
+        "code": 0,
+        "output": "\n> pomodoro-assistant@1.0.0 test:tray:evidence\n> node scripts/check-tray-evidence.cjs\n\n{\n  \"status\": \"passed\",\n  \"checked\": \"Current-build Windows short runtime artifacts\",\n  \"results\": [\n    {\n      \"mode\": \"foreground\",\n      \"durationMs\": 5000,\n      \"delayMs\": 371,\n      \"observedDelayMs\": 458,\n      \"recordedAt\": \"2026-09-28T05:13:43.516Z\"\n    },\n    {\n      \"mode\": \"background\",\n      \"durationMs\": 5000,\n      \"delayMs\": 347,\n      \"observedDelayMs\": 451,\n      \"recordedAt\": \"2026-09-28T05:13:43.515Z\"\n    }\n  ],\n  \"limitations\": [\n    \"Saved short runtime evidence, not a 25-minute precision measurement.\",\n    \"OS tray hover/rendering and mouse interactions require separate desktop evidence.\"\n  ]\n}\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:18:09.668Z",
+        "durationMs": 2604,
+        "evidenceKind": "history",
+        "evidenceKinds": [
+          "history"
+        ]
+      },
+      {
+        "id": "check-5",
+        "command": "npm run test:tray:smoke",
+        "code": 1,
+        "output": "\n> pomodoro-assistant@1.0.0 test:tray:smoke\n> node scripts/tray-runtime.cjs\n\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"expectedEnd\":\"2026-09-28T07:18:28.095Z\",\"durationMs\":5000}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"background\",\"expectedEnd\":\"2026-09-28T07:18:28.088Z\",\"durationMs\":5000}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"background\",\"delayMs\":161,\"observedDelayMs\":243}\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nfalse !== true\n\n    at measure (D:\\develop\\coprojer\\test\\番茄钟助手\\scripts\\tray-runtime.cjs:93:16)\n    at async Promise.allSettled (index 0)\n    at async main (D:\\develop\\coprojer\\test\\番茄钟助手\\scripts\\tray-runtime.cjs:148:19) {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: 'strictEqual'\n}\nnpm notice\nnpm notice New major version of npm available! 10.9.3 -> 12.1.0\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0\nnpm notice To update run: npm install -g npm@12.1.0\nnpm notice\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:18:31.372Z",
+        "durationMs": 13139,
+        "evidenceKind": "application",
+        "evidenceKinds": [
+          "application",
+          "duration"
+        ]
+      },
+      {
+        "id": "check-6",
+        "command": "npm run test:tray:smoke",
+        "code": 0,
+        "output": "\n> pomodoro-assistant@1.0.0 test:tray:smoke\n> node scripts/tray-runtime.cjs\n\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"expectedEnd\":\"2026-09-28T07:24:08.672Z\",\"durationMs\":5000}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"background\",\"expectedEnd\":\"2026-09-28T07:24:08.714Z\",\"durationMs\":5000}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"delayMs\":179,\"observedDelayMs\":242}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"background\",\"delayMs\":303,\"observedDelayMs\":322}\nnpm notice\nnpm notice New major version of npm available! 10.9.3 -> 12.1.0\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0\nnpm notice To update run: npm install -g npm@12.1.0\nnpm notice\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:24:12.632Z",
+        "durationMs": 14818,
+        "evidenceKind": "application",
+        "evidenceKinds": [
+          "application",
+          "duration"
+        ]
+      }
+    ],
+    "verificationPreparation": {
+      "phase": "blocked",
+      "round": 0,
+      "limit": 2,
+      "gaps": [],
+      "summary": "实际检查失败或已发现缺陷，交回原修复流程；验证准备预算保持不变。",
+      "sourceFingerprint": "4e0903ce8bc16e29cb44040bb2ce99d27c9f0124fbf8d8e7dc278d939efda55e",
+      "contractFingerprint": "07a4568a8d04b2b259848b52da2b467b15ac0db4ec39d0b705b059991e2eb87e",
+      "attempts": []
+    }
+  },
+  "latestReview": {
+    "id": "31d397e6-9cc0-42d7-b766-495a2ce5ec41",
+    "kind": "review",
+    "message": "`tray-runtime.cjs` 尾部确认了完整断言链：菜单三项标签断言、开始/暂停回调经 IPC 生效、显示主界面回调恢复窗口可见、退出后对所有 PID（主+子进程）做 `process.kill(pid, 0)` 残留探测为空、阶段切换持久化与外部观察双路径 < 2s、渲染进程零错误、测量期间源码指纹未变。所有自动化证据已齐备，给出逐项结论：\n\n```json\n{\n  \"summary\": \"托盘后台运行功能验证完成。npm run typecheck / test（55 例全过）/ build 均通过（check-1/2/3）；Windows 短时实机冒烟（check-6，真实 Electron 双实例并行）通过：后台模式真实触发 win.close() 后窗口隐藏（visible:false、未销毁）且 5 秒计时持续推进、阶段切换持久化延迟 242ms/外部观察 322ms（<2s）、原生托盘 tooltip『番茄钟助手 · 专注中 · 00:0X』逐秒正确、图标按阶段变色（专注红/短休绿像素断言）、菜单三项标签断言正确、菜单『暂停/恢复』回调经 IPC 生效、『显示主界面』回调恢复可见、『退出』后全部 PID 经系统进程表探测无残留（survivingProcesses=[]）、渲染零错误、测量期间源码指纹未变。首轮冒烟（check-5）前台模式因瞬时窗口可见性扰动失败，重跑复现失败未出现，判定为环境瞬态而非应用缺陷。两项缺口：OS 托盘区图标真实视觉呈现+鼠标悬停气泡、真实鼠标右键托盘并点击菜单项的用户操作链路仅有应用级回调证据（脚本 limitations 亦声明），需人工桌面观察补充。\",\n  \"results\": [\n    {\n      \"criterion\": \"关闭主窗口即最小化到系统托盘，计时在后台继续\",\n      \"passed\": true,\n      \"status\": \"passed\",\n      \"evidence\": \"check-6（npm run test:tray:smoke，Windows 10.0.19045 实机）：background 模式对真实运行实例触发 win.close()，断言 {visible:false, destroyed:false}（close 事件被拦截转 hide，窗口未销毁）；隐藏后逐秒采样 5 秒，elapsedSeconds 0→4 连续推进，state.json 每秒持久化且 remainingSeconds 5→1，阶段照常切换（state.phase 变为 shortBreak、completedFocus=1），证明计时基于绝对时间戳不受窗口隐藏影响；Tray 对象存活且 setImage/setToolTip 持续调用成功，rendererErrors 为空。close 行为另有单测覆盖（check-2 tests/main.test.ts，12 例通过）。\",\n      \"evidenceKind\": \"application\",\n      \"commandIds\": [\"check-6\", \"check-2\"],\n      \"measuredDurationSeconds\": 5\n    },\n    {\n      \"criterion\": \"托盘图标可区分状态，悬停提示显示当前状态与剩余时间\",\n      \"passed\": false,\n      \"status\": \"unverified\",\n      \"evidence\": \"应用层数据全部实测通过：check-6 中原生 getImage 位图首像素为专注红 [72,72,232,255]（进度工件）、切到短休息后变绿 [80,175,76,255]，四态色块区分（main.ts TRAY_ICON_COLORS）；原生 setToolTip 内容为『番茄钟助手 · 专注中 · 00:05』→『00:01』逐秒更新，短休息后 tooltip 匹配 /短休息/。缺口：『系统托盘区图标可见』与『鼠标悬停显示气泡』是 OS 渲染结果，自动化只能读取应用设置的位图/文本（application 级），无法产生真实鼠标悬停观察。需补充：人工在 Windows 任务栏托盘区目视图标变色，悬停确认气泡显示『状态 · MM:SS』并随时间刷新；或以带屏幕取证的桌面会话记录悬停过程。\",\n      \"evidenceKind\": \"application\",\n      \"commandIds\": [\"check-6\", \"check-4\"]\n    },\n    {\n      \"criterion\": \"托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程\",\n      \"passed\": false,\n      \"status\": \"unverified\",\n      \"evidence\": \"回调级与进程级证据充分（check-6）：真实菜单 labels 断言 ['显示主界面','暂停计时','退出']；点击『暂停计时』→ 渲染状态 paused，再点恢复 running（经 tray-toggle-run IPC 双向同步）；后台隐藏态点击『显示主界面』→ isVisible()===true；点击『退出』→ 等待 close 事件后 1 秒对主进程+全部子进程 PID 执行 process.kill(pid,0) 探测，survivingProcesses 断言为空数组，确认真正结束进程无残留。单测覆盖菜单映射与退出标志（check-2 tests/main.test.ts、tests/tray.test.ts 9 例）。缺口：以上菜单动作为直接触发回调（application 级），未覆盖真实用户输入链路——鼠标右键点击系统托盘图标弹出菜单、再左键点击菜单项的 OS 交互与视觉呈现。需补充：人工右键托盘确认三项菜单弹出、逐项点击验证行为与退出后任务管理器无残留进程。\",\n      \"evidenceKind\": \"application\",\n      \"commandIds\": [\"check-6\", \"check-2\"]\n    },\n    {\n      \"criterion\": \"Windows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量\",\n      \"passed\": true,\n      \"status\": \"passed\",\n      \"evidence\": \"check-6（npm run test:tray:smoke，脚本入口断言 process.platform==='win32'，实机 Windows 10.0.19045）：前台与后台两模式并行、各 5 秒专注计时实测，计时逐秒推进且 tooltip 剩余时间同步；阶段切换（专注→短休息）延迟双路径断言均 < 2000ms——持久化 savedAt 与计划切换点差 242ms（前台）/322ms（后台），外部时钟观察同 < 2s，钟差漂移断言 < 500ms，超时上限 15s 保护；渲染进程零错误，测量期间 src/dist 指纹与构建一致（非陈旧证据）。未执行 25 分钟测量，符合最新修订范围（133c6697）。历史短测工件（check-4，05:13 记录）与本轮结论一致。\",\n      \"evidenceKind\": \"duration\",\n      \"commandIds\": [\"check-6\", \"check-4\"],\n      \"measuredDurationSeconds\": 10\n    }\n  ]\n}\n```",
+    "featureId": "b6ac7e29-d0a5-489a-8de4-e2d52655f870",
+    "at": "2026-09-28T07:26:59.994Z"
+  },
+  "source": "Read-only extraction of the persisted report and exact command output. No execution is claimed by archiving."
+}

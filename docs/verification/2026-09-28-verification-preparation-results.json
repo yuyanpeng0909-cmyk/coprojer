@@ -1,0 +1,208 @@
+{
+  "recordedAt": "2026-09-28T05:08:57.9057383Z",
+  "gitHead": "ff11a67a1f773e5fa3eb088138457f0493ce8690",
+  "workspace": "D:/develop/coprojer",
+  "fullSuitePassed": false,
+  "uiRun": {
+    "date": "2026-09-28T05:06:40.01Z",
+    "actualChecks": 2,
+    "layouts": [
+      "1280x840",
+      "860x600"
+    ],
+    "fixture": "local deterministic model; real Electron UI and Node command",
+    "stages": [
+      "diagnosing",
+      "preparing",
+      "rechecking",
+      "blocked"
+    ],
+    "fingerprints": {
+      "src/main/engineering/service.ts": "5c362a906f0d8a20d51da48c18f4f1f832e6b64e0a1c7930b668fb36beb9afe8",
+      "src/main/engineering/files.ts": "de515132588c93a1975a3b337ef3a3c597b1efa4a75cad107efd630a20a8b4de",
+      "src/main/engineering/execution.ts": "42638113799481d5abc8e7a028c58c00ece7c856229e2c03b709d18fc6e04060",
+      "src/main/engineering/verification.ts": "6d0d39a747e7eba8c25b419656c748bdd7302d1e61a5b5f62835e6ed17d57480",
+      "src/main/engineering/command-supervisor.ts": "6f7aa33919854d26d672df6e215490f9942fb0063131744f578bfc5884f8f082",
+      "src/renderer/src/engineering/VerificationProgress.tsx": "62cccb57af2e82b920258d6c9d899d11db834389e3e8de28f8db9eba36b7ee34",
+      "out/main/index.js": "823e5abdbf0496bca1756bc27b58fcec94ff6a425e04d21af852632a06798bc8",
+      "out/renderer/index.html": "6dc35e04c75ed919f89b8951cbf73d8398b1f3b67f86e0404a95dcb249ef8776"
+    },
+    "checks": [
+      {
+        "id": "check-1",
+        "command": "node tests/verify.cjs",
+        "code": 0,
+        "output": "UI_REAL_CHECK_PASSED\n",
+        "sourceFingerprint": "44160a27c4c8bec595878d62682f363eaeca015e0f463254f276d8839f625b1f",
+        "at": "2026-09-28T05:06:38.884Z",
+        "durationMs": 1038,
+        "evidenceKind": "unit"
+      }
+    ],
+    "errors": []
+  },
+  "sourceAndBuildSha256AtArchive": {
+    "src/main/engineering/service.ts": "5c362a906f0d8a20d51da48c18f4f1f832e6b64e0a1c7930b668fb36beb9afe8",
+    "src/main/engineering/execution.ts": "42638113799481d5abc8e7a028c58c00ece7c856229e2c03b709d18fc6e04060",
+    "src/main/engineering/files.ts": "de515132588c93a1975a3b337ef3a3c597b1efa4a75cad107efd630a20a8b4de",
+    "src/main/engineering/store.ts": "ae24f5b03ee712ed5bc946be095a77bd2961cc96ee56e9b4607e2711a0cba55d",
+    "src/main/engineering/verification.ts": "6d0d39a747e7eba8c25b419656c748bdd7302d1e61a5b5f62835e6ed17d57480",
+    "src/main/engineering/command-supervisor.ts": "6f7aa33919854d26d672df6e215490f9942fb0063131744f578bfc5884f8f082",
+    "src/shared/engineering.ts": "689d865408469c4049085897d349c60961680b468668ceb9f5fc5dcefc8655fa",
+    "src/renderer/src/engineering/VerificationProgress.tsx": "62cccb57af2e82b920258d6c9d899d11db834389e3e8de28f8db9eba36b7ee34",
+    "src/renderer/src/engineering/EngineeringPage.tsx": "c1f57a6e6663792ce127e7735b8c612b62526c7ecc7a307f48464af9f2f25a04",
+    "src/renderer/src/engineering/engineering.css": "cbebc711dcb1d1964277a852d2bca682ac59cc6c2343c8279eea1c2e4233d436",
+    "scripts/verification-evidence.cjs": "4c7a0f6ad2051a382d9ba674d2dbc45a6a76ad04a50c244e0196a54a1c5632c3",
+    "scripts/verification-evidence-smoke.cjs": "4d356267d879c06f8cc8b1853e14bcc619dba026cf8758285d320ebc35d9b33a",
+    "scripts/verification-preparation.cjs": "15c9bb1d17ccfc786671cb6d59197b814c8532c4f0ff81968de7a9a24ac84464",
+    "scripts/verification-preparation-smoke.cjs": "59a60a3b36d8b7443f270df3f6b1dd5452a554e30eaa40d3547475ab592ad384",
+    "scripts/verification-processes.cjs": "d9eb3a3e97a56e19e1e9c3942bc17d9febd5976ffed490769e7f87ea14b5ca95",
+    "scripts/fixtures/verification-runtime.cjs": "4df967edfbae554b3e918fa6b3d7f237aea2c1bb459e4b86fca1715b52378957",
+    "scripts/execution-budget.cjs": "9605798fa65e33d6c5264d9e348566fee9654555c61fc31bc7ac422e2dcc9cd6",
+    "package.json": "f30862e57e2e2516a2e3d367aa0c2d3da3813d91d21cbe45df4f98d392d754dc",
+    "package-lock.json": "4bb4d6696f57032e613f446d96cb19cc5f91e7b3ea7796b36f5fbb318c5506eb",
+    "out/main/index.js": "823e5abdbf0496bca1756bc27b58fcec94ff6a425e04d21af852632a06798bc8",
+    "out/renderer/index.html": "6dc35e04c75ed919f89b8951cbf73d8398b1f3b67f86e0404a95dcb249ef8776"
+  },
+  "checks": [
+    {
+      "logSha256": "ba61172457cc910056330f66224aab287052aa4c61b5486c8fa0b33eda9afe16",
+      "result": "passed",
+      "exitCode": 0,
+      "log": "verification-suite-final.log",
+      "evidence": [
+        "PASS: evidence gaps pause once, preserve results and tasks, survive restart and resume review",
+        "PASS: old paused tasks can explicitly recheck without redevelopment or bypassing acceptance",
+        "PASS: real failures still repair; missing tests, changed source and contradictory claims stay unverified and cannot bypass gates",
+        "REPRO: reviewer consumed 36 work steps; stage = blocked",
+        "PASS: budget pause, durable restart, exact reviewer continuation and actual evidence gate",
+        "PASS: final summary can conclude at the boundary without more tool work",
+        "PASS: source, contract and model changes discard old history and rerun real checks",
+        "PASS: resumed model claims cannot bypass actual tests or spend repair budget without a defect",
+        "PASS: failed commands remain failures across checkpoint recovery",
+        "PASS: existing 36-step failures recover directly into review without resetting repair rounds",
+        "PASS: developer checkpoint resumes without replaying completed writes",
+        "PASS: final-summary network failure is reported while completed progress stays recoverable",
+        "PASS: runtime cache does not consume the source discovery budget",
+        "PASS: real script created, actual assertion executed independently, no extra click, manual acceptance retained",
+        "PASS: real offline npm development dependency installation followed by independent execution",
+        "PASS: actual missing-module failure routes through dependency preparation, not code repair",
+        "PASS: automatic part completed before external blockers, platform evidence remains unverified across restart",
+        "PASS: actual code defect repaired before unresolved external validation, no defect hidden as missing environment",
+        "PASS: preparation diagnosis hands business defect back to existing repair loop",
+        "PASS: unknown diagnostics, no-op claims, preparation budget and identical failures stop finitely without resetting repair",
+        "PASS: cancellation and connection failure preserve completed preparation, restart continues without replaying writes",
+        "PASS: cancellation before the first diagnostic request retains its gaps and resumes the correct phase",
+        "PASS: changed source discards stale preparation conversation; lockfile changes invalidate final acceptance",
+        "PASS: reading historical evidence never substitutes for a fresh required runtime check",
+        "PASS: unit execution cannot be relabeled as desktop, application or long-duration evidence",
+        "PASS: role separation, read-only diagnosis, protected code/tests, no global installs or command-path bypass",
+        "PASS: cancellation kills owned test process and cleans isolated user data",
+        "PASS: abrupt host exit closes lifetime lease and terminates its test process without killing unrelated processes",
+        "PASS: real Electron stages, automatically generated/executed script, external blocker, restart, dark theme, keyboard and two layouts"
+      ],
+      "command": "npm run test:verification"
+    },
+    {
+      "logSha256": "e96c38d8615d4e222e19638bc55fa1b3443011ed95334d7ae5eaed25a72a3830",
+      "result": "passed",
+      "exitCode": 0,
+      "log": "evidence-smoke-final.log",
+      "evidence": [
+        "PASS: pending evidence labels, continue-review action, acceptance gate and both Electron layouts"
+      ],
+      "command": "node scripts/verification-evidence-smoke.cjs"
+    },
+    {
+      "logSha256": "239e0497a1e88914b2e18a8c2c42c4fc70becedf8898c379a61b94af6ec81973",
+      "result": "passed on independent rerun",
+      "exitCode": 0,
+      "log": "engineering-recheck.log",
+      "evidence": [
+        "PASS: add-model UI, three protocol tests, encrypted keys, redacted errors, model discovery",
+        "PASS: new empty project, live feature map, stale-response guard, three gates, real code/tests, serial acceptance",
+        "PASS: preview startup/shutdown, generated page persistence, shared context, light/dark and compact desktop layouts",
+        "PASS: deferred feature and missing directory rejected before model execution",
+        "PASS: all protocol tool roundtrips, rejection/continuation, exactly three repair rounds, no-test false-pass prevention",
+        "PASS: cancellation, cyclic-dependency guard, encrypted restart, recovery without automatic replay; no renderer errors"
+      ],
+      "command": "node scripts/engineering-smoke.cjs"
+    },
+    {
+      "logSha256": "e6d395537c40a4a03dc76c04e955e2cbc18df26110bdb31edf77bb42f329d81c",
+      "result": "passed",
+      "exitCode": 0,
+      "log": "tail-suite.log",
+      "evidence": [
+        "PASS: column-header batch menus, selection and confirmation, keyboard and light-dismiss interaction, execution-plan repair and persistence, cancellation and dependencies, and layouts at 1280x840 / 860x600",
+        "PASS: actual SSE text/reasoning/tool output, functional graph updates before completion, no premature workflow transition",
+        "PASS: native detached graph stays synchronized; SVG/PNG/Markdown/JSON export saved and validated",
+        "PASS: design AI runs independently during discussion; interactive sandboxed prototype, drag-out native window, version persistence and export",
+        "PASS: all three streaming protocols, signed/encrypted tool continuation, full cross-model history, whole-project baseline, revision and stop preserving partial output",
+        "PASS: live design process in both layouts/themes, persistent raw output, stop preserves previous prototype and history remains inspectable",
+        "PASS: real Electron 1280×840 / 860×600 layouts, dark theme, restart retaining history/prototype/baseline; no renderer errors",
+        "PASS: strict Responses thinking history and native tool continuation, mixed-model proposal/review/synthesis, human feedback and confirmation, 4 project scopes and windows, scoped prototype, stop/error, restart and resume, both layouts/themes",
+        "PASS: incremental participant graph updates, one-at-a-time live decision cards, waiting without requests, defer to another model, choice and free text, native graph, compact/light/dark, validation, stop/resume, restart with pending card and draft, original reasoning continuation",
+        "PASS: long human-in-the-loop discussions, reserved defer option, bounded summary, same-round cursor resume",
+        "PASS: prototype-first flow without predefined features, automatic PRD with full source reads, PRD failure/stop/restart recovery, first-run draft preservation, four-role migration, skills, three-protocol capabilities, pinned prototype reused in real source, 21-plan preparation, stale approval guard, serial delivery and acceptance, context archive/restore, both layouts/themes"
+      ],
+      "command": "execution-plan / research / roundtable / decision / discussion-budget / novice smoke"
+    },
+    {
+      "logSha256": "5fea02bd29295f5841e09b4f6e3d17007e5b7ed78b2d3bfc8ac1190f07453aa3",
+      "result": "failed",
+      "exitCode": 1,
+      "log": "npm-test-final.log",
+      "evidence": [
+        "PASS: real model request preserves transport cause codes, redacts secrets, distinguishes HTTP failure and cancellation",
+        "PASS: exact versions, category mapping, parser/partial-page checks, score-only selection, Pareto/unknown prices, preliminary exclusion, failed/stale sources, public credential-free requests",
+        "PASS: isolated Electron per-instance capabilities, live-refresh requests, changed ranking, exact-version preservation, evidence table, advisor override/receipt, confirmed apply, offline no-cache/no-call, restart/skill preservation, 1280x840 + 860x600 light/dark, maximized tutorials",
+        "PASS: legacy response without evidence",
+        "PASS: empty response",
+        "PASS: non-array choices",
+        "PASS: missing candidates",
+        "PASS: invalid score votes",
+        "PASS: invalid usage receipt",
+        "PASS: error recovery, valid retry, reopen, unchanged settings, and both sizes/themes",
+        "PASS: Aliyun catalog, auth callback/CSRF/cancel, actual quota schema, free-only checks, stale quota, transaction rollback, encrypted persistence, account isolation, existing bindings and zero inference calls",
+        "PASS: real Electron Aliyun key/quota/assembly flow, preserved data, restart, cancel, both sizes/themes and maximized screenshots; only controlled service fixtures",
+        "PASS: lossless paging, version checks, bounded scoped context, pinned baselines, history compaction, four roles and local skill validation",
+        "PASS: proactive design-opinion readiness, human prototype review gate and requirement-change invalidation",
+        "PASS: prototype-first PRD mapping, retry stability, stale-source rejection and backend-only exemption",
+        "PASS: standard SKILL.md, YAML, package snapshot, legacy migration, instance isolation, on-demand reads, confirmed install, cancellation, restart persistence, model allocation, stale/hallucinated plan rejection",
+        "PASS: independent default/one-shot routing, frozen requests, provider model receipts, history/restart, saved per-agent recommendations, failed-search preservation, empty results, explicit clear, unchanged agent models/skills/credentials",
+        "PASS: legacy migration once; scoped sessions/drafts/position; confirmed memories; context isolation; allowlisted actions; stop/partial text; project-only team apply; private skill isolation; model restriction; idempotence; atomic rollback; stale/restart preview; global defaults; archive/delete/hint persistence",
+        "PASS: real Electron default/override, receipts, reuse connection, role routing, saved search reopen/restart/isolation/failure/clear, both layouts and dark theme",
+        "PASS: real Electron assistant workspace: nonmodal navigation and no-model guidance without model calls; immediate close/reopen draft; confirmed memory only; one-shot choice and draft restored; rename, pin, archive, search and restore; editable team plan; project-only apply, shared agents and project B unchanged; foreign project member rejected; newly discussed features retain project team; close continues response; restart retains partial text, draft, memory and session; no automatic replay; 1280x840 and 860x600 light/dark layouts",
+        "PASS: model IDs replace aliases; create/edit/catalog, legacy data, bindings, agent names, restart and both layouts",
+        "PASS: real Electron local preview/install/toggle, remote recommendation+confirmed install (mock services), per-instance isolation, model assistant preview/apply, on-demand skill tool calls, 1280x840 and 860x600 layouts",
+        "PASS: prototype document boundaries, Markdown wrappers, trailing prose, script/comment closing-tag literals, incomplete and ambiguous outputs",
+        "PASS: explicit stop, quit checkpoint, restart cause, retained partial output, full prototype retry",
+        "PASS: dedicated workbench, demo removal, native bridge, single instance, project creation, real feature lists/search, quick navigation, preferences and legacy data preservation, restart, dark/compact layouts; no renderer errors.",
+        "PASS: project management startup, create/continue/return, search/sort, restart, stale selection, saved data/theme, 1280x840 and 860x600 light/dark; no renderer errors.",
+        "AssertionError [ERR_ASSERTION]: continue action remains visible in the first viewport",
+        "    at main (D:\\develop\\coprojer\\scripts\\project-library-smoke.cjs:125:16) {"
+      ],
+      "command": "npm test (second full run)"
+    },
+    {
+      "logSha256": "3d73061697849cd71f4ba691543903b55c92613fbf038933c59de7bc6e3976ba",
+      "result": "failed",
+      "exitCode": 1,
+      "log": "project-library-recheck.log",
+      "evidence": [
+        "AssertionError [ERR_ASSERTION]: continue action remains visible in the first viewport",
+        "    at main (D:\\develop\\coprojer\\scripts\\project-library-smoke.cjs:125:16) {"
+      ],
+      "command": "node scripts/project-library-smoke.cjs"
+    }
+  ],
+  "notVerified": [
+    "paid-model autonomous planning",
+    "public npm registry installation",
+    "arbitrary target-app native desktop input",
+    "other operating systems/devices",
+    "long-duration precision",
+    "final human acceptance"
+  ]
+}

@@ -1,4 +1,9 @@
 import type { AssistantAction, AssistantMemory, AssistantMemoryInput, AssistantSession, AssistantSessionPatch, AssistantTeamMember, AssistantTeamPlan, AssistantWorkspace } from './assistant'
+import type { AliyunImportInput, AliyunImportPreview, AliyunImportResult, aliyunPages } from './aliyun'
+import type { ModelCapability, ModelCapabilityEvidence, ModelRecommendationOptions, ModelSelectionPolicy } from './model-evidence'
+import type { ModelChecks, OnboardingPreferences, OnboardingPatch } from './onboarding'
+import type { AgentReasoning } from './reasoning'
+import type { ModelTrafficSnapshot, TrafficQuery } from './model-traffic'
 export type Protocol = 'chat' | 'responses' | 'anthropic'
 export interface ModelConfig {
   id: string
@@ -7,8 +12,9 @@ export interface ModelConfig {
   model: string
   protocol: Protocol
   hasKey: boolean
+  checks?: ModelChecks
 }
-export interface ModelInput extends Omit<ModelConfig, 'hasKey' | 'name'> {
+export interface ModelInput extends Omit<ModelConfig, 'hasKey' | 'name' | 'checks'> {
   /** Legacy clients may send a name; new connections derive it from the model ID. */
   name?: string
   apiKey?: string
@@ -56,6 +62,7 @@ export const defaultAgentTools = (role: AgentRole): EngineeringToolName[] =>
     (name) => role === 'developer' || (role === 'reviewer' ? name !== 'write_file' : !['write_file', 'run_command'].includes(name)),
   )
 export interface AgentConfig {
+  reasoning?: AgentReasoning
   ownerProjectId?: string
   id: string
   name: string
@@ -97,11 +104,16 @@ export interface SkillRecommendation {
 }
 export interface AgentModelPlan {
   id: string
-  usage: AssistantModelUsage
-  choices: { agentId: string; previousModelId: string; modelId: string; reason: string }[]
+  usage?: AssistantModelUsage
+  choices: { agentId: string; previousModelId: string; modelId: string; reasoning?: AgentReasoning; reason: string; category: ModelCapability; supported: boolean }[]
+  evidence: ModelCapabilityEvidence[]
+  policy: ModelSelectionPolicy
   caveat: string
 }
 export interface AgentRunSnapshot {
+  reasoning?: AgentReasoning
+  modelDisplayName?: string
+  executionPhase?: 'developer' | 'reviewer' | 'diagnoser' | 'preparer'
   id: string
   at: string
   role: AgentRole
@@ -128,13 +140,65 @@ export interface TaskItem {
   title: string
   done: boolean
 }
+export type VerificationStatus = 'passed' | 'failed' | 'unverified'
+export type VerificationEvidenceKind = 'unit' | 'mock' | 'application' | 'desktop' | 'duration' | 'history' | 'inspection'
+export interface RuntimeMeasurement {
+  mode: string
+  durationSeconds: number
+  persistedTransitionDelayMs: number
+  observedTransitionDelayMs: number
+}
+export interface VerificationGap {
+  id: string
+  criterion: string
+  description: string
+  disposition: 'automatic' | 'external' | 'unknown'
+  reason: string
+  nextStep: string
+}
+export interface VerificationPreparation {
+  phase: 'diagnosing' | 'preparing' | 'rechecking' | 'blocked' | 'complete'
+  round: number
+  limit: number
+  gaps: VerificationGap[]
+  summary: string
+  sourceFingerprint: string
+  contractFingerprint: string
+  environment?: Record<string, unknown>
+  environmentCheckedAt?: string
+  attempts: {
+    id: string
+    at: string
+    key: string
+    round: number
+    status: 'running' | 'ready' | 'failed' | 'interrupted' | 'defect'
+    beforeFingerprint: string
+    environmentFingerprint?: string
+    afterFingerprint?: string
+    actions: string[]
+    result: string
+    nextStep: string
+  }[]
+}
 export interface CriterionResult {
   criterion: string
   passed: boolean
+  status?: VerificationStatus
   evidence: string
+  evidenceKind?: VerificationEvidenceKind
+  commandIds?: string[]
+  sourceFingerprint?: string
+  checkedAt?: string
+  measuredDurationSeconds?: number
+  measurements?: RuntimeMeasurement[]
 }
 export interface Feature {
-  prototypeResult?: { prototypeId: string; passed: boolean; evidence: string }
+  prototypeResult?: { prototypeId: string; passed: boolean; status?: VerificationStatus; evidence: string }
+  verificationPending?: boolean
+  verificationPreparation?: VerificationPreparation
+  verificationFingerprint?: string
+  verificationContractFingerprint?: string
+  verificationChecks?: { id: string; command: string; code: number; output: string; sourceFingerprint: string; at: string; durationMs: number; evidenceKind?: VerificationEvidenceKind; evidenceKinds?: VerificationEvidenceKind[]; measurements?: RuntimeMeasurement[]; runId?: string }[]
   targetId?: string
   id: string
   module: string
@@ -381,6 +445,7 @@ export function requirementsFingerprint(project: Project): string {
   })
 }
 export interface EngineeringState {
+  onboarding?: OnboardingPreferences
   defaultTeamAgentIds?: string[]
   assistant?: AssistantWorkspace
   defaultAssistantModelId?: string
@@ -404,6 +469,7 @@ export interface FeatureInput {
   dependencies: string[]
 }
 export interface EngineeringApi {
+  updateOnboarding(input: OnboardingPatch): Promise<void>
   acceptPrototypeAndPreparePrd(projectId: string, prototypeId: string): Promise<void>
   preparePrd(projectId: string): Promise<void>
   submitPrototypePreferences(projectId: string, preferences: string, targetId?: string): Promise<void>
@@ -430,8 +496,9 @@ export interface EngineeringApi {
   applyAssistantTeamPlan(id: string): Promise<void>
   clearSkillSearch(agentId: string): Promise<void>
   recommendSkills(agentId: string, query: string, modelId?: string): Promise<SkillSearchResult>
-  recommendAgentModels(advisorModelId: string, preference: string): Promise<AgentModelPlan>
+  recommendAgentModels(advisorModelId: string, preference: string, options?: ModelRecommendationOptions): Promise<AgentModelPlan>
   applyAgentModels(planId: string): Promise<void>
+  openModelEvidenceSource(url: string): Promise<void>
   selectPrototype(projectId: string, prototypeId: string): Promise<void>
   preparePlans(projectId: string): Promise<BatchPlanResult[]>
   confirmPlansAndStart(projectId: string, featureIds: string[], revisions: number[]): Promise<BatchConfirmResult[]>
@@ -443,6 +510,12 @@ export interface EngineeringApi {
   deleteModel(id: string): Promise<void>
   testModel(input: ModelInput): Promise<string>
   listModels(input: ModelInput): Promise<string[]>
+  modelTraffic(query?: TrafficQuery): Promise<ModelTrafficSnapshot>
+  scanAliyunModels(apiKey: string): Promise<AliyunImportPreview>
+  syncAliyunQuota(previewId: string): Promise<AliyunImportPreview>
+  importAliyunModels(input: AliyunImportInput): Promise<AliyunImportResult>
+  discardAliyunImport(previewId: string): Promise<void>
+  openAliyunPage(page: keyof typeof aliyunPages): Promise<void>
   saveAgent(input: AgentConfig): Promise<void>
   createProject(input: {
     name: string
@@ -489,7 +562,7 @@ export interface EngineeringApi {
   confirmPlans(projectId: string, featureIds: string[]): Promise<BatchConfirmResult[]>
   planExecution(projectId: string, featureIds: string[]): Promise<ExecutionPlan>
   runExecutionPlan(projectId: string): Promise<void>
-  runFeature(projectId: string, featureId: string): Promise<void>
+  runFeature(projectId: string, featureId: string, reviewOnly?: boolean): Promise<void>
   deleteFeature(projectId: string, featureId: string): Promise<void>
   stop(projectId: string): Promise<void>
   accept(projectId: string, featureId: string): Promise<void>
@@ -516,6 +589,8 @@ export const scopeLabels: Record<Scope, string> = {
   later: '暂缓',
 }
 export const engineeringMethods: (keyof EngineeringApi)[] = [
+  'openModelEvidenceSource',
+  'updateOnboarding',
   'createAssistantSession', 'selectAssistantSession', 'updateAssistantSession', 'deleteAssistantSession', 'stopAssistantMessage',
   'saveAssistantMemory', 'deleteAssistantMemory', 'dismissAssistantHint', 'recommendAssistantTeam', 'updateAssistantTeamPlan', 'applyAssistantTeamPlan',
   'setDefaultAssistantModel', 'sendAssistantMessage', 'clearAssistantChat', 'clearSkillSearch',
@@ -529,6 +604,8 @@ export const engineeringMethods: (keyof EngineeringApi)[] = [
   'deleteModel',
   'testModel',
   'listModels',
+  'modelTraffic',
+  'scanAliyunModels', 'syncAliyunQuota', 'importAliyunModels', 'discardAliyunImport', 'openAliyunPage',
   'saveAgent',
   'createProject',
   'updateProjectMetadata',

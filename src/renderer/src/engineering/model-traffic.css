@@ -1,0 +1,43 @@
+.eng-traffic { min-width: 0; font-size: 12px; }
+.eng-traffic-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.eng-traffic-toolbar label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.eng-traffic-toolbar select { max-width: 100%; min-width: 0; }
+.eng-traffic-filter { flex: 1; max-width: 430px; }
+.eng-traffic-caption { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 10px 0; }
+.eng-traffic-caption p { margin: 5px 0; }
+.eng-traffic-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; border-block: 1px solid var(--border); margin: 18px 0; padding: 16px 0; font-variant-numeric: tabular-nums; }
+.eng-traffic-metrics dt { color: var(--secondary); }
+.eng-traffic-metrics dd { margin: 5px 0; font-size: 22px; font-weight: 450; overflow-wrap: anywhere; }
+.eng-traffic-metrics small { display: block; font-size: 10px; color: var(--muted); line-height: 1.5; }
+.eng-traffic-block { margin: 20px 0; min-width: 0; }
+.eng-traffic-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.eng-traffic-heading h3 { font-size: 13px; font-weight: 500; margin: 0; }
+.eng-traffic-heading > span, .eng-traffic-axis { font-size: 11px; color: var(--muted); }
+.eng-traffic-chart { height: 84px; margin: 0; padding: 0; display: flex; gap: 4px; list-style: none; border-bottom: 1px solid var(--border); }
+.eng-traffic-chart li { position: relative; flex: 1; min-width: 0; }
+.eng-traffic-bar { position: absolute; bottom: 0; left: 0; right: 0; background: var(--accent-solid); opacity: .55; border-radius: 2px 2px 0 0; }
+.eng-traffic-bar.failed { background: var(--tone-red); opacity: 1; }
+.eng-traffic-axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.eng-traffic-table-scroll { overflow-x: auto; max-width: 100%; border-block: 1px solid var(--border); }
+.eng-traffic-table { border-collapse: collapse; width: 100%; min-width: 620px; font-variant-numeric: tabular-nums; }
+.eng-traffic-table th, .eng-traffic-table td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; vertical-align: top; }
+.eng-traffic-table th { font-weight: 500; }
+.eng-traffic-table th:first-child, .eng-traffic-table td:first-child, .eng-traffic-table .eng-traffic-model { text-align: left; }
+.eng-traffic-table thead { font-size: 11px; color: var(--secondary); }
+.eng-traffic-table tbody tr:last-child > * { border-bottom: 0; }
+.eng-traffic-table tbody tr:hover { background: var(--hover); }
+.eng-traffic-table .eng-traffic-model { max-width: 230px; min-width: 145px; white-space: normal; overflow-wrap: anywhere; }
+.eng-traffic-model button { color: var(--text); padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.eng-traffic-model button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.eng-traffic-table small { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; font-weight: 400; }
+.eng-traffic-status.failed, .eng-traffic-warning { color: var(--tone-red); }
+.eng-traffic-status.running { color: var(--tone-blue); }
+.eng-traffic-warning { font-size: 12px; line-height: 1.6; }
+.eng-traffic-empty { margin: 16px 0; color: var(--secondary); font-size: 12px; line-height: 1.6; }
+.eng-model-views { margin-bottom: 16px; }
+@media (max-width: 1000px) {
+  .eng-traffic-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .eng-traffic-toolbar { gap: 8px; }
+  .eng-traffic-filter { min-width: 170px; }
+  .eng-traffic-chart { gap: 3px; }
+}

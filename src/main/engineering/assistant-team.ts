@@ -4,6 +4,7 @@ import type { AssistantSession, AssistantTeamMember, AssistantTeamPlan } from '.
 import { EngineeringStore, now, uid } from './store'
 import { assistantConnection, assistantUsage } from './general-assistant'
 import { complete, parseJson, type Connection } from './model'
+import { resolveReasoning } from '../../shared/reasoning'
 
 const roles = Object.keys(agentRoleLabels) as AgentRole[]
 export class AssistantTeam {
@@ -99,6 +100,7 @@ export class AssistantTeam {
       const reusable = source && (project ? source.ownerProjectId === project.id : !source.ownerProjectId)
       const agent: AgentConfig = reusable ? { ...source, name: member.name, modelId: member.modelId } : { id: uid(), ownerProjectId: project?.id, name: member.name, role: member.role, modelId: member.modelId, instructions: source?.instructions || '负责' + agentRoleLabels[member.role] + '，遵循项目要求并提供真实结果。', tools: source ? [...source.tools] : defaultAgentTools(member.role), skillIds: [] }
       if (reusable) next[next.findIndex(a => a.id === agent.id)] = agent; else next.push(agent)
+      agent.reasoning = resolveReasoning(this.store.data.models.find(m => m.id === agent.modelId)!, source?.reasoning)
       assigned.push(agent)
     }
     this.store.data.agents = next

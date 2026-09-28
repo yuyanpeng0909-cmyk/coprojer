@@ -3,6 +3,7 @@ const fs = require('node:fs/promises')
 const { join, resolve } = require('node:path')
 const http = require('node:http')
 const { _electron: electron } = require('playwright')
+const { allocationFixture, categories } = require('./fixtures/arena.cjs')
 
 async function main() {
   const output = resolve('output/playwright/agent-skills'); await fs.mkdir(output,{recursive:true})
@@ -19,7 +20,7 @@ async function main() {
       let text='', calls=[]
       if(system.includes('SKILL_SEARCH_QUERY')) text=JSON.stringify({query:'frontend'})
       else if(system.includes('SKILL_RECOMMENDATIONS')) text=JSON.stringify({recommendations:[{index:0,reason:'适合原型设计，来源正文已核实，运行能力需按项目检查。'}]})
-      else if(system.includes('AGENT_MODEL_ALLOCATION')) text=JSON.stringify({choices:JSON.parse(input).agents.map(a=>({agentId:a.id,modelId:a.role==='developer'?'model-b':'model-a',reason:'按职责选择；这是受控测试推荐，非真实模型性能结论。'}))})
+      else if(system.includes('AGENT_MODEL_ALLOCATION')) { const parsed=JSON.parse(input);text=JSON.stringify({choices:parsed.agents.map(a=>({agentId:a.id,modelId:parsed.constraints.find(c=>c.agentId===a.id).allowedModelIds[0]}))}) }
       else {
         const previous=body.messages.filter(m=>m.role==='tool')
         if(!previous.length) calls=[{id:'foreign',type:'function',function:{name:'read_skill',arguments:JSON.stringify({id:'designer::fixture-design'})}}]
@@ -72,17 +73,19 @@ async function main() {
     await skills.getByRole('checkbox',{name:/fixture-design/}).uncheck()
     await page.waitForFunction(()=>document.querySelector('.eng-owned-skill input:not(:checked)'))
     await skills.getByRole('checkbox',{name:/fixture-design/}).check()
-    await desktop.evaluate(()=>{
+    await desktop.evaluate((_, arenaFixtures)=>{
       const original=globalThis.fetch
       globalThis.fetch=async(input,init)=>{
         const url=String(input), sha='a'.repeat(40)
+        if(url.startsWith('https://artificialanalysis.ai/')) return new Response('Isolated Arena regression; AA covered separately', {status:503})
+        if(url.startsWith('https://arena.ai/')) return new Response(arenaFixtures[new URL(url).pathname], { headers: { 'content-type': 'text/html' } })
         if(url.startsWith('https://skills.sh/')) return new Response(JSON.stringify({skills:[{name:'fixture-remote',source:'fixture/skills'}]}))
         if(url.includes('api.github.com')&&url.includes('/commits/')) return new Response(JSON.stringify({sha}))
         if(url.includes('api.github.com')&&url.includes('/git/trees/')) return new Response(JSON.stringify({tree:[{path:'skills/fixture-remote/SKILL.md',type:'blob',mode:'100644',size:140}]}))
         if(url.startsWith('https://raw.githubusercontent.com/fixture/skills/')) return new Response('---\nname: fixture-remote\ndescription: 用于原型设计的公开技能测试包\n---\n检查页面交互。')
         return original(input,init)
       }
-    })
+    }, Object.fromEntries(Object.keys(categories).map(p=>[p,allocationFixture('https://arena.ai'+p,'model-a','model-b')])))
     await skills.getByLabel('需要补充什么能力？').fill('界面布局')
     await skills.getByRole('button',{name:'联网推荐',exact:true}).click()
     await skills.getByRole('button',{name:'预览安装',exact:true}).waitFor({timeout:30000})
@@ -102,6 +105,9 @@ async function main() {
     await assert.rejects(invoke('saveAgent',{...second,skillIds:['designer::fixture-design']}),/其他智能体/)
     await page.getByRole('button',{name:'模型配置助手',exact:true}).click()
     const assistant=page.getByRole('dialog',{name:'模型配置助手'})
+    await assistant.getByLabel('任务规划智能体能力类别',{exact:true}).selectOption('text')
+    await assistant.getByLabel('开发智能体能力类别',{exact:true}).selectOption('coding')
+    await assistant.getByLabel('验证智能体能力类别',{exact:true}).selectOption('coding')
     await assistant.getByRole('button',{name:'一键推荐模型',exact:true}).click()
     await assistant.getByRole('button',{name:'一键应用模型配置',exact:true}).waitFor()
     assert.equal((await state()).agents.find(a=>a.id==='developer').modelId,'model-a')
@@ -110,7 +116,7 @@ async function main() {
     await screenshot('model-plan-dark',860,600)
     await page.evaluate(()=>{document.documentElement.dataset.theme='light'})
     await assistant.getByRole('button',{name:'一键应用模型配置',exact:true}).click()
-    await assistant.getByText('已应用到全部智能体，后续任务使用新配置。').waitFor()
+    await assistant.getByText(/已应用 \d+ 项模型变更/).waitFor()
     assert.equal((await state()).agents.find(a=>a.id==='developer').modelId,'model-b')
     await assistant.getByRole('button',{name:'关闭面板',exact:true}).click()
     const pid=await invoke('createProject',{name:'隔离技能验证',parent,brief:'验证按需加载',modelId:'model-a'})

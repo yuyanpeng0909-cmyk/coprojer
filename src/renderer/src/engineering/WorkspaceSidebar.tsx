@@ -24,7 +24,7 @@ export const workspaceNavigation = [
   { id: 'activity', label: '执行记录', icon: Activity },
 ] as const
 export type ProjectView = (typeof workspaceNavigation)[number]['id'] | DeliveryView
-export type WorkspaceSection = 'projects' | 'models' | 'agents' | 'appearance'
+export type WorkspaceSection = 'projects' | 'models' | 'agents' | 'appearance' | 'onboarding'
 export default function WorkspaceSidebar({
   researchTab,
   onResearchTab,
@@ -112,6 +112,7 @@ export default function WorkspaceSidebar({
             {project ? <ArrowLeft size={15} /> : <Folder size={15} />}
             <span className="nav-label">{project ? '返回项目管理' : '项目管理'}</span>
           </button>
+          <button aria-label="新手入门" title="新手入门" aria-current={section === 'onboarding' ? 'page' : undefined} className={section === 'onboarding' ? 'selected' : ''} onClick={() => onSection('onboarding')}><BookOpen size={15} /><span className="nav-label">新手入门</span></button>
         </nav>
         {project && <>
         <div className="sidebar-section-label">项目工作区</div>

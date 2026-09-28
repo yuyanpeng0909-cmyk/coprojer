@@ -1,0 +1,633 @@
+{
+  "schema": "coprojer-pomodoro-live-verification-v1",
+  "recordedAt": "2026-09-28T07:14:13.221Z",
+  "workspace": "D:\\develop\\coprojer",
+  "scope": "Only Coprojer edited. Original Pomodoro source/tests/config untouched; Windows short tests only; no final human acceptance.",
+  "implementation": {
+    "status": "completed",
+    "sourceAndBuildSha256AtArchive": {
+      "src/main/engineering/service.ts": "997bba934356d7ee18c463cd31da276016fa28c37ee6167134d7b848429b69c0",
+      "src/main/engineering/verification.ts": "d035032f47fc2b0fce4a43f6ce07faa77b123fc9fbfde38d603aec0002ad0355",
+      "src/main/engineering/files.ts": "a699548fb711a67725dc9ef42e6b116a595e9d995ba6558fbcc77146ffa8b689",
+      "src/main/engineering/execution.ts": "af3b6152eb95e53ae3307577b3ab0c8f961fab5a3e99823a0da68abb74dbd964",
+      "src/main/engineering/store.ts": "82d9fb6e6ccaeb3c8f922af66dca691a1cd8a90bfa0791c96a0f39b8b73ab4d7",
+      "src/main/engineering/command-supervisor.ts": "6f7aa33919854d26d672df6e215490f9942fb0063131744f578bfc5884f8f082",
+      "src/shared/engineering.ts": "eb6f3d506a75846c390210db160e7381587d997c2621193c13b977e8fab5741b",
+      "src/renderer/src/engineering/VerificationProgress.tsx": "c9fe6574c033ad0765d995559f82a86b84f21aa53ccbcfb4f64f3818fc073b95",
+      "src/renderer/src/engineering/EngineeringPage.tsx": "ae765cf27036dbc1afe415925533d3bfec3684b851da7759427984a5c38dc482",
+      "src/renderer/src/engineering/engineering.css": "9f688e4dd1d5abce928e31d63544e3de32f719522deede4f0072b578e7ba6fce",
+      "scripts/verification-evidence.cjs": "4c7a0f6ad2051a382d9ba674d2dbc45a6a76ad04a50c244e0196a54a1c5632c3",
+      "scripts/verification-evidence-smoke.cjs": "4d356267d879c06f8cc8b1853e14bcc619dba026cf8758285d320ebc35d9b33a",
+      "scripts/verification-preparation.cjs": "15c9bb1d17ccfc786671cb6d59197b814c8532c4f0ff81968de7a9a24ac84464",
+      "scripts/verification-preparation-smoke.cjs": "bbfd36819c1b2ba5a7fcba235064c4209e9cea83c83a3646f51de14272af3431",
+      "scripts/verification-processes.cjs": "d9eb3a3e97a56e19e1e9c3942bc17d9febd5976ffed490769e7f87ea14b5ca95",
+      "scripts/verification-live-regressions.cjs": "baaa1761d0dedb2d67d8c156fb5653624c247eb392c859ff73204bd6576d3864",
+      "scripts/fixtures/verification-runtime.cjs": "5ca451b58ebf0c0614b4db463356a62c734f2f82e9475c741b3842b73dc6321d",
+      "scripts/engineering-smoke.cjs": "b46f5a2a7d6f7e72e4fc02242a656c66c5fb14c32a89f83efeb4debe67abdedf",
+      "scripts/execution-budget.cjs": "a7e2fa750e58caff952c0e77fa72d95e187e4f40383ac8772da5e74104f6ce5a",
+      "scripts/pomodoro-live-verification.cjs": "16502b48e005d6d2774e494d6114826fe5893bb414b3db8d0cdfdfacc9c8b4fc",
+      "package.json": "e9874c1be0041b828d30479fbead0ee9737a9572dc63852534edd8fde43ef1dd",
+      "package-lock.json": "4bb4d6696f57032e613f446d96cb19cc5f91e7b3ea7796b36f5fbb318c5506eb",
+      "out/main/index.js": "02471f4c7e67fd35c66948497b9791496de4d4404edb1ca47aaa71e62a326fa9",
+      "out/preload/index.js": "6e3d452bd4a4c7290f137e5cd1067c0508c6aea84fcb9b86a094061861b6f0e9",
+      "out/renderer/index.html": "d96eb32d23d4a6d889bad4801bd5af0e4bc65481b182d5a5128cf9074032c112",
+      "out/renderer/assets/index-C1F7Q3Nq.css": "7ff7d976d161f7d6824a0cb3c2627d15179237878f78d9037141a5514ec07552",
+      "out/renderer/assets/index-Cou4qIVp.js": "04d4ed5a64694c78cced13cff2ab5eb26fd190eb240fc70991c41d2576808ff6"
+    }
+  },
+  "realProviderRun": {
+    "result": "blocked",
+    "record": ".runtime/pomodoro-live-verification/run-4ab1Hc/result.json",
+    "recordSha256": "86e1841629f0ffa480d7c50a821d7b017c6900070e71e2e141157f07f725133b",
+    "completedAt": "2026-09-28T06:18:17.214Z",
+    "requestsInResumedSegment": 15,
+    "requestScope": "Only the resumed segment; excludes earlier diagnostic runs. No additional calls during final policy/UI checks.",
+    "repairRound": 3,
+    "finalAcceptanceSubmitted": false,
+    "originalModelStatuses": [
+      {
+        "criterion": "关闭主窗口即最小化到系统托盘，计时在后台继续",
+        "status": "passed",
+        "declaredEvidenceKind": "application"
+      },
+      {
+        "criterion": "托盘图标可区分状态，悬停提示显示当前状态与剩余时间",
+        "status": "passed",
+        "declaredEvidenceKind": "application"
+      },
+      {
+        "criterion": "托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程",
+        "status": "passed",
+        "declaredEvidenceKind": "application"
+      },
+      {
+        "criterion": "Windows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量",
+        "status": "passed",
+        "declaredEvidenceKind": "duration"
+      }
+    ],
+    "originalModelStatusCaveat": "Raw model claims are preserved for audit; the two native interaction claims were unsupported and invalidated by the new policy.",
+    "commands": [
+      {
+        "command": "npm run typecheck",
+        "exitCode": 0,
+        "at": "2026-09-28T06:11:02.882Z",
+        "durationMs": 14529,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "declaredEvidenceKinds": [
+          "inspection"
+        ]
+      },
+      {
+        "command": "npm test",
+        "exitCode": 1,
+        "at": "2026-09-28T06:11:18.786Z",
+        "durationMs": 15716,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "declaredEvidenceKinds": [
+          "unit"
+        ]
+      },
+      {
+        "command": "npm run build",
+        "exitCode": 0,
+        "at": "2026-09-28T06:14:09.865Z",
+        "durationMs": 5933,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "declaredEvidenceKinds": [
+          "inspection"
+        ]
+      },
+      {
+        "command": "npm run test:tray:smoke",
+        "exitCode": 0,
+        "at": "2026-09-28T06:15:06.487Z",
+        "durationMs": 22592,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "declaredEvidenceKinds": [
+          "application",
+          "duration",
+          "desktop"
+        ]
+      },
+      {
+        "command": "npm run test:tray:evidence",
+        "exitCode": 0,
+        "at": "2026-09-28T06:17:10.425Z",
+        "durationMs": 7127,
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "declaredEvidenceKinds": [
+          "history"
+        ]
+      }
+    ],
+    "unit": {
+      "passed": 53,
+      "failed": 2,
+      "failures": [
+        {
+          "file": "tests/main.test.ts",
+          "line": 213,
+          "expected": "10:00",
+          "actual": "09:59"
+        },
+        {
+          "file": "tests/main.test.ts",
+          "line": 250,
+          "expected": "02:00",
+          "actual": "01:59"
+        }
+      ],
+      "disposition": "Unfixed actual failure; target tests and clock were not changed to force a pass."
+    },
+    "runtime": [
+      {
+        "mode": "foreground",
+        "status": "passed",
+        "durationMs": 5000,
+        "startedAt": "2026-09-28T06:14:50.382Z",
+        "finishedAt": "2026-09-28T06:15:05.927Z",
+        "persistedTransitionDelayMs": 141,
+        "observedTransitionDelayMs": 239,
+        "limitations": [
+          "Native Electron API/menu callbacks are automated; OS tray hover/click appearance requires separate desktop evidence.",
+          "Foreground means the native window stays visible, not exclusive keyboard focus.",
+          "Windows-only acceptance scope."
+        ],
+        "sourceAndBuildSha256": {
+          "src/main/main.ts": "8987df3d54245180f97b496780003eb7fcfabb70063d1ed5189e2b2d53426025",
+          "src/main/preload.ts": "f88134b4226865733b0a152d78752502d7dfd9b61e748257af2b7ad726be9333",
+          "src/renderer/app.tsx": "1e0ec810ad1fa9f745d42d2c4e96af546e95e5199bc848ced2ec6a22e4112dad",
+          "src/renderer/index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+          "src/renderer/style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+          "src/shared/stats.ts": "3fc9a80892e82d446002b0cf8652f2b6bcccf0e61bfa703bf57165ff50921e1d",
+          "src/shared/timer.ts": "1ba9e5f96fbb56912735df72591b1204c36e359ab2cb9464385d0ebb683ae123",
+          "src/shared/tray.ts": "9258f2df2dd5583e255368e413a525dfd33f8458176052e0168a6d5449242470",
+          "dist/index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+          "dist/main.js": "35071845102d011cbb1b45d4fc520a87d00e3dd94c7dc5863ce70203a67d0fe0",
+          "dist/preload.js": "b1b17690093b2c9c68acfe26ae83eecb52b6d5d211b3094af11bbe3b2643ce9d",
+          "dist/renderer.js": "54f9bc217bf971439054f3d0daed50ab14233ce83944174e1c11f1b061ed0997",
+          "dist/style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+          "build.mjs": "1d4395527bcc1a1b41e8bc6869cd16bb6fd72741241ca7e82b58514abc35c365",
+          "scripts/tray-runtime.cjs": "4103f2128a02ac34f56656d22b7a4168cbdd3b66ce6f5c7fc48eeecc43a97d55"
+        },
+        "record": ".runtime/pomodoro-live-verification/run-4ab1Hc/project/verification/windows-tray/smoke-foreground.json",
+        "recordSha256": "217441aca84044da22772ca977dceba985e66bb85ce80aa2af79ac0d94c57b6c"
+      },
+      {
+        "mode": "background",
+        "status": "passed",
+        "durationMs": 5000,
+        "startedAt": "2026-09-28T06:14:50.381Z",
+        "finishedAt": "2026-09-28T06:15:05.543Z",
+        "persistedTransitionDelayMs": 184,
+        "observedTransitionDelayMs": 222,
+        "limitations": [
+          "Native Electron API/menu callbacks are automated; OS tray hover/click appearance requires separate desktop evidence.",
+          "Foreground means the native window stays visible, not exclusive keyboard focus.",
+          "Windows-only acceptance scope."
+        ],
+        "sourceAndBuildSha256": {
+          "src/main/main.ts": "8987df3d54245180f97b496780003eb7fcfabb70063d1ed5189e2b2d53426025",
+          "src/main/preload.ts": "f88134b4226865733b0a152d78752502d7dfd9b61e748257af2b7ad726be9333",
+          "src/renderer/app.tsx": "1e0ec810ad1fa9f745d42d2c4e96af546e95e5199bc848ced2ec6a22e4112dad",
+          "src/renderer/index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+          "src/renderer/style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+          "src/shared/stats.ts": "3fc9a80892e82d446002b0cf8652f2b6bcccf0e61bfa703bf57165ff50921e1d",
+          "src/shared/timer.ts": "1ba9e5f96fbb56912735df72591b1204c36e359ab2cb9464385d0ebb683ae123",
+          "src/shared/tray.ts": "9258f2df2dd5583e255368e413a525dfd33f8458176052e0168a6d5449242470",
+          "dist/index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+          "dist/main.js": "35071845102d011cbb1b45d4fc520a87d00e3dd94c7dc5863ce70203a67d0fe0",
+          "dist/preload.js": "b1b17690093b2c9c68acfe26ae83eecb52b6d5d211b3094af11bbe3b2643ce9d",
+          "dist/renderer.js": "54f9bc217bf971439054f3d0daed50ab14233ce83944174e1c11f1b061ed0997",
+          "dist/style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+          "build.mjs": "1d4395527bcc1a1b41e8bc6869cd16bb6fd72741241ca7e82b58514abc35c365",
+          "scripts/tray-runtime.cjs": "4103f2128a02ac34f56656d22b7a4168cbdd3b66ce6f5c7fc48eeecc43a97d55"
+        },
+        "record": ".runtime/pomodoro-live-verification/run-4ab1Hc/project/verification/windows-tray/smoke-background.json",
+        "recordSha256": "89fbcd4fec774b495c336bf1bc113a9c2cb1538670853ac9d734207f7fcc0498"
+      }
+    ],
+    "runtimeScope": [
+      "real Electron application",
+      "Tray API/menu callbacks",
+      "foreground/background 5-second transition"
+    ],
+    "missingRuntimeEvidence": [
+      "real Windows taskbar mouse hover",
+      "native menu click"
+    ],
+    "longDurationTestRun": false
+  },
+  "policyAndUiReview": {
+    "record": ".runtime/pomodoro-live-verification/run-4ab1Hc/result-policy-reviewed.json",
+    "recordSha256": "12b968b432a2d27ced38f2e5998069dbf4341468c6b43d462cb3a4bbe30b7c0d",
+    "at": "2026-09-28T07:09:08.259Z",
+    "modelRequests": 0,
+    "freshTargetChecks": 0,
+    "stage": "blocked",
+    "statuses": [
+      {
+        "criterion": "关闭主窗口即最小化到系统托盘，计时在后台继续",
+        "status": "passed",
+        "evidence": "本轮 npm run test:tray:smoke（真实 Electron 生产构建，独立临时 user-data）：后台模式经真实 close 处理器（preventDefault+hide，isQuitting 分支）隐藏窗口后继续真实计时 5 秒，逐秒采样 tooltip（专注中 · 00:05→00:01）持续更新，断言窗口隐藏未销毁，阶段自然切换至短休息，持久化延迟 184ms、外部观察延迟 222ms，均 <2s；typecheck/build 通过。"
+      },
+      {
+        "criterion": "托盘图标可区分状态，悬停提示显示当前状态与剩余时间",
+        "status": "unverified",
+        "evidence": "旧报告缺少对应原生交互的有效证据，不能作为当前通过依据。原报告：本轮 smoke 对真实原生 Tray 断言：专注/短休/长休/空闲四态切换时 setImage 位图首 4 字节 BGRA 值各不相同（状态可区分）；tooltip 由真实 setToolTip 每秒采样为「番茄钟助手 · 专注中 · 00:05」→「00:01」（状态+剩余 MM:SS，前缀与倒计时逐秒正确），前台/后台两种模式均验证。限制：OS 任务栏悬停的最终渲染为系统 shell 视觉层，本环境无法注入真实托盘区鼠标输入（已如实记录），按上轮确认以应用侧 tooltip 内容与图标位图断言为本轮覆盖方式。"
+      },
+      {
+        "criterion": "托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程",
+        "status": "unverified",
+        "evidence": "旧报告缺少对应原生交互的有效证据，不能作为当前通过依据。原报告：本轮 smoke 真实触发托盘菜单回调：显示主界面→窗口 show/focus；开始/暂停→按 running 切换并经 tray-toggle-run IPC 同步界面；退出→置 isQuitting 后 app.quit()，两种模式的应用进程均真实退出，断言已知进程不再存活且无渲染进程错误，无残留后台进程；菜单三项标签与完整退出生命周期（before-quit 后 close 不再拦截）有单测断言。"
+      },
+      {
+        "criterion": "Windows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量",
+        "status": "passed",
+        "evidence": "本轮 npm run test:tray:smoke（win32 实机，前台/后台各真实 5 秒专注计时）：两种模式倒计时逐秒推进，自然跨入短休息阶段；阶段切换持久化延迟 184ms/141ms、外部观察延迟 222ms/239ms，均 <2s。npm run test:tray:evidence 校验完成记录与当前源码+构建 SHA-256 指纹（7221723e…）一致。符合确认范围 133c6697（仅 Windows、短时测试、25 分钟实测移出本轮范围）。"
+      }
+    ],
+    "repairRound": 3,
+    "ui": {
+      "date": "2026-09-28T07:09:10.374Z",
+      "captureOnly": true,
+      "featureId": "b6ac7e29-d0a5-489a-8de4-e2d52655f870",
+      "stage": "blocked",
+      "requests": 0,
+      "layouts": [
+        {
+          "width": 1280,
+          "height": 840,
+          "horizontalOverflow": false
+        },
+        {
+          "width": 860,
+          "height": 600,
+          "horizontalOverflow": false
+        }
+      ],
+      "errors": [],
+      "originalUnchanged": true
+    },
+    "screenshots": [
+      {
+        "path": ".runtime/pomodoro-live-verification/run-4ab1Hc/result-maximized.png",
+        "sha256": "e5f6b812afed2b11f89c9aa64af2992b2c68c0d518c5afb13f11e55d507fdb59"
+      },
+      {
+        "path": ".runtime/pomodoro-live-verification/run-4ab1Hc/result-1280x840.png",
+        "sha256": "0cfe6164e9f017e8dbdffd68e2ba7e8457b04fbd2fa3a0a16dc0e9d262ac8798"
+      },
+      {
+        "path": ".runtime/pomodoro-live-verification/run-4ab1Hc/result-860x600.png",
+        "sha256": "4d953696400849b7f7fd0260f7194746aa4f5c1101f72ce573f809300657916e"
+      }
+    ],
+    "caveat": "Loads the saved real result in the new build, checks conservative evidence migration and UI; not a new live target test."
+  },
+  "coprojerRegression": {
+    "finalBuildExitCode": 0,
+    "npmTestSingleRunExitZero": false,
+    "preparationUi": {
+      "evidence": {
+        "date": "2026-09-28T07:13:22.787Z",
+        "actualChecks": 2,
+        "layouts": [
+          "1280x840",
+          "860x600"
+        ],
+        "fixture": "local deterministic model; real Electron UI and Node command",
+        "stages": [
+          "diagnosing",
+          "preparing",
+          "rechecking",
+          "blocked"
+        ],
+        "fingerprints": {
+          "src/main/engineering/service.ts": "997bba934356d7ee18c463cd31da276016fa28c37ee6167134d7b848429b69c0",
+          "src/main/engineering/files.ts": "a699548fb711a67725dc9ef42e6b116a595e9d995ba6558fbcc77146ffa8b689",
+          "src/main/engineering/execution.ts": "af3b6152eb95e53ae3307577b3ab0c8f961fab5a3e99823a0da68abb74dbd964",
+          "src/main/engineering/verification.ts": "d035032f47fc2b0fce4a43f6ce07faa77b123fc9fbfde38d603aec0002ad0355",
+          "src/main/engineering/command-supervisor.ts": "6f7aa33919854d26d672df6e215490f9942fb0063131744f578bfc5884f8f082",
+          "src/renderer/src/engineering/VerificationProgress.tsx": "c9fe6574c033ad0765d995559f82a86b84f21aa53ccbcfb4f64f3818fc073b95",
+          "out/main/index.js": "02471f4c7e67fd35c66948497b9791496de4d4404edb1ca47aaa71e62a326fa9",
+          "out/renderer/index.html": "d96eb32d23d4a6d889bad4801bd5af0e4bc65481b182d5a5128cf9074032c112"
+        },
+        "checks": [
+          {
+            "id": "check-1",
+            "command": "node tests/verify.cjs",
+            "code": 0,
+            "output": "UI_REAL_CHECK_PASSED\n",
+            "sourceFingerprint": "44160a27c4c8bec595878d62682f363eaeca015e0f463254f276d8839f625b1f",
+            "at": "2026-09-28T07:13:18.299Z",
+            "durationMs": 561,
+            "evidenceKind": "unit",
+            "evidenceKinds": [
+              "unit"
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "archivedAt": "docs/ui/baseline-v1.6/verification-preparation/evidence.json",
+      "sha256": "bc5234e8106cbaffb2889a018cf13d6a77b85157f4149f50acc28e54df47c950"
+    },
+    "finalUiChange": {
+      "change": "Show unresolved failed commands above missing verification conditions.",
+      "verification": "Rebuilt, reran verification-preparation-smoke, recaptured and inspected the exact Pomodoro result at both sizes."
+    },
+    "splitSuiteCoverage": "All package test scripts completed across recorded runs. First section passed before the failure-retention fix; affected engineering/budget/verification and the entire remaining section reran after that fix.",
+    "earlierAttempts": [
+      {
+        "command": "npm test",
+        "log": ".runtime/pomodoro-final-npm-test.log",
+        "exitCode": 1,
+        "reason": "Four-repair smoke exceeded 45s harness wait; only that case was changed to 120s, assertions and product budgets preserved."
+      },
+      {
+        "command": "npm test",
+        "log": ".runtime/pomodoro-final-npm-test-rerun.log",
+        "exitCode": 1,
+        "reason": "Unresolved failed check was lost across a new verification round; fixed retention and added behavioral regression."
+      },
+      {
+        "command": "remaining suite",
+        "log": ".runtime/pomodoro-final-regression-tail.log",
+        "exitCode": 1,
+        "reason": "Same failure-retention bug before the fix; not treated as passed."
+      }
+    ],
+    "earlierPassedCommands": [
+      "node scripts/onboarding.cjs",
+      "node scripts/onboarding-smoke.cjs",
+      "node scripts/model-errors.cjs",
+      "node scripts/model-evidence.cjs",
+      "node scripts/model-evidence-reference.cjs",
+      "node scripts/model-evidence-reference-smoke.cjs",
+      "node scripts/reasoning.cjs",
+      "node scripts/reasoning-smoke.cjs",
+      "node scripts/model-assistant-smoke.cjs",
+      "node scripts/model-assistant-contract-smoke.cjs",
+      "node scripts/aliyun-import.cjs",
+      "node scripts/aliyun-import-smoke.cjs",
+      "node scripts/context-skills.cjs",
+      "node scripts/agent-skills.cjs",
+      "node scripts/general-assistant.cjs",
+      "node scripts/assistant-workspace.cjs",
+      "node scripts/general-assistant-smoke.cjs",
+      "node scripts/assistant-workspace-smoke.cjs",
+      "node scripts/model-names-smoke.cjs",
+      "node scripts/agent-configuration-smoke.cjs",
+      "node scripts/prototype-html.cjs",
+      "node scripts/design-lifecycle.cjs",
+      "node scripts/smoke.cjs",
+      "node scripts/project-manager-smoke.cjs",
+      "node scripts/project-library-smoke.cjs",
+      "node scripts/delivery-navigation-smoke.cjs"
+    ],
+    "finalPassedCommands": [
+      {
+        "command": "node scripts/engineering-smoke.cjs",
+        "start": "2026-09-28T06:54:30.5453721Z",
+        "end": "2026-09-28T06:56:29.2269634Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/execution-plan-smoke.cjs",
+        "start": "2026-09-28T06:56:29.2705488Z",
+        "end": "2026-09-28T06:56:37.6801609Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/execution-budget.cjs",
+        "start": "2026-09-28T06:56:37.6874854Z",
+        "end": "2026-09-28T06:57:07.7930671Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/verification-evidence.cjs",
+        "start": "2026-09-28T06:57:07.7982679Z",
+        "end": "2026-09-28T06:57:41.2852602Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/verification-evidence-smoke.cjs",
+        "start": "2026-09-28T06:57:41.2925697Z",
+        "end": "2026-09-28T06:57:44.7820267Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/verification-live-regressions.cjs",
+        "start": "2026-09-28T06:57:44.7867371Z",
+        "end": "2026-09-28T06:58:11.7106945Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/verification-preparation.cjs",
+        "start": "2026-09-28T06:58:11.7173389Z",
+        "end": "2026-09-28T07:01:54.0568119Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/verification-processes.cjs",
+        "start": "2026-09-28T07:01:54.0614026Z",
+        "end": "2026-09-28T07:01:58.8465443Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/verification-preparation-smoke.cjs",
+        "start": "2026-09-28T07:01:58.8499587Z",
+        "end": "2026-09-28T07:02:28.0178461Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/research-smoke.cjs",
+        "start": "2026-09-28T07:02:28.0220211Z",
+        "end": "2026-09-28T07:02:48.0076751Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/roundtable-smoke.cjs",
+        "start": "2026-09-28T07:02:48.0129186Z",
+        "end": "2026-09-28T07:03:04.6475228Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/decision-smoke.cjs",
+        "start": "2026-09-28T07:03:04.6516221Z",
+        "end": "2026-09-28T07:03:18.7764743Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/discussion-budget-smoke.cjs",
+        "start": "2026-09-28T07:03:18.7806857Z",
+        "end": "2026-09-28T07:03:30.8871433Z",
+        "exitCode": 0
+      },
+      {
+        "command": "node scripts/novice-smoke.cjs",
+        "start": "2026-09-28T07:03:30.8936084Z",
+        "end": "2026-09-28T07:04:11.8793490Z",
+        "exitCode": 0
+      }
+    ],
+    "regressionEvidence": [
+      "PASS: add-model UI, three protocol tests, encrypted keys, redacted errors, model discovery",
+      "PASS: new empty project, live feature map, stale-response guard, three gates, real code/tests, serial acceptance",
+      "PASS: preview startup/shutdown, generated page persistence, shared context, light/dark and compact desktop layouts",
+      "PASS: deferred feature and missing directory rejected before model execution",
+      "PASS: all protocol tool roundtrips, rejection/continuation, exactly three repair rounds, no-test false-pass prevention",
+      "PASS: cancellation, cyclic-dependency guard, encrypted restart, recovery without automatic replay; no renderer errors",
+      "PASS: column-header batch menus, selection and confirmation, keyboard and light-dismiss interaction, execution-plan repair and persistence, cancellation and dependencies, and layouts at 1280x840 / 860x600",
+      "PASS: budget pause, durable restart, exact reviewer continuation and actual evidence gate",
+      "PASS: final summary can conclude at the boundary without more tool work",
+      "PASS: source, contract and model changes discard old history and rerun real checks",
+      "PASS: resumed model claims cannot bypass actual tests or spend repair budget without a defect",
+      "PASS: failed commands remain failures across checkpoint recovery",
+      "PASS: existing 36-step failures recover directly into review without resetting repair rounds",
+      "PASS: developer checkpoint resumes without replaying completed writes",
+      "PASS: final-summary network failure is reported while completed progress stays recoverable",
+      "PASS: runtime cache does not consume the source discovery budget",
+      "PASS: evidence gaps pause once, preserve results and tasks, survive restart and resume review",
+      "PASS: old paused tasks can explicitly recheck without redevelopment or bypassing acceptance",
+      "PASS: real failures still repair; missing tests, changed source and contradictory claims stay unverified and cannot bypass gates",
+      "PASS: pending evidence labels, continue-review action, acceptance gate and both Electron layouts",
+      "PASS: old empty diagnostic state retains explicit gaps",
+      "PASS: independent reviewer really runs nested test:* commands",
+      "PASS: runtime evidence is separated from source, config and confirmed scope",
+      "PASS: legacy empty state rechecks with real commands; one report-format repair preserves acceptance and repair gates",
+      "PASS: completed reviewer commands survive a transport failure and restart without replay",
+      "PASS: diagnostic command ledger and preparation handoff lead to fresh independent execution, never history promotion",
+      "PASS: one actual execution may provide explicitly declared application and duration evidence; history never promotes",
+      "PASS: callback-only native UI claims stay unverified, including saved reports; no repair budget or final human acceptance changes",
+      "PASS: unrelated successful checks cannot erase a known same-source failure; actual repaired-source verification clears it",
+      "PASS: real script created, actual assertion executed independently, no extra click, manual acceptance retained",
+      "PASS: real offline npm development dependency installation followed by independent execution",
+      "PASS: actual missing-module failure routes through dependency preparation, not code repair",
+      "PASS: automatic part completed before external blockers, platform evidence remains unverified across restart",
+      "PASS: actual code defect repaired before unresolved external validation, no defect hidden as missing environment",
+      "PASS: preparation diagnosis hands business defect back to existing repair loop",
+      "PASS: unknown diagnostics, no-op claims, preparation budget and identical failures stop finitely without resetting repair",
+      "PASS: cancellation and connection failure preserve completed preparation, restart continues without replaying writes",
+      "PASS: cancellation before the first diagnostic request retains its gaps and resumes the correct phase",
+      "PASS: changed source discards stale preparation conversation; lockfile changes invalidate final acceptance",
+      "PASS: reading historical evidence never substitutes for a fresh required runtime check",
+      "PASS: unit execution cannot be relabeled as desktop, application or long-duration evidence",
+      "PASS: role separation, read-only diagnosis, protected code/tests, no global installs or command-path bypass",
+      "PASS: cancellation kills owned test process and cleans isolated user data",
+      "PASS: abrupt host exit closes lifetime lease and terminates its test process without killing unrelated processes",
+      "PASS: real Electron stages, automatically generated/executed script, external blocker, restart, dark theme, keyboard and two layouts",
+      "PASS: actual SSE text/reasoning/tool output, functional graph updates before completion, no premature workflow transition",
+      "PASS: native detached graph stays synchronized; SVG/PNG/Markdown/JSON export saved and validated",
+      "PASS: design AI runs independently during discussion; interactive sandboxed prototype, drag-out native window, version persistence and export",
+      "PASS: all three streaming protocols, signed/encrypted tool continuation, full cross-model history, whole-project baseline, revision and stop preserving partial output",
+      "PASS: live design process in both layouts/themes, persistent raw output, stop preserves previous prototype and history remains inspectable",
+      "PASS: real Electron 1280×840 / 860×600 layouts, dark theme, restart retaining history/prototype/baseline; no renderer errors",
+      "PASS: strict Responses thinking history and native tool continuation, mixed-model proposal/review/synthesis, human feedback and confirmation, 4 project scopes and windows, scoped prototype, stop/error, restart and resume, both layouts/themes",
+      "PASS: incremental participant graph updates, one-at-a-time live decision cards, waiting without requests, defer to another model, choice and free text, native graph, compact/light/dark, validation, stop/resume, restart with pending card and draft, original reasoning continuation",
+      "PASS: long human-in-the-loop discussions, reserved defer option, bounded summary, same-round cursor resume",
+      "PASS: prototype-first flow without predefined features, automatic PRD with full source reads, PRD failure/stop/restart recovery, first-run draft preservation, four-role migration, skills, three-protocol capabilities, pinned prototype reused in real source, 21-plan preparation, stale approval guard, serial delivery and acceptance, context archive/restore, both layouts/themes"
+    ],
+    "fixtureScope": "Deterministic agent responses, real filesystem/npm/Node checks and real isolated Electron/IPC. Not production model success-rate evidence."
+  },
+  "originalProject": {
+    "root": "D:\\develop\\coprojer\\test\\番茄钟助手",
+    "checkedAt": "2026-09-28T07:14:13.240Z",
+    "unchanged": true,
+    "fileCount": 28,
+    "sha256": {
+      "build.mjs": "1d4395527bcc1a1b41e8bc6869cd16bb6fd72741241ca7e82b58514abc35c365",
+      "package-lock.json": "36b23c9a795758b4fbbad407d84afef21a76c56a99d66cd1f4dbd8ebb43481c4",
+      "package.json": "70546bbd403c75a1d856128b54bb69ac97f4db14f603d0cedacc457f44c3e072",
+      "scripts\\check-tray-evidence.cjs": "e01e20ba1dfb9f2e4525ce5363b333d7359f7d0d7465fb87f005a39926ca1f34",
+      "scripts\\tray-runtime.cjs": "4103f2128a02ac34f56656d22b7a4168cbdd3b66ce6f5c7fc48eeecc43a97d55",
+      "src\\main\\main.ts": "8987df3d54245180f97b496780003eb7fcfabb70063d1ed5189e2b2d53426025",
+      "src\\main\\preload.ts": "f88134b4226865733b0a152d78752502d7dfd9b61e748257af2b7ad726be9333",
+      "src\\renderer\\app.tsx": "1e0ec810ad1fa9f745d42d2c4e96af546e95e5199bc848ced2ec6a22e4112dad",
+      "src\\renderer\\index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+      "src\\renderer\\style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+      "src\\shared\\stats.ts": "3fc9a80892e82d446002b0cf8652f2b6bcccf0e61bfa703bf57165ff50921e1d",
+      "src\\shared\\timer.ts": "1ba9e5f96fbb56912735df72591b1204c36e359ab2cb9464385d0ebb683ae123",
+      "src\\shared\\tray.ts": "9258f2df2dd5583e255368e413a525dfd33f8458176052e0168a6d5449242470",
+      "tests\\main.test.ts": "2422498a570814948ba81b529c860f2500f6cc403a3e5035cffc39526e548c72",
+      "tests\\stats.test.ts": "f10f0ebb195f347ea8ffb9fd3fa4fda0477b2ffbbeffc0eaf329d799a7b903e3",
+      "tests\\throttle.test.ts": "2e3acab13e7600e23a1b772dfd57bbb44191511b38eada6f6819e38e366c2ed6",
+      "tests\\timer.test.ts": "913aee32da15a578194555c288909054e85c9625769716b038fda5e299ae7149",
+      "tests\\tray.test.ts": "9bb39d66c6b7b9d24168e127e437705d3e67dea0e93bbb945a18836bf5c3ec6e",
+      "tsconfig.json": "cb03fb98ae7dd32b901bd5ae42cf4f357dc1d60ae2c8daadd3590675d4dd6de2",
+      "verification\\README.md": "7202bcd3708c2d7f0a5bde54c0eae2cccea9abb16910a32db04156e6c8622fc7",
+      "verification\\windows-tray\\cancelled-long-run.json": "96107b13ae6457164e1b1f745225253d2189e8b2b997a8148aecbd0c75d21c24",
+      "verification\\windows-tray\\RESULTS.md": "b7ce76bb530dba84f2bfa1f654bddfce8ec3ca3e80087e65efb8564d6c5500f0",
+      "verification\\windows-tray\\smoke-background-progress.json": "2d9c50ca93103537629ad3bad438b7b8c84c6a3926ec6ccb1dc26d42e1aaccc6",
+      "verification\\windows-tray\\smoke-background-renderer.png": "084336257d49c9f3a8a4b2f8ca35f622cd6320cd5e22112afe25381f44464578",
+      "verification\\windows-tray\\smoke-background.json": "daa2ac23f0b0695656345dcfd5a8a2d0da39c4ad5d0cabfd3092dfbab877fc19",
+      "verification\\windows-tray\\smoke-foreground-progress.json": "8bfb5c38787d58019812aa6e566a6c2a44e1c4436d904cd4b5bf6e81535934ee",
+      "verification\\windows-tray\\smoke-foreground-renderer.png": "c584f4c2a4ef3bbbf074d6d3cc58b018016d0f997e0b7a82cb2234e63105fd42",
+      "verification\\windows-tray\\smoke-foreground.json": "4d069931dcfe59c9797f00bb103ed888feee32f93cce6cf04c06cd9df2357fbd"
+    }
+  },
+  "logs": [
+    {
+      "path": ".runtime/pomodoro-final-build.log",
+      "sha256": "7b0dcf1acac1b48b70de911e113d36792e6449720bc02624d8adfa50c2eb0d84"
+    },
+    {
+      "path": ".runtime/pomodoro-final-npm-test.log",
+      "sha256": "8378660831d913e5f4fc48ea7478baf24ca843b7ce1a4bf322ab9422190bee0f"
+    },
+    {
+      "path": ".runtime/pomodoro-final-npm-test-rerun.log",
+      "sha256": "66b76c7266c9a271d1536974c9bd50c41aed2c999370c7e3f9a282bf8bf59c7a"
+    },
+    {
+      "path": ".runtime/pomodoro-final-regression-tail.log",
+      "sha256": "8d24fb9e306d5fb1ead09d2fbb20d2507d1c4d2ee446b498350608ec009e4767"
+    },
+    {
+      "path": ".runtime/pomodoro-final-regression-sequential.log",
+      "sha256": "09b47bdeb291213010a481c76bed23e9de1d3bd84562d2458ec014538e5402b2"
+    },
+    {
+      "path": ".runtime/pomodoro-final-ui-regression.log",
+      "sha256": "5f5789afbbabcd80769a92c7312dcd7f01cce91208de87a61c36c650d68a407b"
+    },
+    {
+      "path": ".runtime/pomodoro-final-capture.log",
+      "sha256": "159cfef5f533566e300877d95afdcba6288c7c6145eb38b4186e88978371cd9f"
+    }
+  ],
+  "cleanup": {
+    "status": "partial",
+    "profiles": [
+      {
+        "run": "run-4ab1Hc",
+        "modelCipherCount": 0,
+        "copiedLocalStatePresent": true
+      },
+      {
+        "run": "run-tAqdqA",
+        "modelCipherCount": 0,
+        "copiedLocalStatePresent": true
+      },
+      {
+        "run": "run-uVmVh0",
+        "modelCipherCount": 0,
+        "copiedLocalStatePresent": true
+      }
+    ],
+    "retained": [
+      "run-tAqdqA",
+      "run-uVmVh0/project/node_modules",
+      "C:/Users/25758/AppData/Local/Temp/coprojer-preparation-uqN4Vy",
+      "old run profile Local State files"
+    ],
+    "reason": "Automatic approval rejected both temporary-directory deletion and explicit copied Local State deletion with blocked by policy. No alternate deletion mechanism used. Model ciphers are empty; the final UI review uses a fresh credential-free profile."
+  },
+  "remaining": [
+    "Pomodoro unit assertions failed; fixing target code/tests is outside this request.",
+    "Real native tray hover/menu input has no accepted evidence; API callbacks cannot substitute.",
+    "No 25-minute run, cross-platform claim, public npm quality measurement, arbitrary desktop automation, or final human acceptance."
+  ]
+}

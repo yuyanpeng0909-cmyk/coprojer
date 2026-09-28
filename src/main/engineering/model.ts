@@ -1,5 +1,16 @@
 import type { ModelInput, Protocol } from '../../shared/engineering'
+import { reasoningRequest, type AgentReasoning } from '../../shared/reasoning'
 import { readModelStream, type DeltaListener } from './stream'
+import { tokenUsage } from '../../shared/model-traffic'
+import type { TrafficRecorder, TrafficObservation } from './model-traffic'
+export class ContextBudgetError extends Error { name = 'ContextBudgetError' }
+
+export class ModelContextLimitError extends ContextBudgetError {
+  constructor(message: string, readonly requestCharacters?: number, readonly limit?: number) {
+    super(message)
+    this.name = 'ModelContextLimitError'
+  }
+}
 
 export interface ToolDefinition {
   name: string
@@ -28,7 +39,7 @@ export interface ModelReply {
   responseItems?: Record<string, unknown>[]
   anthropicBlocks?: Record<string, unknown>[]
 }
-export type Connection = ModelInput & { name: string; apiKey: string }
+export type Connection = ModelInput & { name: string; apiKey: string; reasoning?: AgentReasoning; traffic?: TrafficRecorder; trafficPurpose?: 'inference' | 'test'; onRequest?: () => void; onResponse?: (update: TrafficObservation) => void }
 
 export function normalizedBase(value: string): string {
   const url = new URL(value.trim())
@@ -73,13 +84,9 @@ function glm53AgentDefaults(c: Connection): Record<string, unknown> {
     !['open.bigmodel.cn', 'api.z.ai'].includes(hostname)
   )
     return {}
-  // GLM-5.3 defaults to maximum reasoning. That is useful for a standalone
-  // hard problem, but makes iterative tool work wait a long time between
-  // simple filesystem and command calls. Preserve the provider's reasoning
-  // chain for tool continuation while using its low-latency setting.
+  // Preserve tool continuation; the agent's own reasoning settings are applied below.
   return {
     thinking: { type: 'enabled', clear_thinking: false },
-    reasoning_effort: 'low',
   }
 }
 function cleanError(text: string, key: string): string {
@@ -96,11 +103,9 @@ async function request(
 ): Promise<any> {
   // Bound the serialized request across all protocols, including skills and tools.
   // This is a character guard, not a provider token estimate.
-  const payload = body === undefined ? undefined : JSON.stringify(onDelta
-    ? { ...(body as object), stream: true, ...(needsToolStream(c, body) ? { tool_stream: true } : {}) }
-    : body)
+  const payload = serializeRequest(c, body, !!onDelta)
   if (payload && payload.length > 160_000)
-    throw new Error('本次模型请求超过 160000 字符上限（含资料、技能、工具和对话，并非 token 数）。请减少技能、缩小功能或降低资料预算后重试；原始资料已保留。')
+    throw new ModelContextLimitError('本次模型请求超过 160000 字符上限（含资料、技能、工具和对话，并非 token 数）。原始资料已保留。', payload.length, 160000)
   const startedAt = Date.now()
   const transportError = (error: unknown): Error => {
     const codes: string[] = []
@@ -128,8 +133,11 @@ async function request(
   // result after the old 150-second limit.
   const timeout = AbortSignal.timeout(10 * 60 * 1000)
   let response: Response
+  const url = endpoint(normalizedBase(c.baseUrl), path)
+  signal?.throwIfAborted()
+  c.onRequest?.()
   try {
-    response = await fetch(endpoint(normalizedBase(c.baseUrl), path), {
+    response = await fetch(url, {
       method: body === undefined ? 'GET' : 'POST',
       headers: headers(c),
       body: payload,
@@ -142,14 +150,20 @@ async function request(
     if (signal?.aborted) throw error
     throw transportError(error)
   }
+  c.onResponse?.({ httpStatus: response.status })
   try {
     if (response.ok && onDelta && response.headers.get('content-type')?.includes('text/event-stream'))
-      return await readModelStream(response, c.protocol, onDelta)
+      return await readModelStream(response, c.protocol, onDelta, usage => c.onResponse?.({ usage: tokenUsage(c.protocol, usage) }))
     const raw = await response.text()
     if (raw.length > 8_000_000) throw new Error('模型返回内容过大，请缩小任务范围。')
+    if (!response.ok && [400, 413, 422].includes(response.status) &&
+      /context_length_exceeded|maximum context length|context window.{0,80}(?:exceed|limit)|(?:input|prompt).{0,60}(?:too long|exceeds.{0,30}token)|上下文.{0,30}(?:超出|超过|过长)/i.test(raw))
+      throw new ModelContextLimitError('模型上下文容量不足：' + cleanError(raw, c.apiKey), payload?.length)
     if (!response.ok) throw new Error(`模型服务返回 ${response.status}：${cleanError(raw, c.apiKey)}`)
     try {
-      return JSON.parse(raw)
+      const result = JSON.parse(raw)
+      c.onResponse?.({ usage: tokenUsage(c.protocol, result?.usage) })
+      return result
     } catch {
       throw new Error('服务未返回有效 JSON，请检查接口类型与服务地址。')
     }
@@ -178,8 +192,31 @@ export async function complete(
   signal?: AbortSignal,
   onDelta?: DeltaListener,
 ): Promise<ModelReply> {
-  const protocol: Protocol = c.protocol
-  if (protocol === 'anthropic') {
+  if (!c.traffic || !c.id) return completeRequest(c, system, messages, tools, signal, onDelta)
+  let recording: ReturnType<TrafficRecorder['start']> | undefined
+  const traced: Connection = { ...c,
+    onRequest: () => { try { recording = c.traffic!.start(c, c.trafficPurpose ?? 'inference') } catch { /* Monitoring cannot interrupt inference. */ } },
+    onResponse: update => { try { recording?.observe(update) } catch { /* Keep inference independent of monitoring. */ } },
+  }
+  try {
+    const reply = await completeRequest(traced, system, messages, tools, signal, onDelta)
+    try { recording?.finish('succeeded') } catch { /* Keep the valid reply. */ }
+    return reply
+  } catch (error) {
+    const timedOut = signal?.reason?.name === 'TimeoutError' || /超时|超过 10 分钟/.test(String(error))
+    try { recording?.finish(signal?.aborted && !timedOut ? 'cancelled' : 'failed', timedOut ? 'timeout' : /网络|连接中断|域名|TLS/.test(String(error)) ? 'network' : 'response') } catch { /* Preserve the original model error. */ }
+    throw error
+  }
+}
+
+function serializeRequest(c: Connection, body: unknown, stream: boolean): string | undefined {
+  return body === undefined ? undefined : JSON.stringify(stream
+    ? { ...(body as object), stream: true, ...(c.protocol === 'chat' ? { stream_options: { include_usage: true } } : {}), ...(needsToolStream(c, body) ? { tool_stream: true } : {}) }
+    : body)
+}
+
+function buildModelRequest(c: Connection, system: string, messages: ModelMessage[], tools: ToolDefinition[]) {
+  if (c.protocol === 'anthropic') {
     const input: any[] = []
     for (const m of messages) {
       if (m.role === 'tool') {
@@ -204,14 +241,14 @@ export async function complete(
         })
       } else input.push({ role: m.role, content: m.content })
     }
-    const result = await request(
-      c,
-      'messages',
-      {
+    return {
+      path: 'messages',
+      body: {
         model: c.model,
         system,
         messages: input,
         max_tokens: 8192,
+        ...reasoningRequest(c, c.reasoning),
         ...(tools.length
           ? {
               tools: tools.map((t) => ({
@@ -222,26 +259,9 @@ export async function complete(
             }
           : {}),
       },
-      signal,
-      onDelta,
-    )
-    return {
-      anthropicBlocks: result.content,
-      model: typeof result.model === 'string' ? result.model : undefined,
-      reasoning: (result.content ?? [])
-        .filter((p: any) => p.type === 'thinking')
-        .map((p: any) => p.thinking)
-        .join('\n'),
-      text: (result.content ?? [])
-        .filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('\n'),
-      calls: (result.content ?? [])
-        .filter((p: any) => p.type === 'tool_use')
-        .map((p: any) => ({ id: p.id, name: p.name, arguments: JSON.stringify(p.input) })),
     }
   }
-  if (protocol === 'responses') {
+  if (c.protocol === 'responses') {
     const input: any[] = []
     for (const m of messages) {
       if (m.role === 'tool')
@@ -258,39 +278,24 @@ export async function complete(
           })
       }
     }
-    const result = await request(
-      c,
-      'responses',
-      {
+    return {
+      path: 'responses',
+      body: {
         model: c.model,
         instructions: system,
         input,
         store: false,
         include: ['reasoning.encrypted_content'],
+        ...reasoningRequest(c, c.reasoning),
         ...(tools.length
           ? { tools: tools.map((t) => ({ type: 'function', ...t, strict: false })) }
           : {}),
       },
-      signal,
-      onDelta,
-    )
-    return {
-      responseItems: result.output,
-      model: typeof result.model === 'string' ? result.model : undefined,
-      text: (result.output ?? [])
-        .flatMap((item: any) => item.content ?? [])
-        .filter((p: any) => p.type === 'output_text')
-        .map((p: any) => p.text)
-        .join('\n'),
-      calls: (result.output ?? [])
-        .filter((item: any) => item.type === 'function_call')
-        .map((item: any) => ({ id: item.call_id, name: item.name, arguments: item.arguments })),
     }
   }
-  const result = await request(
-    c,
-    'chat/completions',
-    {
+  return {
+    path: 'chat/completions',
+    body: {
       model: c.model,
       messages: [
         { role: 'system', content: system },
@@ -312,11 +317,59 @@ export async function complete(
       ],
       stream: false,
       ...glm53AgentDefaults(c),
+      ...reasoningRequest(c, c.reasoning),
       ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: t })) } : {}),
     },
-    signal,
-    onDelta,
-  )
+  }
+}
+
+export function modelRequestCharacters(c: Connection, system: string, messages: ModelMessage[], tools: ToolDefinition[], stream = true): number {
+  return serializeRequest(c, buildModelRequest(c, system, messages, tools).body, stream)!.length
+}
+async function completeRequest(
+  c: Connection,
+  system: string,
+  messages: ModelMessage[],
+  tools: ToolDefinition[] = [],
+  signal?: AbortSignal,
+  onDelta?: DeltaListener,
+): Promise<ModelReply> {
+  const protocol: Protocol = c.protocol
+  const prepared = buildModelRequest(c, system, messages, tools)
+  const result = await request(c, prepared.path, prepared.body, signal, onDelta)
+  if (protocol === 'anthropic') {
+    if (!Array.isArray(result?.content)) throw new Error('服务返回中缺少模型回复，请检查模型名称和协议。')
+    return {
+      anthropicBlocks: result.content,
+      model: typeof result.model === 'string' ? result.model : undefined,
+      reasoning: (result.content ?? [])
+        .filter((p: any) => p.type === 'thinking')
+        .map((p: any) => p.thinking)
+        .join('\n'),
+      text: (result.content ?? [])
+        .filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text)
+        .join('\n'),
+      calls: (result.content ?? [])
+        .filter((p: any) => p.type === 'tool_use')
+        .map((p: any) => ({ id: p.id, name: p.name, arguments: JSON.stringify(p.input) })),
+    }
+  }
+  if (protocol === 'responses') {
+    if (!Array.isArray(result?.output) || ['failed', 'incomplete'].includes(result.status)) throw new Error('服务返回中缺少完整模型回复，请检查模型名称和协议。')
+    return {
+      responseItems: result.output,
+      model: typeof result.model === 'string' ? result.model : undefined,
+      text: (result.output ?? [])
+        .flatMap((item: any) => item.content ?? [])
+        .filter((p: any) => p.type === 'output_text')
+        .map((p: any) => p.text)
+        .join('\n'),
+      calls: (result.output ?? [])
+        .filter((item: any) => item.type === 'function_call')
+        .map((item: any) => ({ id: item.call_id, name: item.name, arguments: item.arguments })),
+    }
+  }
   const message = result.choices?.[0]?.message
   if (!message) throw new Error('服务返回中缺少模型回复，请检查模型名称和协议。')
   return {

@@ -265,7 +265,7 @@ export default function ContextWorkspace({
     <div className="eng-context-workspace">
       {!!project.agentRuns?.length && <details className="eng-context-run"><summary>最近任务的上下文 · {project.agentRuns.at(-1)!.contextCharacters.toLocaleString()} 字符 · {project.agentRuns.at(-1)!.contextIds.length} 条资料</summary>
         <p>按当前功能和依赖取材；未注入的历史仍保留，可按 ID 分页读取。字符数不是模型 token 用量。</p>
-        {project.agentRuns.slice(-6).reverse().map(run => <p key={run.id}>{run.role} · {run.contextCharacters.toLocaleString()} 字符 · {run.omittedCount} 条未注入 · 技能 {run.skills.map(s => s.id + '@' + s.version).join('、') || '无'}<br />资料：{run.contextIds.map(id => project.context.find(c => c.id === id)?.title || id).join('、') || '当前任务约束'}</p>)}
+        {project.agentRuns.slice(-6).reverse().map(run => <p key={run.id}>{run.role} · {run.modelDisplayName || run.modelId} · {run.contextCharacters.toLocaleString()} 字符 · {run.omittedCount} 条未注入 · 技能 {run.skills.map(s => s.id + '@' + s.version).join('、') || '无'}<br />资料：{run.contextIds.map(id => project.context.find(c => c.id === id)?.title || id).join('、') || '当前任务约束'}</p>)}
       </details>}
       <div className="eng-context-heading">
         <div>

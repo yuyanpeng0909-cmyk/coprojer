@@ -1,0 +1,1235 @@
+{
+  "schema": "coprojer-native-preparation-audit-v1",
+  "recordedAt": "2026-09-28T10:54:15.063Z",
+  "scope": {
+    "platform": "Windows",
+    "measurement": "short; each foreground/background instance five seconds",
+    "originalProjectEdited": false,
+    "paidModelCalls": 0,
+    "finalHumanAcceptance": false
+  },
+  "implementation": {
+    "status": "completed",
+    "sourceSha256": {
+      "src/main/engineering/service.ts": "f3544720ef74e0edc192fb209ce4e061c93b4cd0ffbd538ea8b6a31add88d7d2",
+      "src/main/engineering/verification.ts": "1e7deec91122da67789ad6c24451cdf6258614f661ef0ecb6702dbc59b3e81f5",
+      "src/main/engineering/execution.ts": "e366976551975861c7f2ac25905a96854c49db88c6bfba7c44c5b539aec8f6c0",
+      "src/main/engineering/files.ts": "cbb001e645f1f7caf4e097e55feae164783143b5ac257b7f2e85080f84ca9eef",
+      "src/main/engineering/store.ts": "82d9fb6e6ccaeb3c8f922af66dca691a1cd8a90bfa0791c96a0f39b8b73ab4d7",
+      "src/main/engineering/command-supervisor.ts": "6f7aa33919854d26d672df6e215490f9942fb0063131744f578bfc5884f8f082",
+      "src/shared/engineering.ts": "17fd47fdc467e72e7a0e4d5db8b04452162736e2fe1aa869bcf00233489b26f6",
+      "src/renderer/src/engineering/EngineeringPage.tsx": "2ddd5a0dd2824d473ea0b507b55ccdb2e9a1abd4949695bc618ee1f754de6e70",
+      "src/renderer/src/engineering/VerificationProgress.tsx": "616293c1cbfc1f1fc0e06cd450755ebf094c7f2bc718f11e82b30884acda279c",
+      "package.json": "7e9dc33ecaf202ffd58c7a460d8f8c65d39949d3bc495935ca1fc65b5b482c7f",
+      "scripts/verification-desktop-preparation.cjs": "61b3d763288bf00e64dcb4d4e434a27b7e8c29353052a16e68e674f90f39c6e0",
+      "scripts/verification-report-smoke.cjs": "41c20eff7d67c71bf6e8f8e9e6c0c9a6bfd8ab40e4159993e3e3daf8bf7af916",
+      "scripts/pomodoro-desktop-verification.cjs": "52eb8dc75d7295734533938201efc3fb84caee1a186e2edaeca8903654fe15e0",
+      "scripts/fixtures/pomodoro-desktop-check.cjs": "bb55ef7e2607638e0b26f1b0e31304e32a1fbc6bd9fc8fe3e08cae2cac7ca2cd",
+      "scripts/fixtures/windows-desktop.ps1": "3f77fc2782c185ecadb97407475cfd38f06670ab400bf6c3f020a4e1800185a2",
+      "scripts/fixtures/electron-test-bootstrap.cjs": "f500dbd358449ef905062a6079014cc8c8a1534e2c4965b552dc21041a361414",
+      "scripts/fixtures/test-display-launch.cjs": "6a5bef1c456e2aa0fa750b21998cea633c0a2836b956fddb13c27652b08b346b"
+    },
+    "buildSha256": {
+      "out/main/index.js": "98fc48785e602dc1ef0dfe68fed3ccebcde36ba9c380d9fd2f80af48bcd5fae5",
+      "out/preload/index.js": "e7b1a0a8de7cc00d25ebeb924e943c5bd8e7143f95a66a5c14a759b3bf447131",
+      "out/renderer/index.html": "873b2a761524430eb60f9124655720e435b69e4d0673680ced6f7ad7ac58cbff",
+      "out/renderer/assets/index-B3jkWYcW.css": "a57f47cad063022335e18d6a20a7f64a73e87ec2b228da56246db2508d39b4ee",
+      "out/renderer/assets/index-Cu0EIqAj.js": "580f7e594b468e8277c168274e1c207dfc0d7205b331b76a6b26eff18558896d"
+    }
+  },
+  "original": {
+    "archive": {
+      "path": "docs/verification/2026-09-28-native-preparation-original.json",
+      "sha256": "150bef51bc07e8d576fe661205c4376c27ec0bb97d06740bbc0afb58bc4ded52",
+      "bytes": 26633
+    },
+    "projectId": "dda88f47-0231-467e-a31b-6782ece970be",
+    "featureId": "b6ac7e29-d0a5-489a-8de4-e2d52655f870",
+    "checks": [
+      {
+        "id": "check-1",
+        "command": "npm run typecheck",
+        "code": 0,
+        "at": "2026-09-28T07:17:29.340Z",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+      },
+      {
+        "id": "check-2",
+        "command": "npm test",
+        "code": 0,
+        "at": "2026-09-28T07:17:36.248Z",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+      },
+      {
+        "id": "check-3",
+        "command": "npm run build",
+        "code": 0,
+        "at": "2026-09-28T07:17:40.452Z",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+      },
+      {
+        "id": "check-4",
+        "command": "npm run test:tray:evidence",
+        "code": 0,
+        "at": "2026-09-28T07:18:09.668Z",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+      },
+      {
+        "id": "check-5",
+        "command": "npm run test:tray:smoke",
+        "code": 1,
+        "at": "2026-09-28T07:18:31.372Z",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+      },
+      {
+        "id": "check-6",
+        "command": "npm run test:tray:smoke",
+        "code": 0,
+        "at": "2026-09-28T07:24:12.632Z",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+      }
+    ],
+    "corrections": {
+      "perInstanceDurationSeconds": 5,
+      "incorrectReportedDurationSeconds": 10,
+      "measurements": [
+        {
+          "mode": "foreground",
+          "persistedTransitionDelayMs": 179,
+          "observedTransitionDelayMs": 242
+        },
+        {
+          "mode": "background",
+          "persistedTransitionDelayMs": 303,
+          "observedTransitionDelayMs": 322
+        }
+      ],
+      "firstFailureCause": "undetermined; a successful rerun alone does not identify cause",
+      "processScope": "main PID plus app.getAppMetrics; process.kill(pid,0) existence probes, not a full system process-table scan; only ESRCH confirms absence",
+      "repetition": "one persisted review prefix rendered in both summary and expanded body"
+    }
+  },
+  "isolated": {
+    "runDir": ".runtime/native-preparation-audit/isolated-88qoSR",
+    "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+    "model": "deterministic local fixture; zero paid requests",
+    "phases": [
+      "reviewer-1",
+      "diagnoser",
+      "preparer",
+      "preparer",
+      "reviewer-2",
+      "diagnoser"
+    ],
+    "preparedAssets": {
+      "tests/coprojer-desktop-check.cjs": "bb55ef7e2607638e0b26f1b0e31304e32a1fbc6bd9fc8fe3e08cae2cac7ca2cd",
+      "tests/windows-desktop.ps1": "3f77fc2782c185ecadb97407475cfd38f06670ab400bf6c3f020a4e1800185a2",
+      "tests/electron-test-bootstrap.cjs": "f500dbd358449ef905062a6079014cc8c8a1534e2c4965b552dc21041a361414",
+      "tests/test-display-launch.cjs": "6a5bef1c456e2aa0fa750b21998cea633c0a2836b956fddb13c27652b08b346b",
+      "tests/coprojer-smoke-check.cjs": "b54076f55c6268e46f65ef997cd3745dbbd6e7e06ff4210b119065cf273a55e9"
+    },
+    "copyVerification": {
+      "fileCount": 2482,
+      "differences": []
+    },
+    "repairRound": 3,
+    "preparationRound": 1,
+    "stage": "blocked",
+    "results": [
+      {
+        "criterion": "关闭主窗口即最小化到系统托盘，计时在后台继续",
+        "status": "passed",
+        "passed": true,
+        "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+        "checkedAt": "2026-09-28T10:49:15.407Z",
+        "commandIds": [
+          "check-1"
+        ],
+        "evidenceKind": "application",
+        "evidence": "Fresh foreground/background app execution and hidden-window assertions passed."
+      },
+      {
+        "criterion": "托盘图标可区分状态，悬停提示显示当前状态与剩余时间",
+        "status": "unverified",
+        "passed": false,
+        "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+        "checkedAt": "2026-09-28T10:49:15.407Z",
+        "commandIds": [
+          "check-2"
+        ],
+        "evidenceKind": "desktop",
+        "evidence": "实际检查存在失败命令。"
+      },
+      {
+        "criterion": "托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程",
+        "status": "unverified",
+        "passed": false,
+        "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+        "checkedAt": "2026-09-28T10:49:15.407Z",
+        "commandIds": [
+          "check-2"
+        ],
+        "evidenceKind": "desktop",
+        "evidence": "实际检查存在失败命令。"
+      },
+      {
+        "criterion": "Windows 下以短时实机测试验证前台与后台计时推进和阶段切换，短时阶段切换误差 < 2 秒；本次不执行完整 25 分钟测量",
+        "status": "passed",
+        "passed": true,
+        "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+        "checkedAt": "2026-09-28T10:49:15.407Z",
+        "commandIds": [
+          "check-1"
+        ],
+        "measurements": [
+          {
+            "mode": "foreground",
+            "durationSeconds": 5,
+            "persistedTransitionDelayMs": 290,
+            "observedTransitionDelayMs": 364
+          },
+          {
+            "mode": "background",
+            "durationSeconds": 5,
+            "persistedTransitionDelayMs": 358,
+            "observedTransitionDelayMs": 432
+          }
+        ],
+        "measuredDurationSeconds": 5,
+        "evidenceKind": "duration",
+        "evidence": "本轮实际命令 check-1 的结构化测量：foreground：单实例 5 秒；持久化延迟 290 ms；外部观察延迟 364 ms；background：单实例 5 秒；持久化延迟 358 ms；外部观察延迟 432 ms。各模式独立记录，时长不相加。"
+      }
+    ],
+    "checks": [
+      {
+        "id": "check-1",
+        "command": "node tests/coprojer-smoke-check.cjs",
+        "code": 0,
+        "output": "TEST_DISPLAY {\"primary\":false,\"device\":\"\\\\\\\\.\\\\DISPLAY1\",\"workArea\":{\"y\":0,\"width\":1536,\"height\":824,\"x\":1920}}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"background\",\"expectedEnd\":\"2026-09-28T10:48:52.330Z\",\"durationMs\":5000}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"expectedEnd\":\"2026-09-28T10:48:52.445Z\",\"durationMs\":5000}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"delayMs\":290,\"observedDelayMs\":364}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"background\",\"delayMs\":358,\"observedDelayMs\":432}\n",
+        "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+        "at": "2026-09-28T10:48:55.786Z",
+        "durationMs": 18248,
+        "evidenceKind": "application",
+        "evidenceKinds": [
+          "application",
+          "duration"
+        ],
+        "measurements": [
+          {
+            "mode": "foreground",
+            "durationSeconds": 5,
+            "persistedTransitionDelayMs": 290,
+            "observedTransitionDelayMs": 364
+          },
+          {
+            "mode": "background",
+            "durationSeconds": 5,
+            "persistedTransitionDelayMs": 358,
+            "observedTransitionDelayMs": 432
+          }
+        ],
+        "runId": "f07e9ff5-b3f9-4d0d-b339-445f4eb276c4"
+      },
+      {
+        "id": "check-2",
+        "command": "node tests/coprojer-desktop-check.cjs",
+        "code": 1,
+        "output": "Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803\n    at desktop (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:30:31)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async trayAction (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:64:20)\n    at async main (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:68:17)\n",
+        "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+        "at": "2026-09-28T10:49:15.362Z",
+        "durationMs": 19533,
+        "evidenceKind": "desktop",
+        "evidenceKinds": [
+          "desktop"
+        ],
+        "measurements": [],
+        "runId": "6d9698f9-7398-484f-bf94-8211aa971d12"
+      },
+      {
+        "id": "unresolved-e72efde071ba",
+        "command": "npm run test:tray:smoke",
+        "code": 1,
+        "output": "\n> pomodoro-assistant@1.0.0 test:tray:smoke\n> node scripts/tray-runtime.cjs\n\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"expectedEnd\":\"2026-09-28T07:18:28.095Z\",\"durationMs\":5000}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"background\",\"expectedEnd\":\"2026-09-28T07:18:28.088Z\",\"durationMs\":5000}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"background\",\"delayMs\":161,\"observedDelayMs\":243}\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nfalse !== true\n\n    at measure (D:\\develop\\coprojer\\test\\番茄钟助手\\scripts\\tray-runtime.cjs:93:16)\n    at async Promise.allSettled (index 0)\n    at async main (D:\\develop\\coprojer\\test\\番茄钟助手\\scripts\\tray-runtime.cjs:148:19) {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: 'strictEqual'\n}\nnpm notice\nnpm notice New major version of npm available! 10.9.3 -> 12.1.0\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0\nnpm notice To update run: npm install -g npm@12.1.0\nnpm notice\n",
+        "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+        "at": "2026-09-28T07:18:31.372Z",
+        "durationMs": 13139,
+        "evidenceKind": "application",
+        "evidenceKinds": [
+          "application",
+          "duration"
+        ]
+      }
+    ],
+    "executions": [
+      {
+        "reviewRound": 1,
+        "commands": [
+          {
+            "runId": "e69cc421-3cdd-45d5-ace3-ebec8dc41687",
+            "code": 0,
+            "output": "\n> pomodoro-assistant@1.0.0 typecheck\n> tsc --noEmit\n\n",
+            "evidenceId": "check-1",
+            "evidenceKinds": [
+              "inspection"
+            ],
+            "measurements": [],
+            "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+            "durationMs": 7382
+          },
+          {
+            "runId": "f84309ee-cfaa-4d5f-9a85-e33c99c3047a",
+            "code": 0,
+            "output": "\n> pomodoro-assistant@1.0.0 test\n> vitest run\n\n\n\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mD:/develop/coprojer/.runtime/native-preparation-audit/isolated-88qoSR/project\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/throttle.test.ts \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 17\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/timer.test.ts \u001b[2m(\u001b[22m\u001b[2m20 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 28\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/stats.test.ts \u001b[2m(\u001b[22m\u001b[2m10 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 28\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/tray.test.ts \u001b[2m(\u001b[22m\u001b[2m9 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 15\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/main.test.ts \u001b[2m(\u001b[22m\u001b[2m12 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 406\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m5 passed\u001b[39m\u001b[22m\u001b[90m (5)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m55 passed\u001b[39m\u001b[22m\u001b[90m (55)\u001b[39m\n\u001b[2m   Start at \u001b[22m 18:48:24\n\u001b[2m   Duration \u001b[22m 3.81s\u001b[2m (transform 2.53s, setup 0ms, collect 3.21s, tests 494ms, environment 4ms, prepare 4.61s)\u001b[22m\n\nnpm notice\nnpm notice New major version of npm available! 10.9.3 -> 12.1.0\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0\nnpm notice To update run: npm install -g npm@12.1.0\nnpm notice\n",
+            "evidenceId": "check-2",
+            "evidenceKinds": [
+              "unit"
+            ],
+            "measurements": [],
+            "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+            "durationMs": 9026
+          },
+          {
+            "runId": "4622446b-dabe-41a8-8db3-af7a2c153f84",
+            "code": 0,
+            "output": "\n> pomodoro-assistant@1.0.0 build\n> node build.mjs\n\nbuild done\n",
+            "evidenceId": "check-3",
+            "evidenceKinds": [
+              "inspection"
+            ],
+            "measurements": [],
+            "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+            "durationMs": 3408
+          }
+        ]
+      },
+      {
+        "reviewRound": 2,
+        "commands": [
+          {
+            "runId": "f07e9ff5-b3f9-4d0d-b339-445f4eb276c4",
+            "code": 0,
+            "output": "TEST_DISPLAY {\"primary\":false,\"device\":\"\\\\\\\\.\\\\DISPLAY1\",\"workArea\":{\"y\":0,\"width\":1536,\"height\":824,\"x\":1920}}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"background\",\"expectedEnd\":\"2026-09-28T10:48:52.330Z\",\"durationMs\":5000}\n{\"event\":\"started\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"expectedEnd\":\"2026-09-28T10:48:52.445Z\",\"durationMs\":5000}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":0,\"remainingSeconds\":5,\"tooltip\":\"番茄钟助手 · 专注中 · 00:05\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":1,\"remainingSeconds\":4,\"tooltip\":\"番茄钟助手 · 专注中 · 00:04\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":2,\"remainingSeconds\":3,\"tooltip\":\"番茄钟助手 · 专注中 · 00:03\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":3,\"remainingSeconds\":2,\"tooltip\":\"番茄钟助手 · 专注中 · 00:02\"}\n{\"event\":\"sample\",\"mode\":\"background\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"sample\",\"mode\":\"foreground\",\"elapsedSeconds\":4,\"remainingSeconds\":1,\"tooltip\":\"番茄钟助手 · 专注中 · 00:01\"}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"foreground\",\"delayMs\":290,\"observedDelayMs\":364}\n{\"event\":\"passed\",\"kind\":\"smoke\",\"mode\":\"background\",\"delayMs\":358,\"observedDelayMs\":432}\n",
+            "evidenceId": "check-1",
+            "evidenceKinds": [
+              "application",
+              "duration"
+            ],
+            "measurements": [
+              {
+                "mode": "foreground",
+                "durationSeconds": 5,
+                "persistedTransitionDelayMs": 290,
+                "observedTransitionDelayMs": 364
+              },
+              {
+                "mode": "background",
+                "durationSeconds": 5,
+                "persistedTransitionDelayMs": 358,
+                "observedTransitionDelayMs": 432
+              }
+            ],
+            "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+            "durationMs": 18249
+          },
+          {
+            "runId": "6d9698f9-7398-484f-bf94-8211aa971d12",
+            "code": 1,
+            "output": "Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803\n    at desktop (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:30:31)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async trayAction (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:64:20)\n    at async main (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:68:17)\n",
+            "evidenceId": "check-2",
+            "evidenceKinds": [
+              "desktop"
+            ],
+            "measurements": [],
+            "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+            "durationMs": 19534
+          }
+        ]
+      }
+    ],
+    "preparation": {
+      "phase": "blocked",
+      "round": 1,
+      "limit": 2,
+      "gaps": [
+        {
+          "id": "78129f95db40cc71",
+          "criterion": "托盘图标可区分状态，悬停提示显示当前状态与剩余时间",
+          "description": "实际检查存在失败命令。",
+          "disposition": "unknown",
+          "reason": "Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803",
+          "nextStep": "需要本次隔离应用独占短时指针输入；当前观测到鼠标被移走，未继续点击，不涉及新授权。保留动作记录后再次独立验证。"
+        },
+        {
+          "id": "bafe10d5d83fba35",
+          "criterion": "托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程",
+          "description": "实际检查存在失败命令。",
+          "disposition": "unknown",
+          "reason": "Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803",
+          "nextStep": "需要本次隔离应用独占短时指针输入；当前观测到鼠标被移走，未继续点击，不涉及新授权。保留动作记录后再次独立验证。"
+        }
+      ],
+      "summary": "托盘图标可区分状态，悬停提示显示当前状态与剩余时间：技术诊断未完成；Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803 下一步：需要本次隔离应用独占短时指针输入；当前观测到鼠标被移走，未继续点击，不涉及新授权。保留动作记录后再次独立验证。\n托盘菜单提供：显示主界面、开始/暂停、退出；退出为真正结束进程，无残留后台进程：技术诊断未完成；Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803 下一步：需要本次隔离应用独占短时指针输入；当前观测到鼠标被移走，未继续点击，不涉及新授权。保留动作记录后再次独立验证。",
+      "sourceFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1",
+      "contractFingerprint": "3e045bad35a727d0e2fadfd9e42de393a61dc7e64c8503617df2c06852dcfb1d",
+      "attempts": [
+        {
+          "id": "34649fb3-292a-49eb-9ab7-ddba501ba47c",
+          "at": "2026-09-28T10:48:37.327Z",
+          "key": "216df478e73aa1e8aa1f8b21e63704c41edba676d5934a0886cdf0fd8e046e60",
+          "round": 1,
+          "status": "ready",
+          "beforeFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d",
+          "environmentFingerprint": "cd358bb4a90f94445ae99a4c377d24f1a77ff58e4e8ced6aa5c55a817690479f",
+          "actions": [
+            "created:tests/coprojer-desktop-check.cjs",
+            "write_file: 已写入 tests/coprojer-desktop-check.cjs（9452 字节）",
+            "created:tests/windows-desktop.ps1",
+            "write_file: 已写入 tests/windows-desktop.ps1（13746 字节）",
+            "created:tests/electron-test-bootstrap.cjs",
+            "write_file: 已写入 tests/electron-test-bootstrap.cjs（1998 字节）",
+            "created:tests/test-display-launch.cjs",
+            "write_file: 已写入 tests/test-display-launch.cjs（2211 字节）",
+            "created:tests/coprojer-smoke-check.cjs",
+            "write_file: 已写入 tests/coprojer-smoke-check.cjs（352 字节）"
+          ],
+          "result": "Created five supplemental verification files. No application source, existing tests or package scripts changed.",
+          "nextStep": "Run node tests/coprojer-smoke-check.cjs and node tests/coprojer-desktop-check.cjs independently; inspect JSON/screenshots and preserve failures.",
+          "afterFingerprint": "535c6e8e808db7ee4f25d9b39efac5fd521dec40b3c53e82e0405043b31177c1"
+        }
+      ],
+      "environment": {
+        "platform": "win32",
+        "arch": "x64",
+        "runtime": {
+          "node": "D:\\develop\\nodejs\\node.exe",
+          "npm": "D:\\develop\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+          "available": true
+        },
+        "scripts": {
+          "dev": "npm run build && electron .",
+          "build": "node build.mjs",
+          "typecheck": "tsc --noEmit",
+          "test": "vitest run",
+          "test:tray:smoke": "node scripts/tray-runtime.cjs",
+          "test:tray:evidence": "node scripts/check-tray-evidence.cjs"
+        },
+        "dependencies": [
+          [
+            "@types/node",
+            "22.20.3"
+          ],
+          [
+            "@types/react",
+            "18.3.31"
+          ],
+          [
+            "@types/react-dom",
+            "18.3.7"
+          ],
+          [
+            "electron",
+            "31.7.7"
+          ],
+          [
+            "esbuild",
+            "0.23.1"
+          ],
+          [
+            "playwright",
+            "1.63.0"
+          ],
+          [
+            "react",
+            "18.3.1"
+          ],
+          [
+            "react-dom",
+            "18.3.1"
+          ],
+          [
+            "typescript",
+            "5.9.3"
+          ],
+          [
+            "vitest",
+            "2.1.9"
+          ]
+        ],
+        "hasPackage": true,
+        "tools": "诊断可读取项目文件和确认基线；准备可写测试资料、添加 test:*、安装项目开发依赖；独立验证只能运行已有检查。",
+        "desktop": {
+          "platform": "win32",
+          "checked": true,
+          "interactive": true,
+          "screens": 2,
+          "desktop": "0,0,1920,1080",
+          "available": true,
+          "meaning": "仅证明本机有可探测的交互桌面和 Windows UIAutomation/Forms；尚未证明目标应用的点击、悬停或截图通过。",
+          "nextStep": "需要原生鼠标证据时，可由验证准备添加有界 Node 检查，调用本机 PowerShell/.NET UIAutomation 与 Win32 输入，并隔离目标应用。仅操作本次启动的应用及已定位的对应托盘图标；必须记录真实输入结果，不能直接调用菜单回调替代。历史外部工具的截图/坐标错误不证明当前本机能力不可用。"
+        },
+        "scope": "平台、时长、验收范围只取本项目最新确认基线；不要自动扩大。"
+      },
+      "environmentCheckedAt": "2026-09-28T10:49:19.821Z"
+    },
+    "nativeEvidence": {
+      "schema": 1,
+      "startedAt": "2026-09-28T10:48:57.056Z",
+      "sourceAndBuild": {
+        "src\\main\\main.ts": "8987df3d54245180f97b496780003eb7fcfabb70063d1ed5189e2b2d53426025",
+        "src\\main\\preload.ts": "f88134b4226865733b0a152d78752502d7dfd9b61e748257af2b7ad726be9333",
+        "src\\renderer\\app.tsx": "1e0ec810ad1fa9f745d42d2c4e96af546e95e5199bc848ced2ec6a22e4112dad",
+        "src\\renderer\\index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+        "src\\renderer\\style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b",
+        "src\\shared\\stats.ts": "3fc9a80892e82d446002b0cf8652f2b6bcccf0e61bfa703bf57165ff50921e1d",
+        "src\\shared\\timer.ts": "1ba9e5f96fbb56912735df72591b1204c36e359ab2cb9464385d0ebb683ae123",
+        "src\\shared\\tray.ts": "9258f2df2dd5583e255368e413a525dfd33f8458176052e0168a6d5449242470",
+        "dist\\index.html": "07371e5fa884f5bca156f349d0847449091dca0de0806d0e4ad2540600c9cfa2",
+        "dist\\main.js": "35071845102d011cbb1b45d4fc520a87d00e3dd94c7dc5863ce70203a67d0fe0",
+        "dist\\preload.js": "b1b17690093b2c9c68acfe26ae83eecb52b6d5d211b3094af11bbe3b2643ce9d",
+        "dist\\renderer.js": "54f9bc217bf971439054f3d0daed50ab14233ce83944174e1c11f1b061ed0997",
+        "dist\\style.css": "40c67e66990a28e6f7574d72d595c35e2d3407ecfd0758b6ee677a543292dc2b"
+      },
+      "status": "blocked",
+      "inputEvidence": [
+        {
+          "label": "native-hover-paused-container",
+          "events": [
+            {
+              "y": 1060,
+              "at": "2026-09-28T10:49:09.0147184Z",
+              "target": {
+                "name": "通知 V 形",
+                "className": "Button",
+                "pid": 11004,
+                "offscreen": false,
+                "type": "ControlType.Button",
+                "rect": {
+                  "y": 1040,
+                  "width": 24,
+                  "height": 40,
+                  "x": 1640
+                },
+                "runtimeId": [
+                  42,
+                  65876
+                ]
+              },
+              "action": "native-open-owned-tray-container",
+              "x": 1652
+            }
+          ],
+          "windows": [
+            {
+              "name": "",
+              "className": "NotifyIconOverflowWindow",
+              "pid": 11004,
+              "offscreen": false,
+              "type": "ControlType.Pane",
+              "rect": {
+                "y": 880,
+                "width": 160,
+                "height": 160,
+                "x": 1572
+              },
+              "runtimeId": [
+                42,
+                65882
+              ]
+            },
+            {
+              "name": "",
+              "className": "Shell_TrayWnd",
+              "pid": 11004,
+              "offscreen": false,
+              "type": "ControlType.Pane",
+              "rect": {
+                "y": 1040,
+                "width": 1920,
+                "height": 40,
+                "x": 0
+              },
+              "runtimeId": [
+                42,
+                65808
+              ]
+            },
+            {
+              "name": "",
+              "className": "Shell_SecondaryTrayWnd",
+              "pid": 11004,
+              "offscreen": false,
+              "type": "ControlType.Pane",
+              "rect": {
+                "y": 824,
+                "width": 1536,
+                "height": 40,
+                "x": 1920
+              },
+              "runtimeId": [
+                42,
+                132612
+              ]
+            }
+          ]
+        }
+      ],
+      "rendererErrors": [],
+      "capability": {
+        "screens": [
+          {
+            "primary": false,
+            "bounds": {
+              "y": 0,
+              "width": 1536,
+              "height": 864,
+              "x": 1920
+            },
+            "device": "\\\\.\\DISPLAY1",
+            "workArea": {
+              "y": 0,
+              "width": 1536,
+              "height": 824,
+              "x": 1920
+            }
+          },
+          {
+            "primary": true,
+            "bounds": {
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "x": 0
+            },
+            "device": "\\\\.\\DISPLAY2",
+            "workArea": {
+              "y": 0,
+              "width": 1920,
+              "height": 1040,
+              "x": 0
+            }
+          }
+        ],
+        "interactive": true,
+        "inputDesktop": "Default",
+        "shellWindows": [
+          {
+            "name": "",
+            "className": "Shell_TrayWnd",
+            "pid": 11004,
+            "offscreen": false,
+            "type": "ControlType.Pane",
+            "rect": {
+              "y": 1040,
+              "width": 1920,
+              "height": 40,
+              "x": 0
+            },
+            "runtimeId": [
+              42,
+              65808
+            ]
+          },
+          {
+            "name": "",
+            "className": "Shell_SecondaryTrayWnd",
+            "pid": 11004,
+            "offscreen": false,
+            "type": "ControlType.Pane",
+            "rect": {
+              "y": 824,
+              "width": 1536,
+              "height": 40,
+              "x": 1920
+            },
+            "runtimeId": [
+              42,
+              132612
+            ]
+          }
+        ],
+        "uia": true
+      },
+      "display": {
+        "primary": true,
+        "bounds": {
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "x": 0
+        },
+        "device": "\\\\.\\DISPLAY2",
+        "workArea": {
+          "y": 0,
+          "width": 1920,
+          "height": 1040,
+          "x": 0
+        },
+        "reason": "Native notification area is on Shell_TrayWnd on the primary display; use primary fallback before first show."
+      },
+      "runtime": {
+        "pid": 2664,
+        "userData": "D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\.runtime\\coprojer-checks\\6d9698f9-7398-484f-bf94-8211aa971d12\\user-data",
+        "electron": "31.7.7",
+        "windowBounds": {
+          "x": -8,
+          "y": -8,
+          "width": 1936,
+          "height": 1056
+        }
+      },
+      "error": "Error: DESKTOP_TECHNICAL_BLOCK: Input ownership changed during hover; no click sent. Expected 1592,900 observed 1227,803\n    at desktop (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:30:31)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async trayAction (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:64:20)\n    at async main (D:\\develop\\coprojer\\.runtime\\native-preparation-audit\\isolated-88qoSR\\project\\tests\\coprojer-desktop-check.cjs:68:17)",
+      "finishedAt": "2026-09-28T10:49:14.130Z",
+      "cleanupProcessProbes": [
+        {
+          "pid": 2664,
+          "status": "absent",
+          "error": "ESRCH"
+        },
+        {
+          "pid": 20556,
+          "status": "absent",
+          "error": "ESRCH"
+        },
+        {
+          "pid": 11908,
+          "status": "absent",
+          "error": "ESRCH"
+        },
+        {
+          "pid": 23424,
+          "status": "absent",
+          "error": "ESRCH"
+        },
+        {
+          "pid": 29608,
+          "status": "absent",
+          "error": "ESRCH"
+        }
+      ],
+      "driverPid": 29608
+    },
+    "artifacts": [
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/01-probe-request.json",
+        "sha256": "d4984ecf3bf456d92c50991a5b45627dfe5a2d6bdcc0dfb6a8235e8620c5d812",
+        "bytes": 18
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/01-probe-result.json",
+        "sha256": "e870a1dfafbebdf22f751a5d5568af767cef6e9912b7e98fa202fe3e83af8383",
+        "bytes": 1305
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/01-probe-stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/01-probe-stdout.txt",
+        "sha256": "84b087fe64971baf9bd6f625e7131fac61c497b1cf3ff0b94bec636fe4e6ca3c",
+        "bytes": 730
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/02-open-tray-overflow-request.json",
+        "sha256": "eb1277caa25c6fcbbbcc25b86ee7a50a2b5eac232eceea7f67f5e1632910dde4",
+        "bytes": 411
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/02-open-tray-overflow-result.json",
+        "sha256": "e5d7e5d6804a7a3b355d1de4833a4719ecf7dbfc9ad823b10793c3ea96be1871",
+        "bytes": 1482
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/02-open-tray-overflow-stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/02-open-tray-overflow-stdout.txt",
+        "sha256": "579fb3f857e298e8cb35a47bd7579cde109a723a9fe50942b860f80241a7a5fc",
+        "bytes": 838
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/03-tray-request.json",
+        "sha256": "8ccfc47bf5944e8dfbcc330212005dd59e1ffc9de0076ba128f50d5ae161748a",
+        "bytes": 470
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/03-tray-result.json",
+        "sha256": "c89681a8bc7778ad2a6287d09d673ec5c13fba20289ba5ca19cfc6d71c1d5c0d",
+        "bytes": 811
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/03-tray-stderr.txt",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/03-tray-stdout.txt",
+        "sha256": "7a225af9dd3fe7e498c59515609c7c2e833a70a838fba452616d9b35fa1f81ce",
+        "bytes": 551
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/application-maximized.png",
+        "sha256": "579cb73b0138bf4fc7a7f2ba8957a2386f37d942d36f76c263276f10eb10c62b",
+        "bytes": 58324
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/desktop-result.json",
+        "sha256": "81eef8711a1eb1fce2a2e4c941ba7aaf26b6e8e036429401ee25dbb1c7ec8a11",
+        "bytes": 6614
+      },
+      {
+        "path": "docs/verification/native-preparation-2026-09-28/native-hover-paused-container.png",
+        "sha256": "76ba5d04f2987b8ccf7a4a0623ae222f72dae2ca8f251a94bcb99d7c0a4a2818",
+        "bytes": 6185
+      }
+    ],
+    "raw": {
+      "path": ".runtime/native-preparation-audit/isolated-88qoSR/result.json",
+      "sha256": "001a548293670ab5df61d3b4ddc5fb8a8750e680a33f1e40ea78005494f35471",
+      "bytes": 61186
+    }
+  },
+  "validation": {
+    "coreOrchestration": "passed; actual writes/commands, environment checkpoint, budgets, source changes, cancellations, failure retention, evidence type and duration guards",
+    "npmTest": {
+      "status": "interrupted-or-failed-in-research-smoke",
+      "log": ".runtime/native-preparation-audit/npm-test-final-4.log",
+      "detail": "The full chain reached research-smoke after the verification suites passed; target page closed. Original failure retained. No all-green full invocation is claimed."
+    },
+    "researchRerun": {
+      "exitCode": 0,
+      "log": ".runtime/native-preparation-audit/research-final.log"
+    },
+    "remaining": [
+      {
+        "script": "roundtable-smoke",
+        "startedAt": "2026-09-28T10:38:31.8570160Z",
+        "finishedAt": "2026-09-28T10:38:50.3215178Z",
+        "exitCode": 0
+      },
+      {
+        "script": "decision-smoke",
+        "startedAt": "2026-09-28T10:38:50.4229167Z",
+        "finishedAt": "2026-09-28T10:39:08.6793963Z",
+        "exitCode": 0
+      },
+      {
+        "script": "discussion-budget-smoke",
+        "startedAt": "2026-09-28T10:39:08.6888732Z",
+        "finishedAt": "2026-09-28T10:39:27.1537576Z",
+        "exitCode": 0
+      },
+      {
+        "script": "novice-smoke",
+        "startedAt": "2026-09-28T10:39:27.1633632Z",
+        "finishedAt": "2026-09-28T10:40:15.2284615Z",
+        "exitCode": 0
+      }
+    ],
+    "ui": {
+      "status": "passed",
+      "result": {
+        "count": 1,
+        "persistedCount": 1,
+        "body": "tray-runtime.cjs 尾部确认了完整断言链。\n\n原始报告正文保持完整。合法重复内容：检查；检查。",
+        "captures": [
+          [
+            1280,
+            840
+          ],
+          [
+            860,
+            600
+          ]
+        ],
+        "errors": []
+      },
+      "artifacts": [
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-before.json",
+          "sha256": "d2bd5f01757b3b13e9401fe5f6599c829e48dd6c2c069bb96924dff3c0d0e908",
+          "bytes": 195
+        },
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-result.json",
+          "sha256": "5578be74117112ad3be1adaff7511333f8181b28e1a1ee078bcda96866367394",
+          "bytes": 284
+        },
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-report-1280x840.png",
+          "sha256": "cd71054353942b23305a632e7ba7782b0fff12856294fa2815a28bd47481c189",
+          "bytes": 196748
+        },
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-report-860x600.png",
+          "sha256": "8a92e1ad4623b473da518103aaa2411dc6cdaffcd31c06193cc68f48de7a651a",
+          "bytes": 148614
+        },
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-failure-1280x840.png",
+          "sha256": "c660a14008ba690a3fb67ed733d24d5e862abf170ec3e4b814a9f21026ab1ed6",
+          "bytes": 203132
+        },
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-failure-860x600.png",
+          "sha256": "45e76c49928525e65f953cdbcc6414e887b45e21cf5ca1f83f0ad9ec59e40e9e",
+          "bytes": 154711
+        },
+        {
+          "path": "docs/verification/native-preparation-2026-09-28/ui-report-maximized.png",
+          "sha256": "ae08f77e09c11a39d14eb381df46ed6afb9cb459ef478ae33456183246e33144",
+          "bytes": 196471
+        }
+      ]
+    },
+    "actualApplication": {
+      "status": "passed",
+      "typecheckExit": 0,
+      "unitExit": 0,
+      "unitPassed": 55,
+      "buildExit": 0,
+      "smokeExit": 0,
+      "measurements": [
+        {
+          "mode": "foreground",
+          "durationSeconds": 5,
+          "persistedTransitionDelayMs": 290,
+          "observedTransitionDelayMs": 364
+        },
+        {
+          "mode": "background",
+          "durationSeconds": 5,
+          "persistedTransitionDelayMs": 358,
+          "observedTransitionDelayMs": 432
+        }
+      ]
+    },
+    "nativeDesktop": "blocked",
+    "finalHumanAcceptance": "not submitted",
+    "logs": [
+      {
+        "path": ".runtime/native-preparation-audit/build-final.log",
+        "sha256": "465522ca6574b89573d778df02ae172509f055a11244d1a93c5184770abeabb8",
+        "bytes": 10715
+      },
+      {
+        "path": ".runtime/native-preparation-audit/decision-smoke-final.log",
+        "sha256": "84cc5775714fc290fd21583aaa84f3ccb6928278d558e2ad330712893e13bf82",
+        "bytes": 394
+      },
+      {
+        "path": ".runtime/native-preparation-audit/desktop-regression-2.log",
+        "sha256": "cf8a74de0785d7c73e4368e2f8095a0c401cf365a8b9f53419b5d869c32dc659",
+        "bytes": 211
+      },
+      {
+        "path": ".runtime/native-preparation-audit/desktop-regression-3.log",
+        "sha256": "8add83ae71c8c45672d5b7a023711d7407f0fedda9469a4c5b1c68ea928ef519",
+        "bytes": 437
+      },
+      {
+        "path": ".runtime/native-preparation-audit/desktop-regression.log",
+        "sha256": "cf8a74de0785d7c73e4368e2f8095a0c401cf365a8b9f53419b5d869c32dc659",
+        "bytes": 211
+      },
+      {
+        "path": ".runtime/native-preparation-audit/discussion-budget-smoke-final.log",
+        "sha256": "fe959f2890b47c5043635efe5e4800f4d5e506de81b5920b327691f5b998ae6f",
+        "bytes": 221
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-2.log",
+        "sha256": "4de84d9ab8663667010894ca515ec73b0bd84d27eb8dc9b55f8693f0d26b4201",
+        "bytes": 2505
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-3.log",
+        "sha256": "0034561a05c205ebf4710cc6e1c6252b096f2013e812e085b4699fd0efad85d6",
+        "bytes": 2541
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-4.log",
+        "sha256": "ae706603a9a1c9e14360e5f52fbd54af8d7d59b5b3a98cfad9b971fda63260d8",
+        "bytes": 2541
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-final-2.log",
+        "sha256": "8b472eccfe71b20b99fe83125fab4b5ed27b08ef30a70336dd8a539571437eca",
+        "bytes": 2619
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-final-3.log",
+        "sha256": "3bf73e53daa6388584683739a34410eff1260cd809915b9846e9a64d09e91c45",
+        "bytes": 2497
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-final-4.log",
+        "sha256": "81ecd97a79c1a1eabee8b79003ceba64fb144d9277b7f679dd707b30fd44043a",
+        "bytes": 2543
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run-final.log",
+        "sha256": "b0a3b1be6e8c8375c68b2fcde3f169d541fe8f02fa77dc7465a78036fdcf7837",
+        "bytes": 2541
+      },
+      {
+        "path": ".runtime/native-preparation-audit/isolated-run.log",
+        "sha256": "d0c58424fb1c44a625a0dcffa9b15d6b37fb3b01c51865fa87946ece100e293b",
+        "bytes": 842
+      },
+      {
+        "path": ".runtime/native-preparation-audit/novice-smoke-final.log",
+        "sha256": "7c0ebde02ac8ecc8dcede16aee55782ec2b10a80fa943b0b19c60b7762e9e7c6",
+        "bytes": 491
+      },
+      {
+        "path": ".runtime/native-preparation-audit/npm-test-final-2.log",
+        "sha256": "45dff21d24563bf0a216dde50511b2327478309405ffb67a44ba600ed9960746",
+        "bytes": 949
+      },
+      {
+        "path": ".runtime/native-preparation-audit/npm-test-final-3.log",
+        "sha256": "0aca86867766c411d95a489dc6b7c409dc655027383ee8a79e51b831f131f33c",
+        "bytes": 14570
+      },
+      {
+        "path": ".runtime/native-preparation-audit/npm-test-final-4.log",
+        "sha256": "953793f834193a9c6483072cd1e091ea46f99a2da3b450b64cc300de2b618b16",
+        "bytes": 29531
+      },
+      {
+        "path": ".runtime/native-preparation-audit/npm-test-final.log",
+        "sha256": "45dff21d24563bf0a216dde50511b2327478309405ffb67a44ba600ed9960746",
+        "bytes": 949
+      },
+      {
+        "path": ".runtime/native-preparation-audit/report-smoke-final.log",
+        "sha256": "c457744739171ec1bf5b26361ff816b4f213e8a0c153b2dec36cbdf615b8333d",
+        "bytes": 233
+      },
+      {
+        "path": ".runtime/native-preparation-audit/research-final.log",
+        "sha256": "559b970aabfd3c48c951af81549249c2c6aff6c05faeb1f50484cd4fa0aa43c0",
+        "bytes": 913
+      },
+      {
+        "path": ".runtime/native-preparation-audit/roundtable-smoke-final.log",
+        "sha256": "9971e846c56ddcd3b89ed8921d8c632365bc3172e29beec5dbe942c489c5ea22",
+        "bytes": 356
+      }
+    ]
+  },
+  "originalFileProtection": {
+    "fileCount": 2482,
+    "unchanged": true,
+    "changes": [],
+    "before": {
+      "path": ".runtime/native-preparation-audit/original-before.json",
+      "sha256": "2bbef75971d2215c6bac797e37e264e491e559fb6bcedb49146a718143ff973c",
+      "bytes": 309027
+    },
+    "after": {
+      "path": ".runtime/native-preparation-audit/original-after.json",
+      "sha256": "ca273d1dde9416f86cf3c1fa62c1e09a3acd6dc91d9e2fc70aa2304c6751b24d",
+      "bytes": 309027
+    }
+  },
+  "previousRuns": [
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-czrixu",
+      "result": {
+        "path": ".runtime/native-preparation-audit/isolated-czrixu/result.json",
+        "sha256": "248eb17dec1b5e2d56ac127cab13f3d0df7c79d6f4c8f713e060080c75b98a45",
+        "bytes": 67487
+      },
+      "stage": "blocked",
+      "checks": [
+        {
+          "id": "check-1",
+          "code": 0,
+          "command": "node tests/coprojer-smoke-check.cjs",
+          "runId": "32c0f827-eb52-40f9-9e6c-e6a31f93eac9",
+          "sourceFingerprint": "ae84ea89bef68ce47a0319e85963036ba13d75e51c090c13bc6d167bc9f26766"
+        },
+        {
+          "id": "check-2",
+          "code": 1,
+          "command": "node tests/coprojer-desktop-check.cjs",
+          "runId": "3e5c7a61-9ea2-47c2-9678-8219e3adfb7d",
+          "sourceFingerprint": "ae84ea89bef68ce47a0319e85963036ba13d75e51c090c13bc6d167bc9f26766"
+        },
+        {
+          "id": "unresolved-e72efde071ba",
+          "code": 1,
+          "command": "npm run test:tray:smoke",
+          "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+        }
+      ]
+    },
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-NuJitu",
+      "result": {
+        "path": ".runtime/native-preparation-audit/isolated-NuJitu/result.json",
+        "sha256": "d71dd0ad8cf6a7b495ddf07a22a4135a2618f592ba7d81ba80d24d2a13cf7c55",
+        "bytes": 51191
+      },
+      "stage": "blocked",
+      "checks": [
+        {
+          "id": "check-1",
+          "code": 1,
+          "command": "node tests/coprojer-smoke-check.cjs",
+          "runId": "bc5d6222-37bb-4608-ad06-0bdabca1f8f9",
+          "sourceFingerprint": "279aadbb84a1a938614144beecdc32fa0ae7cd21e9dbd0713124dc0484ff87d1"
+        },
+        {
+          "id": "check-2",
+          "code": 1,
+          "command": "node tests/coprojer-desktop-check.cjs",
+          "runId": "bbc2e4bf-6a9b-4c8c-8f74-bf5863e715c7",
+          "sourceFingerprint": "279aadbb84a1a938614144beecdc32fa0ae7cd21e9dbd0713124dc0484ff87d1"
+        },
+        {
+          "id": "unresolved-e72efde071ba",
+          "code": 1,
+          "command": "npm run test:tray:smoke",
+          "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+        }
+      ]
+    },
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-qr8KeY",
+      "result": {
+        "path": ".runtime/native-preparation-audit/isolated-qr8KeY/result.json",
+        "sha256": "4f475b54e4f344bd57ad2fc9b5ea0278f2c62de909b561e754570aff391b2293",
+        "bytes": 66405
+      },
+      "stage": "blocked",
+      "checks": [
+        {
+          "id": "check-1",
+          "code": 0,
+          "command": "node tests/coprojer-smoke-check.cjs",
+          "runId": "b0293413-67a6-4c76-b9a1-f76f423f69f5",
+          "sourceFingerprint": "698700c1ccf067ba6555d999249d549c2bf57e126943c89316d4f8c36fb59bd3"
+        },
+        {
+          "id": "check-2",
+          "code": 1,
+          "command": "node tests/coprojer-desktop-check.cjs",
+          "runId": "45eeaed5-0584-4787-8dc1-bd65d77f4273",
+          "sourceFingerprint": "698700c1ccf067ba6555d999249d549c2bf57e126943c89316d4f8c36fb59bd3"
+        },
+        {
+          "id": "unresolved-e72efde071ba",
+          "code": 1,
+          "command": "npm run test:tray:smoke",
+          "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+        }
+      ]
+    },
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-R3ySuV",
+      "result": {
+        "path": ".runtime/native-preparation-audit/isolated-R3ySuV/result.json",
+        "sha256": "456d5d555db57a2bbda25baaddaa1a98e8bdaa37c5d96eaee6ca507c79a6013c",
+        "bytes": 62432
+      },
+      "stage": "blocked",
+      "checks": [
+        {
+          "id": "check-1",
+          "code": 0,
+          "command": "node tests/coprojer-smoke-check.cjs",
+          "runId": "f7149db0-972e-4890-a02f-7c437ea4a236",
+          "sourceFingerprint": "fbbb424c4b1f23101b3de32064def3f3833a70e33f3066f7fff3b8adb62879c2"
+        },
+        {
+          "id": "check-2",
+          "code": 1,
+          "command": "node tests/coprojer-desktop-check.cjs",
+          "runId": "4326fe4c-2d58-4290-94b6-5dd5574e6826",
+          "sourceFingerprint": "fbbb424c4b1f23101b3de32064def3f3833a70e33f3066f7fff3b8adb62879c2"
+        },
+        {
+          "id": "unresolved-e72efde071ba",
+          "code": 1,
+          "command": "npm run test:tray:smoke",
+          "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+        }
+      ]
+    },
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-rdMhF0",
+      "result": {
+        "path": ".runtime/native-preparation-audit/isolated-rdMhF0/result.json",
+        "sha256": "287497a82491c46b52392d42ac4d5f15ae89e2e1b3080e138ddc474ad89b2a83",
+        "bytes": 64027
+      },
+      "stage": "blocked",
+      "checks": [
+        {
+          "id": "check-1",
+          "code": 0,
+          "command": "node tests/coprojer-smoke-check.cjs",
+          "runId": "2e838124-e07d-4023-811d-a0770d85b0b6",
+          "sourceFingerprint": "b6ddd459daf49425e30896b7af70c1cda3c7b567a6797606f90f8c2e23307fb0"
+        },
+        {
+          "id": "check-2",
+          "code": 1,
+          "command": "node tests/coprojer-desktop-check.cjs",
+          "runId": "35dd57f5-7dbe-4122-80e1-ed500a143756",
+          "sourceFingerprint": "b6ddd459daf49425e30896b7af70c1cda3c7b567a6797606f90f8c2e23307fb0"
+        },
+        {
+          "id": "unresolved-e72efde071ba",
+          "code": 1,
+          "command": "npm run test:tray:smoke",
+          "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+        }
+      ]
+    },
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-T2Uaoq",
+      "error": {
+        "path": ".runtime/native-preparation-audit/isolated-T2Uaoq/error.json",
+        "sha256": "9188225eeddb3cc31de3e86003ff90cdd7cbf4cfe1345c0bafd4c5af001efeb9",
+        "bytes": 33745
+      }
+    },
+    {
+      "runDir": ".runtime/native-preparation-audit/isolated-THIrPl",
+      "result": {
+        "path": ".runtime/native-preparation-audit/isolated-THIrPl/result.json",
+        "sha256": "be979f1de42de4b613faa63ce20e046850760675f8c944d05be1369fe912f933",
+        "bytes": 65041
+      },
+      "stage": "blocked",
+      "checks": [
+        {
+          "id": "check-1",
+          "code": 0,
+          "command": "node tests/coprojer-smoke-check.cjs",
+          "runId": "a38108d7-d690-4a16-bb39-fc5e620a22b8",
+          "sourceFingerprint": "e8a1c84c27d55b4c732bcf912647e5909905a776b8c169c37660977041afd143"
+        },
+        {
+          "id": "check-2",
+          "code": 1,
+          "command": "node tests/coprojer-desktop-check.cjs",
+          "runId": "b32425bc-05e6-4e08-9f48-4b9451ec4b8d",
+          "sourceFingerprint": "e8a1c84c27d55b4c732bcf912647e5909905a776b8c169c37660977041afd143"
+        },
+        {
+          "id": "unresolved-e72efde071ba",
+          "code": 1,
+          "command": "npm run test:tray:smoke",
+          "sourceFingerprint": "7221723e97ac27f25369fe6578ba4bc544e6d32280ab6224a3bdcca19643853d"
+        }
+      ]
+    }
+  ]
+}

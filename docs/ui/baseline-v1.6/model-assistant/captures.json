@@ -1,0 +1,68 @@
+[
+  {
+    "file": "01-category-selection-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "category-selection-light-1280.png",
+    "width": 1280,
+    "height": 840,
+    "maximized": false
+  },
+  {
+    "file": "category-selection-light-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  },
+  {
+    "file": "evidence-light-1280.png",
+    "width": 1280,
+    "height": 840,
+    "maximized": false
+  },
+  {
+    "file": "evidence-light-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  },
+  {
+    "file": "evidence-dark-1280.png",
+    "width": 1280,
+    "height": 840,
+    "maximized": false
+  },
+  {
+    "file": "evidence-dark-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  },
+  {
+    "file": "02-source-comparison-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "03-allocation-preview-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "04-confirm-apply-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "offline-light-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  }
+]

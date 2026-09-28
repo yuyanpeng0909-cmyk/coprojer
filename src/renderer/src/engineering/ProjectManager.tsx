@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { AlertCircle, Archive, ArrowRight, CircleCheck, FolderOpen, LoaderCircle, Pencil, Pin, Search } from 'lucide-react'
 import type { EngineeringApi, EngineeringState, Project } from '../../../shared/engineering'
 import { Overlay, Tabs } from '../components/ui'
@@ -18,9 +18,10 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
   .replace(/^Error invoking remote method '[^']+': Error: /, '')
 
 export default function ProjectManager({
-  state, loaded, loadFailed, onRetry, onSelect, onOpen, onUpdate, onOpenFolder, onCreate, onModels, onAgents,
+  state, loaded, loadFailed, onRetry, onSelect, onOpen, onUpdate, onOpenFolder, onCreate, onModels, onAgents, onboarding,
 }: {
   state: EngineeringState
+  onboarding?: ReactNode
   loaded: boolean
   loadFailed: boolean
   onRetry(): void
@@ -66,7 +67,7 @@ export default function ProjectManager({
     </div>
   )
   if (!state.projects.length) return (
-    <WelcomeWorkspace state={state} onCreate={onCreate} onModels={onModels} onAgents={onAgents} />
+    <div className="project-manager">{onboarding}<WelcomeWorkspace state={state} onCreate={onCreate} onModels={onModels} onAgents={onAgents} /></div>
   )
   const active = state.projects.filter(project => !project.archivedAt)
   const archived = state.projects.filter(project => !!project.archivedAt)
@@ -82,6 +83,7 @@ export default function ProjectManager({
   })
   return (
     <section className="project-manager" aria-label="已保存的项目">
+      {onboarding}
       {error && !editing && <p className="eng-inline-error" role="alert">{error}</p>}
       {scope === 'active' && attention.length > 0 && (
         <section className="project-attention" aria-label="跨项目待处理事项">

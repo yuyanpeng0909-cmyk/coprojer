@@ -1,0 +1,431 @@
+{
+  "archivedAt": "2026-09-28T10:31:32.058Z",
+  "verifiedAt": "2026-09-28T10:15:40.364Z",
+  "mockProviders": true,
+  "realUserProfileModified": false,
+  "realApplicationRestarted": false,
+  "activation": "Next launch of the new build",
+  "screenshotTotals": {
+    "requests": 6,
+    "succeeded": 4,
+    "failed": 1,
+    "cancelled": 1,
+    "interrupted": 0,
+    "running": 0,
+    "inputTokens": 496,
+    "outputTokens": 112,
+    "totalTokens": 608,
+    "usageReported": 3,
+    "averageDurationMs": 31.25,
+    "rpm": 6
+  },
+  "finalTotals": {
+    "requests": 7,
+    "succeeded": 5,
+    "failed": 1,
+    "cancelled": 1,
+    "interrupted": 0,
+    "running": 0,
+    "inputTokens": 624,
+    "outputTokens": 144,
+    "totalTokens": 768,
+    "usageReported": 4,
+    "averageDurationMs": 43.8,
+    "rpm": 7
+  },
+  "captures": [
+    {
+      "file": "monitor-1280x840-light.png",
+      "width": 1280,
+      "height": 840,
+      "sha256": "c37855a86bc7c3a6f83963b1b3ceac22e3cc52bd7f873fde9322c84a2d43e396"
+    },
+    {
+      "file": "monitor-860x600-light.png",
+      "width": 860,
+      "height": 600,
+      "sha256": "4f5d42b72edf58dbf434a3a7fd38a7bc67c74447ab593712fc0f56907bb0989e"
+    },
+    {
+      "file": "monitor-1280x840-dark.png",
+      "width": 1280,
+      "height": 840,
+      "sha256": "a40ef938de4db2168898012eba7a0b10936fa443e7e60392a2c2abee74705bfb"
+    },
+    {
+      "file": "monitor-860x600-dark.png",
+      "width": 860,
+      "height": 600,
+      "sha256": "6ee259960d943866f648e3339cbf132b4a8b6f34ea4b22814e63b1c8be5a7e2a"
+    },
+    {
+      "file": "monitor-maximized.png",
+      "width": 1536,
+      "height": 823,
+      "sha256": "ab7700d9409ae5230fbab7727aa61e76631a1e53ccf72d05b9f9baf569bbfd7f"
+    },
+    {
+      "file": "monitor-requests-maximized.png",
+      "width": 1536,
+      "height": 824,
+      "sha256": "f6ea4644d3e6e229af5406589b7781e251177f12413095ce5cc04b9ba8f1fbc3"
+    }
+  ],
+  "displayEvidence": [
+    {
+      "selection": {
+        "reason": "display-1-non-primary",
+        "targetId": 4128473448,
+        "primaryId": 3955661350,
+        "workArea": {
+          "x": 1920,
+          "y": 0,
+          "width": 1536,
+          "height": 824
+        },
+        "native": [
+          {
+            "bounds": {
+              "height": 1080,
+              "width": 1920,
+              "y": 0,
+              "x": 1920
+            },
+            "device": "\\\\.\\DISPLAY1",
+            "primary": false
+          },
+          {
+            "bounds": {
+              "height": 1080,
+              "width": 1920,
+              "y": 0,
+              "x": 0
+            },
+            "device": "\\\\.\\DISPLAY2",
+            "primary": true
+          }
+        ]
+      },
+      "windows": [
+        {
+          "id": 1,
+          "initiallyVisible": false,
+          "displayId": 4128473448
+        }
+      ],
+      "events": [
+        {
+          "event": "show",
+          "id": 1,
+          "displayId": 4128473448
+        },
+        {
+          "event": "maximize",
+          "id": 1,
+          "displayId": 4128473448
+        }
+      ]
+    },
+    {
+      "selection": {
+        "reason": "display-1-non-primary",
+        "targetId": 4128473448,
+        "primaryId": 3955661350,
+        "workArea": {
+          "x": 1920,
+          "y": 0,
+          "width": 1536,
+          "height": 824
+        },
+        "native": [
+          {
+            "bounds": {
+              "height": 1080,
+              "width": 1920,
+              "y": 0,
+              "x": 1920
+            },
+            "device": "\\\\.\\DISPLAY1",
+            "primary": false
+          },
+          {
+            "bounds": {
+              "height": 1080,
+              "width": 1920,
+              "y": 0,
+              "x": 0
+            },
+            "device": "\\\\.\\DISPLAY2",
+            "primary": true
+          }
+        ]
+      },
+      "windows": [
+        {
+          "id": 1,
+          "initiallyVisible": false,
+          "displayId": 4128473448
+        }
+      ],
+      "events": [
+        {
+          "event": "show",
+          "id": 1,
+          "displayId": 4128473448
+        }
+      ]
+    }
+  ],
+  "pageErrors": [],
+  "sourceHashes": {
+    "src/shared/model-traffic.ts": "49ad143a0b850ef87a00170fe632f68963efde2c886f0844e43cf3c9de721d46",
+    "src/main/engineering/model-traffic.ts": "0527b30c042f069554b340a367ee8e489b75ee9ecd25e278d313d6220f7fdd76",
+    "src/main/engineering/model.ts": "b6c7d1e2ed9524c85bb54dd3d18c1843b46d786277c28266617e2251cf469db2",
+    "src/main/engineering/stream.ts": "d5bc5a1c04c5584d0c1f97810ce3471cb05d78a780d58d2b9d11abb18a58eada",
+    "src/main/engineering/service.ts": "f3544720ef74e0edc192fb209ce4e061c93b4cd0ffbd538ea8b6a31add88d7d2",
+    "src/shared/engineering.ts": "17fd47fdc467e72e7a0e4d5db8b04452162736e2fe1aa869bcf00233489b26f6",
+    "src/renderer/src/engineering/EngineeringPage.tsx": "2ddd5a0dd2824d473ea0b507b55ccdb2e9a1abd4949695bc618ee1f754de6e70",
+    "src/renderer/src/engineering/ModelTraffic.tsx": "881f40235a6c2a2f52959840c89968fb990f737e22a347ec2583515d73ffa233",
+    "src/renderer/src/engineering/model-traffic.css": "c4e42f2463b42554e6202b56f829f3ae65c594777768c5c681e3c15ec7eb089e",
+    "scripts/model-traffic.cjs": "b14d623015716af5f410bd5de23c90a5da543cf3afce4cfdf3386ed3741bd3d9",
+    "scripts/model-traffic-smoke.cjs": "106d643fcbbde2de5643fb95a718e536d5b71fab563e84b9f95eb4752125a8a0",
+    "scripts/test-display.cjs": "75d49c97a6d21fe66b40ffb2831d88b0c34602f3d13cf14c206e31706fe6265a",
+    "scripts/fixtures/test-display-entry.cjs": "13beb41d0ba547fb2a48ea8379f266947cd09e2876377f625112f9973206ebf1",
+    "scripts/general-assistant-smoke.cjs": "9aa68e38029b7a9fb5aa33c62a38199c2e901c11bdecbacd7d8373295fadb462",
+    "package.json": "7e9dc33ecaf202ffd58c7a460d8f8c65d39949d3bc495935ca1fc65b5b482c7f"
+  },
+  "buildHashes": {
+    "out/main/index.js": "98fc48785e602dc1ef0dfe68fed3ccebcde36ba9c380d9fd2f80af48bcd5fae5",
+    "out/renderer/index.html": "873b2a761524430eb60f9124655720e435b69e4d0673680ced6f7ad7ac58cbff"
+  },
+  "changesSinceVerification": [],
+  "regression": {
+    "mode": "Initial npm test snapshot resumed in segments after test-environment fixes",
+    "passed": 42,
+    "failed": 0,
+    "scripts": [
+      {
+        "script": "node scripts/onboarding.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/onboarding-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/model-errors.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/model-traffic.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/model-traffic-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/model-evidence.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/model-evidence-reference.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-full-test.log"
+      },
+      {
+        "script": "node scripts/model-evidence-reference-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/reasoning.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/reasoning-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/model-assistant-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/model-assistant-contract-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/aliyun-import.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/aliyun-import-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/context-skills.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/agent-skills.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/general-assistant.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/assistant-workspace.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-tail.log"
+      },
+      {
+        "script": "node scripts/general-assistant-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/assistant-workspace-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/model-names-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/agent-configuration-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/prototype-html.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/design-lifecycle.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/project-manager-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/project-library-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/delivery-navigation-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/engineering-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/execution-plan-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/execution-budget.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/verification-evidence.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/verification-evidence-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/verification-live-regressions.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/verification-preparation.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/verification-processes.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/verification-preparation-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-verification-retry.log",
+        "initialStatus": 1,
+        "initialEvidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/research-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/roundtable-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/decision-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/discussion-budget-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      },
+      {
+        "script": "node scripts/novice-smoke.cjs",
+        "status": 0,
+        "evidence": ".runtime/model-traffic-regression-final.log"
+      }
+    ],
+    "addedDuringVerificationNotRun": [
+      "node scripts/verification-desktop-preparation.cjs",
+      "node scripts/verification-report-smoke.cjs"
+    ]
+  },
+  "focusedLogs": [
+    ".runtime/model-traffic-final-test.log",
+    ".runtime/model-traffic-final-smoke.log",
+    ".runtime/model-traffic-focused.log"
+  ],
+  "focusedStartedAt": "2026-09-28T10:14:32.334Z"
+}

@@ -1,6 +1,20 @@
 # Coprojer 功能与验证矩阵
 
-核对日期：2026-09-27。以本次源码、已有使用说明和实际测试结果为准。主图文教程在 [README](../README.md)，执行结果在 [验证报告](verification/2026-09-27-pomodoro-walkthrough.md)。
+更新日期：2026-09-28。产品入口见 [README](../README.md)，本次发布核验见 [发布验证](verification/2026-09-28-release.md)。9 月 27 日案例的实跑和截图记录继续保留原时间口径。
+
+## 2026-09-28 新增及增强能力
+
+| 功能 | 当前范围 | 说明与验证入口 |
+| --- | --- | --- |
+| 新手入门 | 配置准备、项目/功能进度、导航定位、暂停与恢复 | [指南](ONBOARDING.md)；test:onboarding |
+| 阿里云快速导入 | 型号识别、控制台授权、免费额度保护、预览装配 | [指南](ALIYUN_IMPORT.md)；test:aliyun |
+| 模型能力证据 | AA / Arena 分类、型号来源、候选匹配与确认应用 | [推荐](MODEL_RECOMMENDATIONS.md)；test:models、test:model-references |
+| 实例推理配置 | 已适配型号的独立档位/预算与项目隔离 | [说明](AGENT_REASONING.md)；test:reasoning |
+| 模型流量监控 | 按时间/连接统计请求、Token、失败率、耗时及趋势 | [说明](MODEL_TRAFFIC.md)；test:traffic |
+| 验证准备 | 缺口诊断、准备工具权限、独立复验、断点与失败保留 | [说明](VERIFICATION_PREPARATION.md)；test:verification |
+| 长任务上下文与收敛 | 大工具组整理、摘要扁平化、完整日志归档、无进展暂停、未完成交付保护与恢复 | [上下文证据](verification/2026-09-28-long-task-context.md)、[发布验证](verification/2026-09-28-release.md)；long-task-context.cjs、execution-convergence.cjs |
+
+这些入口已接入全量测试。实际通过状态与限制以发布报告为准；供应商实测、受控回复、原生桌面输入和人工验收各自说明。以下原有功能表中的“本轮”统一指 **2026-09-27 历史案例**，不将旧记录改写为当天新实测。
 
 ## 如何阅读
 

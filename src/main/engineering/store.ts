@@ -9,11 +9,14 @@ import { syncPrototypeBriefs } from '../../shared/prototype-workflow'
 import type { SkillDefinition } from '../../shared/engineering'
 import type { AgentConfig, EngineeringState, ModelConfig, Project } from '../../shared/engineering'
 import type { ExecutionCheckpoint } from './execution'
+import { cleanupVerificationRuns } from './files'
+import { nativeEvidenceSupported, pendingGaps } from './verification'
 
 export const uid = () => randomUUID()
 export const now = () => new Date().toISOString()
 interface DiskState {
   version: 1
+  onboarding?: EngineeringState['onboarding']
   defaultTeamAgentIds?: string[]
   assistant?: EngineeringState['assistant']
   defaultAssistantModelId?: EngineeringState['defaultAssistantModelId']
@@ -59,6 +62,7 @@ export class EngineeringStore {
       for (const agent of this.data.agents)
         agent.skillIds ??= builtinSkills.filter(s => s.roles.includes(agent.role) && s.requiredTools.every(t => agent.tools.includes(t))).map(s => s.id)
       for (const project of this.data.projects) {
+        cleanupVerificationRuns(project.root)
         project.features ??= []
         project.context ??= []
         project.events ??= []
@@ -75,6 +79,31 @@ export class EngineeringStore {
           feature.revision ??= 1
           feature.repairRound ??= 0
           feature.feedback ??= ''
+          // Preserve final human acceptance, but do not reuse unsupported native
+          // interaction claims from an older verifier in unfinished deliveries.
+          const invalid = feature.stage === 'done' ? [] : feature.results.filter(r => r.passed && !nativeEvidenceSupported(r.criterion, r))
+          if (invalid.length) {
+            for (const result of invalid) {
+              result.passed = false; result.status = 'unverified'
+              result.evidence = '旧报告缺少对应原生交互的有效证据，不能作为当前通过依据。原报告：' + result.evidence
+            }
+            delete feature.verificationFingerprint; delete feature.verificationContractFingerprint
+            const failedChecks = feature.verificationChecks?.filter(c => c.code !== 0) ?? []
+            if (!failedChecks.length && !feature.results.some(r => r.status === 'failed')) feature.verificationPending = true
+            if (feature.stage === 'acceptance') {
+              feature.stage = 'blocked'; feature.tasks.forEach(t => { t.done = false })
+              if (project.executionPlan?.status === 'waiting-acceptance' && project.executionPlan.orderedFeatureIds[project.executionPlan.currentIndex] === feature.id) project.executionPlan.status = 'stopped'
+            }
+            feature.feedback = '原生界面交互仍缺有效证据，旧报告不能据此通过。' +
+              (failedChecks.length ? '\n同时有实际检查失败：' + failedChecks.map(c => c.command).join('；') + '。失败记录保留。' : '') +
+              '\n' + invalid.map(r => r.criterion + '：' + r.evidence).join('\n')
+            if (feature.verificationPreparation) {
+              feature.verificationPreparation.phase = 'blocked'
+              feature.verificationPreparation.summary = feature.feedback
+              feature.verificationPreparation.gaps = pendingGaps(feature)
+            }
+            project.events.push({ id: uid(), at: now(), featureId: feature.id, kind: 'verification-invalidated', message: '旧报告有 ' + invalid.length + ' 项原生交互证据不完整，已保留原文并恢复未验证；未修改验收标准、修复轮次或最终人工验收。' })
+          }
         }
         normalizeContext(project)
         if (
@@ -98,8 +127,20 @@ export class EngineeringStore {
               if (['receiving', 'running'].includes(tool.status)) tool.status = 'error'
           }
         if (project.activity) {
-          for (const feature of project.features)
-            if (['developing', 'verifying'].includes(feature.stage)) feature.stage = 'blocked'
+          for (const feature of project.features) {
+            if (['developing', 'verifying'].includes(feature.stage)) {
+              if (feature.stage === 'verifying') feature.verificationPending = true
+              feature.stage = 'blocked'
+            }
+            const preparation = feature.verificationPreparation
+            if (preparation && ['diagnosing', 'preparing', 'rechecking'].includes(preparation.phase)) {
+              const attempt = preparation.attempts.at(-1)
+              if (attempt?.status === 'running') { attempt.status = 'interrupted'; attempt.result = '应用退出中断，已完成动作保留。'; attempt.nextStep = '继续验证，核对当前文件后接续。' }
+              preparation.phase = 'blocked'; preparation.summary = '上次验证条件准备或复验已中断，可继续验证。'
+              feature.verificationPending = true
+            }
+          }
+          if (project.executionPlan?.status === 'running') project.executionPlan.status = 'stopped'
           project.events.push({
             id: uid(),
             kind: 'interrupted',
@@ -228,7 +269,7 @@ export class EngineeringStore {
       project.features
         .map(
           (f) =>
-            `## ${f.title}\n\n子项目：${project.targets?.find((t) => t.id === f.targetId)?.name || '未分配'}\n模块：${f.module} · 范围：${f.scope} · 状态：${f.stage}\n\n${f.description}\n\n### 验收标准\n${f.criteria.map((c) => '- ' + c).join('\n')}\n\n### 实现方案\n${f.plan}\n\n### 验证\n${f.results.map((r) => '- ' + (r.passed ? '通过' : '未通过') + '：' + r.criterion + ' — ' + r.evidence).join('\n')}`,
+            `## ${f.title}\n\n子项目：${project.targets?.find((t) => t.id === f.targetId)?.name || '未分配'}\n模块：${f.module} · 范围：${f.scope} · 状态：${f.stage}\n\n${f.description}\n\n### 验收标准\n${f.criteria.map((c) => '- ' + c).join('\n')}\n\n### 实现方案\n${f.plan}\n\n### 验证\n${f.results.map((r) => '- ' + (r.status === 'unverified' ? '待补验证' : r.passed ? '通过' : '未通过') + '：' + r.criterion + ' — ' + r.evidence).join('\n')}`,
         )
         .join('\n\n')
     writeFileSync(join(directory, 'FEATURES.md'), this.redact(text))

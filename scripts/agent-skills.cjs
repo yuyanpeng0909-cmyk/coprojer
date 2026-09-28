@@ -3,6 +3,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const ts = require('typescript')
+const { allocationFixture } = require('./fixtures/arena.cjs')
+const { aaHtml } = require('./fixtures/aa.cjs')
+const realFetch = globalThis.fetch
+globalThis.fetch = async url => new Response(new URL(url).hostname === 'artificialanalysis.ai' ? aaHtml() : allocationFixture(String(url)), { headers: { 'content-type': 'text/html' } })
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coprojer-owned-skills-'))
 let modelReply = () => { throw Error('Unexpected model call') }
 const cache = new Map()
@@ -78,9 +82,12 @@ async function run() {
     assert.match(system,/AGENT_MODEL_ALLOCATION/)
     const input = JSON.parse(messages[0].content)
     assert.ok(!JSON.stringify(input).includes('cipher'))
-    return {text: JSON.stringify({choices: input.agents.map(a=>({agentId:a.id,modelId:a.role==='developer'?'model-b':'model-a',reason:'根据职责选择，能力待验证。'}))}),calls:[]}
+    return {text: JSON.stringify({choices: input.agents.map(a=>({agentId:a.id,modelId:input.constraints.find(c=>c.agentId===a.id).allowedModelIds[0]}))}),calls:[]}
   }
   const previous = store.data.agents.map(a=>a.modelId)
+  // Keep this regression on its original Arena metrics; AA has dedicated reasoning coverage.
+  const recommend = config.recommendAgentModels
+  config.recommendAgentModels = (id, preference, options = {}) => recommend(id, preference, { ...options, categories: options.categories || Object.fromEntries(store.data.agents.filter(a => !a.ownerProjectId).map(a => [a.id, a.role === 'planner' ? 'text' : a.role === 'designer' ? 'frontend' : 'coding'])) })
   const plan = await config.recommendAgentModels('model-a','质量优先')
   assert.deepEqual(store.data.agents.map(a=>a.modelId), previous, 'recommendation must not mutate assignment')
   assert.equal(plan.choices.length, store.data.agents.length)
@@ -92,6 +99,36 @@ async function run() {
   assert.throws(()=>config.applyAgentModels(stale.id),/变化/)
   modelReply = async () => ({ text: JSON.stringify({choices:store.data.agents.map(a=>({agentId:a.id,modelId:'hallucinated-model',reason:'bad'}))}),calls:[] })
   await assert.rejects(config.recommendAgentModels('model-a',''),/不存在/)
+  // The language model cannot bypass measured candidates or make up the displayed evidence.
+  modelReply = async (_c,_s,messages) => {const input=JSON.parse(messages[0].content);return {text:JSON.stringify({choices:input.agents.map(a=>({agentId:a.id,modelId:'model-a',reason:'Flash 更快，所有任务都选它。'}))}),calls:[]}}
+  await assert.rejects(config.recommendAgentModels('model-a','速度优先'),/能力证据/)
+  modelReply = async (_c,_s,messages) => {const input=JSON.parse(messages[0].content);return {text:JSON.stringify({choices:input.agents.map(a=>({agentId:a.id,modelId:input.constraints.find(c=>c.agentId===a.id).allowedModelIds[0],reason:'虚构排名与速度'}))}),calls:[]}}
+  const verified = await config.recommendAgentModels('model-a','')
+  assert.ok(verified.choices.every(c=>!c.reason.includes('虚构')))
+  assert.ok(verified.evidence.every(e=>e.status==='fresh'))
+  await assert.rejects(config.recommendAgentModels('model-a','',{categories:{developer:'invented-category'}}),/分类/)
+  await assert.rejects(config.recommendAgentModels('model-a','',{policy:'speed'}),/策略/)
+  const projectAgent = {...store.data.agents[0],id:'project-agent',ownerProjectId:'project-fixture',modelId:'model-b',skillIds:[]}
+  store.data.agents.push(projectAgent)
+  const scoped = await config.recommendAgentModels('model-a','')
+  assert.ok(!scoped.choices.some(c=>c.agentId==='project-agent'))
+  const previousAgents = store.data.agents, originalSave=store.save.bind(store)
+  store.save=()=>{throw Error('disk full')}
+  assert.throws(()=>config.applyAgentModels(scoped.id),/disk full/);assert.equal(store.data.agents,previousAgents)
+  store.save=originalSave;config.applyAgentModels(scoped.id)
+  assert.equal(store.data.agents.find(a=>a.id==='project-agent').modelId,'model-b')
+  const beforeFailure=JSON.stringify(store.data.agents)
+  globalThis.fetch=async()=>{throw Error('fetch failed')}
+  modelReply=()=>{throw Error('No advisor call expected without evidence')}
+  const unavailable=await config.recommendAgentModels('model-a','')
+  assert.equal(unavailable.usage,undefined);assert.ok(unavailable.choices.every(c=>c.modelId===c.previousModelId&&!c.supported))
+  assert.ok(unavailable.evidence.every(e=>e.status==='unavailable'))
+  assert.equal(JSON.stringify(store.data.agents),beforeFailure)
+  globalThis.fetch=async url=>new Response(allocationFixture(String(url),'model-with-unmatched-suffix','coding-model'),{headers:{'content-type':'text/html'}})
+  modelReply = async (_c,_s,messages) => {const input=JSON.parse(messages[0].content);return {text:JSON.stringify({choices:input.agents.map(a=>({agentId:a.id,modelId:input.constraints.find(c=>c.agentId===a.id).allowedModelIds[0]}))}),calls:[]}}
+  const incomplete = await config.recommendAgentModels('model-a','')
+  assert.ok(incomplete.choices.filter(c=>c.previousModelId==='model-a').every(c=>!c.supported&&c.modelId==='model-a'),'unranked current model is not assumed worse')
+  assert.ok(incomplete.choices.filter(c=>c.previousModelId==='model-a').every(c=>c.reason.includes('未上榜不代表能力差')))
   console.log('PASS: standard SKILL.md, YAML, package snapshot, legacy migration, instance isolation, on-demand reads, confirmed install, cancellation, restart persistence, model allocation, stale/hallucinated plan rejection')
 }
-run().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>fs.rmSync(root,{recursive:true,force:true}))
+run().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{globalThis.fetch=realFetch;fs.rmSync(root,{recursive:true,force:true})})

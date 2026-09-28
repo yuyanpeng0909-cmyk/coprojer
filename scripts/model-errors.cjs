@@ -6,7 +6,7 @@ function load(file) {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText
-  new Function('exports', 'require', code)(api, () => load('src/main/engineering/stream.ts'))
+  new Function('exports', 'require', code)(api, name => load(require('node:path').resolve(require('node:path').dirname(file), name + '.ts')))
   return api
 }
 const { complete } = load('src/main/engineering/model.ts')

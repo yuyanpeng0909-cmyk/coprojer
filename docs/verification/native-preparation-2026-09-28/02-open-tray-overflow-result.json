@@ -1,0 +1,80 @@
+{
+  "events": [
+    {
+      "y": 1060,
+      "at": "2026-09-28T10:49:09.0147184Z",
+      "target": {
+        "name": "通知 V 形",
+        "className": "Button",
+        "pid": 11004,
+        "offscreen": false,
+        "type": "ControlType.Button",
+        "rect": {
+          "y": 1040,
+          "width": 24,
+          "height": 40,
+          "x": 1640
+        },
+        "runtimeId": [
+          42,
+          65876
+        ]
+      },
+      "action": "native-open-owned-tray-container",
+      "x": 1652
+    }
+  ],
+  "windows": [
+    {
+      "name": "",
+      "className": "NotifyIconOverflowWindow",
+      "pid": 11004,
+      "offscreen": false,
+      "type": "ControlType.Pane",
+      "rect": {
+        "y": 880,
+        "width": 160,
+        "height": 160,
+        "x": 1572
+      },
+      "runtimeId": [
+        42,
+        65882
+      ]
+    },
+    {
+      "name": "",
+      "className": "Shell_TrayWnd",
+      "pid": 11004,
+      "offscreen": false,
+      "type": "ControlType.Pane",
+      "rect": {
+        "y": 1040,
+        "width": 1920,
+        "height": 40,
+        "x": 0
+      },
+      "runtimeId": [
+        42,
+        65808
+      ]
+    },
+    {
+      "name": "",
+      "className": "Shell_SecondaryTrayWnd",
+      "pid": 11004,
+      "offscreen": false,
+      "type": "ControlType.Pane",
+      "rect": {
+        "y": 824,
+        "width": 1536,
+        "height": 40,
+        "x": 1920
+      },
+      "runtimeId": [
+        42,
+        132612
+      ]
+    }
+  ]
+}

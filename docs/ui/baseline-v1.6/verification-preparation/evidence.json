@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-28T07:13:22.787Z",
+  "actualChecks": 2,
+  "layouts": [
+    "1280x840",
+    "860x600"
+  ],
+  "fixture": "local deterministic model; real Electron UI and Node command",
+  "stages": [
+    "diagnosing",
+    "preparing",
+    "rechecking",
+    "blocked"
+  ],
+  "fingerprints": {
+    "src/main/engineering/service.ts": "997bba934356d7ee18c463cd31da276016fa28c37ee6167134d7b848429b69c0",
+    "src/main/engineering/files.ts": "a699548fb711a67725dc9ef42e6b116a595e9d995ba6558fbcc77146ffa8b689",
+    "src/main/engineering/execution.ts": "af3b6152eb95e53ae3307577b3ab0c8f961fab5a3e99823a0da68abb74dbd964",
+    "src/main/engineering/verification.ts": "d035032f47fc2b0fce4a43f6ce07faa77b123fc9fbfde38d603aec0002ad0355",
+    "src/main/engineering/command-supervisor.ts": "6f7aa33919854d26d672df6e215490f9942fb0063131744f578bfc5884f8f082",
+    "src/renderer/src/engineering/VerificationProgress.tsx": "c9fe6574c033ad0765d995559f82a86b84f21aa53ccbcfb4f64f3818fc073b95",
+    "out/main/index.js": "02471f4c7e67fd35c66948497b9791496de4d4404edb1ca47aaa71e62a326fa9",
+    "out/renderer/index.html": "d96eb32d23d4a6d889bad4801bd5af0e4bc65481b182d5a5128cf9074032c112"
+  },
+  "checks": [
+    {
+      "id": "check-1",
+      "command": "node tests/verify.cjs",
+      "code": 0,
+      "output": "UI_REAL_CHECK_PASSED\n",
+      "sourceFingerprint": "44160a27c4c8bec595878d62682f363eaeca015e0f463254f276d8839f625b1f",
+      "at": "2026-09-28T07:13:18.299Z",
+      "durationMs": 561,
+      "evidenceKind": "unit",
+      "evidenceKinds": [
+        "unit"
+      ]
+    }
+  ],
+  "errors": []
+}

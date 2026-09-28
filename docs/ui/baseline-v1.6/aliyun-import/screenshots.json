@@ -1,0 +1,56 @@
+[
+  {
+    "file": "entry-light-1280.png",
+    "width": 1280,
+    "height": 840,
+    "maximized": false
+  },
+  {
+    "file": "entry-light-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  },
+  {
+    "file": "01-key-entry-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "02-free-quota-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "quota-light-1280.png",
+    "width": 1280,
+    "height": 840,
+    "maximized": false
+  },
+  {
+    "file": "quota-light-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  },
+  {
+    "file": "quota-dark-860.png",
+    "width": 860,
+    "height": 600,
+    "maximized": false
+  },
+  {
+    "file": "03-assembly-preview-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  },
+  {
+    "file": "04-imported-models-maximized.png",
+    "width": 1920,
+    "height": 1040,
+    "maximized": true
+  }
+]

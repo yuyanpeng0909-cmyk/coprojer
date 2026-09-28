@@ -11,6 +11,7 @@ export async function readModelStream(
   response: Response,
   protocol: string,
   emit: DeltaListener,
+  onUsage?: (usage: unknown) => void,
 ): Promise<any> {
   if (!response.body) throw new Error('模型服务没有返回数据流。')
   const reader = response.body.getReader(),
@@ -23,6 +24,7 @@ export async function readModelStream(
   const chat: any = { content: '', reasoning_content: '', tool_calls: [] }
   const blocks: any[] = [],
     items: any[] = []
+  let usage: Record<string, unknown> = {}
   const send = (kind: ModelDelta['kind'], value: unknown, extra = {}) => {
     if (typeof value === 'string' && (value || kind === 'tool'))
       emit({ kind, text: value, ...extra })
@@ -39,6 +41,12 @@ export async function readModelStream(
       return
     }
     const e = JSON.parse(data)
+    const reportedUsage = e.usage ?? e.message?.usage ?? e.response?.usage
+    if (reportedUsage && typeof reportedUsage === 'object') {
+      // message_delta and usage-only Chat chunks are cumulative snapshots.
+      usage = { ...usage, ...reportedUsage }
+      onUsage?.(usage)
+    }
     if (typeof e.model === 'string') reportedModel = e.model
     if (e.type === 'message_start' && typeof e.message?.model === 'string') reportedModel = e.message.model
     if (e.error || ['error', 'response.failed', 'response.incomplete'].includes(e.type))

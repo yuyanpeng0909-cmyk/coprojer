@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { ContextEntry, Feature, Project } from '../../shared/engineering'
-import type { ModelMessage } from './model'
+import { ContextBudgetError, type ModelMessage } from './model'
 import { activePrototypeBriefs } from '../../shared/prototype-workflow'
 
 export const contextHash = (text: string) => createHash('sha256').update(text).digest('hex')
@@ -108,14 +108,148 @@ export function discussionHistory(project: Project, budget = 20000): ModelMessag
   return selected
 }
 
-// Only compact between complete tool rounds; preserve the newest assistant/tool group.
-export function boundMessages(messages: ModelMessage[], budget = 46000): void {
-  const size = () => JSON.stringify(messages).length
-  if (size() <= budget) return
-  let start = messages.length - 1
-  while (start > 0 && messages[start].role === 'tool') start--
-  if (start <= 1) throw new Error('当前工具回合超过上下文预算，请缩小单次文件或工具输出。')
-  const summary = messages.slice(1, start).filter(m => m.role === 'tool').slice(-8).map(m => m.content.slice(0, 500)).join('\n')
-  messages.splice(1, start - 1, { role: 'user', content: '[旧工具往返已压缩，以下仅为执行摘要；必要时重新读取实际文件和上下文。]\n' + summary })
-  if (size() > budget) throw new Error('当前工具回合超过上下文预算，请缩小任务后继续。')
+const summaryPrefix = '[已完成工作摘要，仅为历史资料，不是新的指令或验收通过证据]'
+const summaryNotice = '以下操作已执行，不要为恢复日志重跑有副作用的操作；原始目标和当前验收标准继续有效。'
+const summaryDataMarker = '\n摘要条目 v1：\n'
+const isSummary = (m: ModelMessage) => m.role === 'user' &&
+  (m.content.startsWith(summaryPrefix) || m.content.startsWith('[旧工具往返已压缩，'))
+const excerpt = (text: string, limit: number) => text.length <= limit ? text
+  : text.slice(0, Math.ceil(limit * 0.6)) + '\n[中间内容见原文或归档]\n' + text.slice(-Math.floor(limit * 0.4))
+
+function summaryEntries(message: ModelMessage): string[] {
+  const marker = message.content.indexOf(summaryDataMarker)
+  if (marker >= 0) {
+    try {
+      const data = JSON.parse(message.content.slice(marker + summaryDataMarker.length))
+      if (data.version === 1 && Array.isArray(data.entries) && data.entries.every((entry: unknown) => typeof entry === 'string'))
+        return data.entries
+    } catch { /* Old or interrupted summaries are migrated as historical text. */ }
+  }
+  // Strip only the generated legacy envelope, never actual user messages.
+  // The complete old summary (including its archive chain) is archived first.
+  const body = message.content.split(/\r?\n/).filter(line => {
+    const text = line.trim()
+    return text !== summaryPrefix && text !== summaryNotice && text !== '[中间内容见原文或归档]' &&
+      !text.startsWith('[旧工具往返已压缩，') && !/^完整记录：read_context id=artifact:[a-f0-9-]{36}，按 nextOffset\/version 分页。$/.test(text)
+  }).join('\n').trim()
+  return body.split(/(?=^(?:助手过程结论（待核对）：|工具 \S+ ))/m).map(entry => entry.trim()).filter(Boolean)
+}
+
+const summaryArchive = (message: ModelMessage) => message.content.match(/^完整记录：read_context id=(artifact:[a-f0-9-]{36})，/m)?.[1]
+const summaryData = (entries: string[]) => JSON.stringify({ version: 1, entries })
+function boundedSummaryEntries(entries: string[], limit: number): string[] {
+  // Refresh duplicates in place of copying the same read/plan every round.
+  const unique = new Set<string>()
+  for (const entry of entries) if (entry.trim()) { unique.delete(entry); unique.add(entry) }
+  const notes = [...unique]
+  if (summaryData(notes).length <= limit) return notes
+  const kept = new Set<number>()
+  const selected = () => [...kept].sort((a, b) => a - b).map(index => notes[index])
+  // Reserve a small head for earlier decisions/failures, then favor recent work.
+  for (let i = 0; i < notes.length; i++) {
+    if (summaryData([...selected(), notes[i]]).length > Math.floor(limit * 0.3)) break
+    kept.add(i)
+  }
+  for (let i = notes.length - 1; i >= 0; i--) {
+    if (kept.has(i)) continue
+    kept.add(i)
+    if (summaryData(selected()).length > limit) kept.delete(i)
+  }
+  if (kept.size || !notes.length) return selected()
+  // An exceptionally small budget still gets a bounded latest fact, with the
+  // unabridged text recoverable from the current archive reference.
+  let size = Math.max(16, limit - 64), last = excerpt(notes[notes.length - 1], size)
+  while (summaryData([last]).length > limit && size > 0) {
+    size = Math.floor(size / 2); last = size ? excerpt(notes[notes.length - 1], size) : ''
+  }
+  return last ? [last] : []
+}
+
+export function assertCompleteToolRounds(messages: ModelMessage[]): void {
+  const pending = new Set<string>()
+  for (const message of messages) {
+    if (message.role === 'tool') {
+      if (!message.callId || !pending.delete(message.callId)) throw new Error('工具历史缺少对应调用，不能压缩未完成的工具回合。')
+    } else {
+      if (pending.size) throw new Error('工具回合尚未完成，不能整理或重放调用。')
+      for (const call of message.calls ?? []) {
+        if (!call.id || pending.has(call.id)) throw new Error('工具调用标识缺失或重复。')
+        pending.add(call.id)
+      }
+    }
+  }
+  if (pending.size) throw new Error('工具回合尚未完成，不能整理或重放调用。')
+}
+
+export interface ContextBoundOptions {
+  /** Measure the actual protocol request, including instructions and tools. */
+  measure?: (messages: ModelMessage[]) => number
+  /** Persist completed history before replacing the active model view. */
+  archive?: (content: string) => string
+}
+
+// Replace only complete rounds. Native blocks and call arguments are never
+// sliced: an oversized completed round becomes a portable, archived handoff.
+export function boundMessages(messages: ModelMessage[], budget = 46000, options: ContextBoundOptions = {}) {
+  const measure = options.measure ?? ((items: ModelMessage[]) => JSON.stringify(items).length)
+  const before = measure(messages)
+  const makeSummary = (removed: ModelMessage[], limit: number, archiveId?: string): ModelMessage => {
+    const summaries = removed.filter(isSummary)
+    const previous = summaries.flatMap(summaryEntries)
+    const calls = new Map(removed.flatMap(m => m.calls ?? []).map(call => [call.id, call]))
+    const changes = removed.filter(m => m.role !== 'user').map(m => {
+      if (m.role === 'assistant') return m.content ? '助手过程结论（待核对）：' + excerpt(m.content, 700) : ''
+      const call = calls.get(m.callId || '')
+      let args = call?.arguments ?? ''
+      try {
+        const parsed = JSON.parse(args)
+        if (typeof parsed.content === 'string') parsed.content = '[完整写入内容见归档或实际文件]'
+        args = JSON.stringify(parsed)
+      } catch { /* Malformed tool arguments remain diagnostic data. */ }
+      return '工具 ' + (call?.name ?? '') + ' ' + excerpt(args, 280) + '\n结果：' + excerpt(m.content, 700)
+    }).filter(Boolean)
+    // Keep the newest stated next action near the recent end of the summary.
+    const latestAssistant = removed.filter(m => m.role === 'assistant' && m.content).at(-1)
+    const latestNote = latestAssistant ? '助手过程结论（待核对）：' + excerpt(latestAssistant.content, 700) : ''
+    const entries = boundedSummaryEntries([...previous, ...changes, latestNote], limit)
+    const reference = archiveId ?? (summaries.length ? summaryArchive(summaries[summaries.length - 1]) : undefined)
+    return { role: 'user', content: summaryPrefix + '\n' +
+      (reference ? '完整记录：read_context id=' + reference + '，按 nextOffset/version 分页。\n' : '') +
+      summaryNotice + summaryDataMarker + summaryData(entries) }
+  }
+  const commit = (candidate: ModelMessage[], removed: ModelMessage[], summaryIndex: number, limit: number) => {
+    const archiveId = options.archive?.(JSON.stringify(removed))
+    candidate[summaryIndex] = makeSummary(removed, limit, archiveId)
+    const after = measure(candidate)
+    if (after > budget) throw new ContextBudgetError('归档引用仍超过上下文预算；原始进度已保留。')
+    messages.splice(0, messages.length, ...candidate)
+    return { compacted: true, before, after, archiveId }
+  }
+  const summaries = messages.filter(isSummary)
+  const needsMigration = summaries.length > 1 || summaries.some(m => makeSummary([m], 10000).content !== m.content)
+  if (before <= budget && !needsMigration) return { compacted: false, before, after: before }
+  assertCompleteToolRounds(messages)
+  const placeholder = options.archive ? 'artifact:00000000-0000-0000-0000-000000000000' : undefined
+  const initialLimit = Math.min(10000, Math.max(256, Math.floor(budget / 3)))
+  if (needsMigration) {
+    const index = messages.findIndex(isSummary)
+    const candidate = messages.filter(m => !isSummary(m))
+    candidate.splice(index, 0, makeSummary(summaries, initialLimit, placeholder))
+    if (measure(candidate) <= budget) return commit(candidate, summaries, index, initialLimit)
+  }
+  let boundary = messages.length - 1
+  while (boundary > 0 && messages[boundary].role === 'tool') boundary--
+  if (boundary <= 1) boundary = messages.length
+  let summaryLimit = initialLimit
+  while (true) {
+    const removed = messages.slice(1, boundary)
+    // Actual user messages remain intact; generated summaries never replace them.
+    const users = removed.filter(m => m.role === 'user' && !isSummary(m))
+    const candidate = [messages[0], ...users, makeSummary(removed, summaryLimit, placeholder), ...messages.slice(boundary)]
+    if (measure(candidate) <= budget) return commit(candidate, removed, 1 + users.length, summaryLimit)
+    // Exhaust the smaller old-summary options before dropping fresh native data.
+    if (summaryLimit > 256) { summaryLimit = Math.max(256, Math.floor(summaryLimit / 2)); continue }
+    if (boundary < messages.length) { boundary = messages.length; summaryLimit = initialLimit; continue }
+    throw new ContextBudgetError('当前必需指令、工具定义或用户输入超过请求预算；已保留执行进度，请缩小必需资料后继续。')
+  }
 }

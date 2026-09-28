@@ -286,8 +286,18 @@ async function main() {
     await invoke('generatePrototype', pid, '按最终需求更新已讨论的首页。', designer.id)
     await waitFor(async () => !(await project()).designActivity, 'final prototype')
     await invoke('acceptPrototypeAndPreparePrd', pid, (await project()).prototypes.at(-1).id)
+    await idle()
+    const generatedPrd = (await project()).requirementsDocument
+    const prdHeading = generatedPrd.split(/\r?\n/).find(line => /^#\s+/.test(line)).replace(/^#\s+/, '')
     await page.getByRole('button', { name: '确认完整需求', exact: true }).click()
     dialog = page.getByRole('region', { name: '需求与规格审阅', exact: true })
+    // A PRD update must refresh the preserved review snapshot before approval.
+    await waitFor(async () => {
+      if (await dialog.locator('.specification-warning').count())
+        await dialog.getByRole('button', { name: '刷新审阅内容', exact: true }).click()
+      return await dialog.locator('.specification-reader').getByRole('heading', { name: prdHeading, exact: true }).count() > 0 &&
+        await dialog.getByRole('button', { name: '确认并保存基线', exact: true }).isEnabled()
+    }, 'fresh requirements review after PRD generation')
     await dialog.getByRole('button', { name: '确认并保存基线', exact: true }).click()
     await dialog.getByText('已确认基线', {exact:true}).waitFor()
     await dialog.getByRole('button', {name:'继续讨论',exact:true}).click()

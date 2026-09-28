@@ -29,7 +29,7 @@ async function main() {
     }
     throw new Error('Timed out: ' + label)
   }
-  const idle = async (id) => waitFor(async () => !(await project(id)).activity, 'project idle')
+  const idle = async (id, timeout) => waitFor(async () => !(await project(id)).activity, 'project idle', timeout)
   async function launch() {
     desktop = await electron.launch({ args: ['.'], env, timeout: 30000 })
     page = await desktop.firstWindow()
@@ -420,7 +420,9 @@ async function main() {
     provider.control.failing = true
     const reviewsBefore = provider.control.reviews
     await invoke('runFeature', pid, failure)
-    await idle(pid)
+    // Four development/review rounds launch real npm processes on Windows.
+    // Keep the rounds/assertions intact while allowing their bounded runtime.
+    await idle(pid, 120000)
     p = await project(pid)
     assert.equal(p.features.find((f) => f.id === failure).stage, 'blocked')
     assert.equal(p.features.find((f) => f.id === failure).repairRound, 3)

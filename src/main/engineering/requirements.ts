@@ -111,7 +111,7 @@ export class RequirementsWorkspace {
   constructor(
     private deps: {
       store: EngineeringStore
-      model(id: string): Connection
+      model(id: string, agent?: AgentConfig): Connection
       save(p: Project): void
       context(p: Project): string
       roleAgent(p: Project, role: AgentRole): AgentConfig
@@ -445,7 +445,7 @@ export class RequirementsWorkspace {
       throw new Error('请填写有效的原型设计要求。')
     modelId ||= p.designModelId || this.deps.roleAgent(p, 'designer').modelId || p.discussionModelId
     const instructions = this.deps.agentInstructions(p, 'designer', modelId) + '\n原型运行于无同源权限的沙箱，交互状态使用内存变量；不要使用 localStorage、sessionStorage、cookie 或外部接口。开发角色会在正式项目中接入真实状态。'
-    const connection = this.deps.model(modelId),
+    const connection = this.deps.model(modelId, this.deps.roleAgent(p, 'designer')),
       controller = new AbortController()
     const target = targetId ? p.targets?.find((t) => t.id === targetId) : undefined
     if (targetId && !target) throw new Error('子项目不存在。')

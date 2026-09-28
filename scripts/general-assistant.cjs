@@ -3,6 +3,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const ts = require('typescript')
+const { arenaHtml, categories } = require('./fixtures/arena.cjs')
+const realFetch = globalThis.fetch
+globalThis.fetch = async url => new Response(arenaHtml(categories[new URL(url).pathname], [{ model: 'execution-id', score: 1500, input: 1, output: 2 }]), { headers: { 'content-type': 'text/html' } })
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coprojer-general-assistant-'))
 const cache = new Map(), calls = []
 let respond, candidates = [{name:'verified-skill',description:'真实候选测试',url:'https://github.com/fixture/skills/tree/main/verified'}]
@@ -86,4 +89,4 @@ async function main(){
   assistant.clearAssistantChat();assert.deepEqual(new EngineeringStore().data.assistantChat,[])
   console.log('PASS: independent default/one-shot routing, frozen requests, provider model receipts, history/restart, saved per-agent recommendations, failed-search preservation, empty results, explicit clear, unchanged agent models/skills/credentials')
 }
-main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>fs.rmSync(root,{recursive:true,force:true}))
+main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{globalThis.fetch=realFetch;fs.rmSync(root,{recursive:true,force:true})})

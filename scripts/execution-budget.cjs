@@ -28,6 +28,9 @@ function fixture() {
   const root = path.join(sandbox, `project-${serial}`)
   fs.mkdirSync(path.join(root, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(root, 'value.cjs'), 'exports.sum = (a, b) => a + b')
+  // Budget tests make distinct reads; repeated reads have a separate, earlier
+  // no-progress pause covered by execution-convergence.cjs.
+  for (let i = 1; i <= 40; i++) fs.writeFileSync(path.join(root, 'budget-context-' + i + '.txt'), 'Distinct context ' + i)
   fs.writeFileSync(path.join(root, 'tests/behavior.cjs'), "const assert = require('node:assert/strict'); assert.equal(require('../value.cjs').sum(2, 3), 5); console.log('behavior verified')")
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'isolated-budget-fixture', scripts: { test: 'node tests/behavior.cjs' } }))
   const service = new EngineeringService()
@@ -51,11 +54,12 @@ function freshReview(seen) {
 function provider({ finishAtLimit = false, test = true } = {}) {
   const seen = { developers: 0, reviewers: [], finals: 0, finish: false }
   model.complete = async (connection, system, messages, tools) => {
+    if (system.includes('VERIFICATION_DIAGNOSIS')) return { text: JSON.stringify({ gaps: [{ criterion: '相加正确', disposition: 'unknown', reason: '回归夹具没有准备能力。', nextStep: '补充实际检查。' }] }), calls: [] }
     if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: '开发完成', calls: [] } }
     seen.reviewers.push(structuredClone(messages))
     if (seen.finish || finishAtLimit && !tools.length) return result()
     const n = seen.reviewers.length
-    const call = { id: `call-${n}`, name: test && n === 1 ? 'run_command' : 'read_file', arguments: JSON.stringify(test && n === 1 ? { program: 'node', args: ['tests/behavior.cjs'] } : { path: 'value.cjs' }) }
+    const call = { id: `call-${n}`, name: test && n === 1 ? 'run_command' : 'read_file', arguments: JSON.stringify(test && n === 1 ? { program: 'node', args: ['tests/behavior.cjs'] } : { path: 'budget-context-' + n + '.txt' }) }
     if (!tools.length) seen.finals++
     return { text: '', calls: [call], reasoning: 'reasoning-marker', responseItems: [{ type: 'reasoning', id: `r-${n}`, encrypted_content: 'opaque-marker' }], anthropicBlocks: [{ type: 'thinking', thinking: 'thinking-marker', signature: 'signature-marker' }] }
   }
@@ -121,10 +125,11 @@ async function main() {
   missingTest.finish = true
   await run(service)
   assert.equal(feature.stage, 'blocked', 'model claims cannot replace missing test evidence after resuming')
-  assert.equal(feature.repairRound, 3)
-  assert.equal(missingTest.developers, 4, 'resume does not add another initial development or expand repair budget')
+  assert.equal(feature.repairRound, 0)
+  assert.equal(missingTest.developers, 1, 'missing evidence does not spend code repair budget')
+  assert.equal(feature.verificationPending, true)
   assert.match(feature.results[0].evidence, /缺少实际执行/)
-  console.log('PASS: resumed model claims cannot bypass actual tests or the three-repair limit')
+  console.log('PASS: resumed model claims cannot bypass actual tests or spend repair budget without a defect')
 
   ;({ service, project, feature } = fixture())
   fs.writeFileSync(path.join(project.root, 'value.cjs'), 'exports.sum = (a, b) => a - b')
@@ -133,7 +138,9 @@ async function main() {
   failedTest.finish = true
   await run(service)
   assert.equal(feature.stage, 'blocked')
-  assert.ok(project.events.some(e => e.kind === 'repair' && e.message.includes('实际检查存在失败命令')), 'failed actual command must survive checkpoint')
+  assert.ok(feature.verificationChecks.some(c => c.code !== 0), 'failed actual command must survive checkpoint')
+  assert.ok(feature.results.some(r => r.status === 'failed'), 'restored failing evidence must remain a failure')
+  assert.ok(project.events.some(e => e.kind === 'repair'), 'restored failures must route to the original repair loop')
   console.log('PASS: failed commands remain failures across checkpoint recovery')
 
   ;({ service, project, feature } = fixture())
@@ -149,8 +156,8 @@ async function main() {
   legacy.finish = true
   await run(service)
   assert.equal(feature.stage, 'blocked')
-  assert.equal(feature.repairRound, 3)
-  assert.equal(legacy.developers, 1, 'legacy recovery must preserve remaining repair budget')
+  assert.equal(feature.repairRound, 2)
+  assert.equal(legacy.developers, 0, 'legacy recovery preserves repair budget when only evidence is missing')
   console.log('PASS: existing 36-step failures recover directly into review without resetting repair rounds')
 
   ;({ service, project, feature } = fixture())
@@ -189,7 +196,7 @@ async function main() {
   console.log('PASS: final-summary network failure is reported while completed progress stays recoverable')
 
   const runtime = path.join(project.root, '.runtime')
-  fs.mkdirSync(runtime)
+  fs.mkdirSync(runtime, { recursive: true })
   for (let i = 0; i < 650; i++) fs.writeFileSync(path.join(runtime, `${i}.json`), '{}')
   const discovered = listFiles(project.root)
   assert.ok(discovered.includes('value.cjs') && discovered.includes('tests/behavior.cjs'))
