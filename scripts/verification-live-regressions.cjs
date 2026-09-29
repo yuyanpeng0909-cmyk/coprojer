@@ -16,6 +16,22 @@ async function main() {
   assert.equal(result.code, 0); assert.match(result.output, /NESTED_TEST_EXECUTED/)
   console.log('PASS: independent reviewer really runs nested test:* commands')
 
+  fs.writeFileSync(path.join(ctx.root, 'tests/powershell-cache.cjs'), [
+    'const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path")',
+    'const cache=process.env.PSModuleAnalysisCachePath',
+    'assert.ok(cache,"child PowerShell module cache must have an explicit runtime path")',
+    'const runtime=path.resolve(".runtime")+path.sep',
+    'assert.ok(path.resolve(cache).startsWith(runtime),"cache must stay in this project runtime")',
+    'fs.writeFileSync(cache,"controlled generated module metadata")',
+    'console.log("MODULE_CACHE_ISOLATED")',
+  ].join(';'))
+  const beforeModuleCache = sourceFingerprint(ctx.root)
+  const moduleCache = JSON.parse(await executeTool(ctx.service.store, ctx.project, 'f', 'reviewer', 'run_command', { program:'node', args:['tests/powershell-cache.cjs'] }, signal))
+  assert.equal(moduleCache.code, 0, moduleCache.output)
+  assert.match(moduleCache.output, /MODULE_CACHE_ISOLATED/)
+  assert.equal(sourceFingerprint(ctx.root), beforeModuleCache, 'module discovery cannot invalidate an unchanged review')
+  console.log('PASS: child module cache stays outside source fingerprint without ignoring application files')
+
   fs.mkdirSync(path.join(ctx.root, 'verification/native'), { recursive: true })
   fs.writeFileSync(path.join(ctx.root, 'verification/README.md'), 'Approved scope stays an input.')
   fs.writeFileSync(path.join(ctx.root, 'verification/native/settings.json'), '{"threshold":2}')

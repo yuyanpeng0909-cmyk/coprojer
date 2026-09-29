@@ -14,7 +14,7 @@ import { createServer } from 'node:net'
 import { createHash } from 'node:crypto'
 import { ExecutionBudgetPause, executionKey, executionStepLimit, diagnosisStepLimit, preparationStepLimit, preparationRoundLimit, verificationStatus, commandEvidenceKinds, type ExecutionRole, type CommandEvidence, type ExecutionCheckpoint } from './execution'
 import { ExecutionProgress, ExecutionProgressPause } from './execution-progress'
-import { digest, verificationContract, verificationEnvironment, commandFailure, pendingGaps, diagnosedGaps, preparationPrompt, interactionEvidenceBoundary, nativeEvidenceSupported, runtimeMeasurements, measurementSummary } from './verification'
+import { digest, verificationContract, verificationEnvironment, commandFailure, pendingGaps, diagnosedGaps, preparationPrompt, interactionEvidenceBoundary, nativeEvidenceSupported, runtimeMeasurements, measurementSummary, measuredDuration, currentCommandEvidence } from './verification'
 import { assembleContext, boundMessages, normalizeContext, readContext, assertCompleteToolRounds } from './context'
 import { agentSkills, skillReader } from './skills'
 import { builtinSkills, ownSkill } from '../../shared/agents'
@@ -1304,13 +1304,13 @@ export class EngineeringService {
     let prototypeReadUntil = progress?.resume?.prototypeReadUntil ?? 0
     const schema = JSON.stringify({
       summary: '结论',
-      results: [{ criterion: '原验收条件逐字保留', passed: false, status: 'unverified', evidence: '实际证据；若缺条件，说明具体缺口', evidenceKind: 'unit / mock / application / desktop / duration / history / inspection 中的一种', commandIds: ['本轮命令返回的 evidenceId'], measuredDurationSeconds: '单个实例的连续实测秒数；并行模式不能相加，分别按原始 measurements 记录，不混淆持久化和外部观察延迟' }],
+      results: [{ criterion: '原验收条件逐字保留', passed: false, status: 'unverified', evidence: '实际证据；若缺条件，说明具体缺口', evidenceKind: 'unit / mock / application / desktop / duration / history / inspection 中的一种', commandIds: ['本轮命令返回的 evidenceId'], measuredDurationSeconds: 5 }],
       ...(prototype ? { prototypeReview: { prototypeId: prototype.id, passed: false, status: 'unverified', evidence: '逐项说明页面结构、关键交互与原型的对应文件和检查结果；未实测视觉需明确说明。' } } : {}),
     })
     const rolePrompt =
       role === 'diagnoser' || role === 'preparer' ? preparationPrompt(role) : role === 'developer'
         ? '实现完整可运行功能；首次从零建立网页工程时提供 npm run dev、build、test，测试须真实验证行为，执行 npm install 和必要检查。最终返回 JSON {"status":"complete 或 incomplete","summary":"实际修改和检查结论","nextStep":"后续动作或具体阻塞"}。只有本轮实现和必要检查已完成且无需继续开发工具时才用 complete；仍需修改、排查或运行检查必须用 incomplete，不得把进度总结当作开发交付。'
-        : `只检查实际工程，不得修改源代码、测试代码或通过降低测试标准使检查通过。必须运行实际测试（npm test、npm run test:* 或项目中的 test 脚本）并按需构建。最后只输出 JSON ${schema}，覆盖每一项标准，passed 为布尔值；无法确认的标 false。`
+        : `只检查实际工程，不得修改源代码、测试代码或通过降低测试标准使检查通过。必须运行实际测试（npm test、npm run test:* 或项目中的 test 脚本）并按需构建。最后只输出 JSON ${schema}，覆盖每一项标准，passed 为布尔值；无法确认的标 false。measuredDurationSeconds 仅 duration 项填写，必须是 JSON 数字（示例 5 不代表实际值），按单个实例的连续实测秒数填写；并行模式不能相加，分别保留原始 measurements，不混淆持久化和外部观察延迟。`
     const system = `你是 Coprojer 的${role === 'developer' ? '开发' : '验证'}智能体。\n${skillInstructions}\n当前项目根目录：${p.root}。操作仅限当前项目。只能通过已提供工具执行，不可声称未发生的操作。不能修改已确认目标、验收标准、.coprojer 管理资料或项目外文件。\n先使用 list_files/read_file 检查实际项目，再开展工作。使用 npm 和 Node；run_command 的参数是数组，不使用 shell 连接符。不要运行永久驻留的服务，应用通过预览按钮启动 npm run dev。\n共享上下文索引：${this.agentContext(p, f)}\n已确认功能：${JSON.stringify({ title: f.title, description: f.description, criteria: f.criteria, plan: f.plan, tasks: f.tasks.map((t) => t.title) })}\n${rolePrompt}\n上一轮反馈：${feedback || '无'}`
     const prototypeInstruction = prototype ? '\n验收原型ID：' + prototype.id + '\n必须先完整分页读取 read_context id=prototype:' + prototype.id + '（连续使用 nextOffset/version），才能修改文件或运行命令。开发必须复用该原型的页面结构、视觉样式与核心交互，替换演示数据并接入实际业务；不能自行换一套界面。校验必须对照原型检查实际文件，填写 prototypeReview，明确指出未实测的视觉与交互。用户的最终试用验收仍不可省略。' : ''
     const messages: ModelMessage[] = progress?.resume?.messages ?? [
@@ -1767,12 +1767,15 @@ export class EngineeringService {
             } catch {
               result = { summary: '验证回复格式无效，不能判定通过。', results: [] }
             }
-            const hasTest = verification.commands.some((command) => command.isTest)
-            const failedCheck = verification.commands.some(c => c.code !== 0 && (c.failureKind ?? commandFailure(c.output, c.code)) === 'check')
+            const currentChecks = currentCommandEvidence(verification.commands)
+            const hasTest = currentChecks.some((command) => command.isTest)
+            const failedCheck = currentChecks.some(c => c.code !== 0 && (c.failureKind ?? commandFailure(c.output, c.code)) === 'check')
+            if (currentChecks.length !== verification.commands.length)
+              this.store.event(p, 'verification-retry', `${verification.commands.length - currentChecks.length} 条先前失败已有相同源码、命令和证据范围的后续实跑通过；原失败保留在命令记录中。`, f.id)
             f.verificationChecks = verification.commands.map(c => ({ id: c.id || '', command: c.command, code: c.code,
               output: this.store.redact(c.output), sourceFingerprint: c.sourceFingerprint || beforeReview, at: c.at || now(),
               durationMs: c.durationMs || 0, evidenceKind: c.evidenceKind, evidenceKinds: commandEvidenceKinds(c), measurements: c.measurements, runId: c.runId }))
-            const evidence = hasTest && verification.commands.every(c => c.code === 0) && !changed
+            const evidence = hasTest && currentChecks.every(c => c.code === 0) && !changed
             f.verificationPending = false
             f.results = f.criteria.map((criterion) => {
               const item = Array.isArray(result.results)
@@ -1788,9 +1791,10 @@ export class EngineeringService {
               const specificEvidence = !changed && linked.some(c => c.isTest) && linked.every(c => c.code === 0 && (!c.sourceFingerprint || c.sourceFingerprint === beforeReview))
               const kindMatches = !['application', 'desktop', 'duration'].includes(item?.evidenceKind) || linked.some(c => commandEvidenceKinds(c).includes(item.evidenceKind))
               const measurements = linked.filter(c => c.code === 0 && commandEvidenceKinds(c).includes('duration')).flatMap(c => c.measurements ?? [])
-              const durationMatches = item?.evidenceKind !== 'duration' || (typeof item.measuredDurationSeconds === 'number' && item.measuredDurationSeconds > 0 &&
-                (!measurements.length || item.measuredDurationSeconds <= Math.max(...measurements.map(m => m.durationSeconds))) &&
-                item.measuredDurationSeconds * 1000 <= linked.filter(c => commandEvidenceKinds(c).includes('duration')).reduce((sum, c) => sum + (c.durationMs || 0), 0))
+              const measuredDurationSeconds = measuredDuration(item?.measuredDurationSeconds)
+              const durationMatches = item?.evidenceKind !== 'duration' || (measuredDurationSeconds !== undefined &&
+                (!measurements.length || measuredDurationSeconds <= Math.max(...measurements.map(m => m.durationSeconds))) &&
+                measuredDurationSeconds * 1000 <= linked.filter(c => commandEvidenceKinds(c).includes('duration')).reduce((sum, c) => sum + (c.durationMs || 0), 0))
               const nativeEvidence = nativeEvidenceSupported(criterion, item) && linked.every(c =>
                 nativeEvidenceSupported(criterion, { evidenceKind: item?.evidenceKind, evidence: c.output }))
               const itemEvidence = specificEvidence && kindMatches && durationMatches && nativeEvidence && (item?.commandIds === undefined || linked.length === item.commandIds.length && linked.length > 0)
@@ -1801,7 +1805,7 @@ export class EngineeringService {
                 status,
                 passed: status === 'passed',
                 sourceFingerprint: beforeReview, checkedAt: now(), commandIds: linked.map(c => c.id!).filter(Boolean),
-                ...(item?.evidenceKind === 'duration' ? { measurements, measuredDurationSeconds: durationMatches ? item.measuredDurationSeconds : undefined } : {}),
+                ...(item?.evidenceKind === 'duration' ? { measurements, measuredDurationSeconds: durationMatches ? measuredDurationSeconds : undefined } : {}),
                 evidenceKind: ['unit', 'mock', 'application', 'desktop', 'duration', 'history', 'inspection'].includes(item?.evidenceKind) ? item.evidenceKind : undefined,
                 evidence: this.store.redact(
                   changed

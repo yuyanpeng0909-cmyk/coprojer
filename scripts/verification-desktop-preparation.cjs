@@ -1,4 +1,65 @@
 const { fs, path, assert, sandbox, fixture, model, call, answer, run, load } = require('./fixtures/verification-runtime.cjs')
+async function successfulSameCheckRetryDoesNotRepair() {
+ const ctx=fixture({criteria:['Actual retry completed']}),verification=load('src/main/engineering/verification.ts'),original=verification.verificationEnvironment
+ verification.verificationEnvironment=()=>({platform:process.platform,desktop:{checked:false},runtime:{available:true}})
+ fs.writeFileSync(path.join(ctx.root,'tests/retry.cjs'),
+  'const fs=require("node:fs");fs.mkdirSync(".runtime",{recursive:true});'+
+  'if(!fs.existsSync(".runtime/retried")){fs.writeFileSync(".runtime/retried","1");console.error("AssertionError: first attempt failed");process.exit(1)}console.log("REAL_RETRY_PASSED")')
+ let developments=0
+ model.complete=async(_c,system,messages)=>{
+  if(system.includes('你是 Coprojer 的开发智能体'))return answer(++developments===1?{summary:'Existing check ready.'}:{status:'incomplete',summary:'Unexpected repair requested.'})
+  const count=messages.filter(m=>m.role==='tool').length
+  if(count<2)return call('run_command',{program:'node',args:['tests/retry.cjs'],evidenceKind:'unit'})
+  return answer({results:[{criterion:ctx.feature.criteria[0],passed:true,status:'passed',evidence:'Same check actually passed on retry.',evidenceKind:'unit',commandIds:['check-2']}]})
+ }
+ try {
+  await run(ctx.service)
+  assert.equal(ctx.feature.stage,'acceptance','an earlier same-source failure must not trigger another code repair after its actual retry passed')
+  assert.equal(ctx.feature.repairRound,0);assert.equal(developments,1)
+  assert.deepEqual(ctx.feature.verificationChecks.map(c=>c.code),[1,0],'preserve both attempts in the audit ledger')
+  assert.equal(ctx.feature.verificationChecks[0].sourceFingerprint,ctx.feature.verificationChecks[1].sourceFingerprint)
+  assert.ok(!ctx.project.events.some(e=>e.kind==='repair'))
+  console.log('PASS: successful identical check retry settles without code repair and preserves the original failure')
+ }finally{verification.verificationEnvironment=original}
+}
+function retryEvidenceCannotHideOtherFailures() {
+ const {currentCommandEvidence}=load('src/main/engineering/verification.ts')
+ const failed={id:'failed',command:'node tests/native.cjs',sourceFingerprint:'source-a',code:1,isTest:false,output:'AssertionError',evidenceKind:'desktop'}
+ const passed={...failed,id:'passed',code:0,isTest:true,output:'ACTUAL_CHECK_PASSED'}
+ assert.deepEqual(currentCommandEvidence([failed,passed]),[passed])
+ for(const later of [{...passed,command:'node tests/other.cjs'},{...passed,sourceFingerprint:'source-b'},
+  {...passed,evidenceKind:'unit'},{...passed,evidenceKind:'history',evidenceKinds:['desktop']},{...passed,code:1}]) {
+  assert.deepEqual(currentCommandEvidence([failed,later]),[failed,later],'unrelated, stale, weaker or failed checks cannot erase a failure')
+ }
+ assert.deepEqual(currentCommandEvidence([passed,failed]),[passed,failed],'a later failure takes precedence')
+ const unknown={...failed,sourceFingerprint:undefined}
+ assert.deepEqual(currentCommandEvidence([unknown,{...passed,sourceFingerprint:undefined}]),[unknown,{...passed,sourceFingerprint:undefined}])
+ console.log('PASS: unrelated commands, changed source, weaker/history evidence and later failures cannot resolve an earlier failure')
+}
+async function decimalStringDurationDoesNotRepeatPreparation() {
+ const verification=load('src/main/engineering/verification.ts'), original=verification.verificationEnvironment
+ verification.verificationEnvironment=()=>({platform:process.platform,desktop:{checked:false},runtime:{available:true}})
+ try {
+  for (const [seconds, passed] of [['0.05',true],[0.05,true],['0.1',false],['0.05 seconds',false],['',false],[null,false],[true,false],['NaN',false],['Infinity',false],['0x1',false]]) {
+   const ctx=fixture({criteria:['Short measured timer']}), diagnoses=[]
+   fs.writeFileSync(path.join(ctx.root,'tests/measure.cjs'),
+    'console.log(JSON.stringify({event:"started",mode:"foreground",durationMs:50}));'+
+    'setTimeout(()=>console.log(JSON.stringify({event:"passed",mode:"foreground",delayMs:1,observedDelayMs:2})),50)')
+   model.complete=async(_c,system,messages)=>{
+    if(system.includes('VERIFICATION_DIAGNOSIS')) { diagnoses.push(true);return answer({gaps:ctx.feature.verificationPreparation.gaps.map(g=>({...g,disposition:'unknown',reason:'Unsupported duration report.',nextStep:'Correct the report.'}))}) }
+    if(system.includes('你是 Coprojer 的开发智能体'))return answer({summary:'Existing fixture ready.'})
+    if(!messages.some(m=>m.role==='tool'))return call('run_command',{program:'node',args:['tests/measure.cjs'],evidenceKind:'duration'})
+    return answer({results:[{criterion:ctx.feature.criteria[0],passed:true,status:'passed',evidence:'Fresh actual timer.',evidenceKind:'duration',measuredDurationSeconds:seconds,commandIds:['check-1']}]})
+   }
+   await run(ctx.service)
+   assert.equal(ctx.feature.stage,passed?'acceptance':'blocked','reported seconds: '+JSON.stringify(seconds))
+   assert.equal(ctx.feature.results[0].measuredDurationSeconds,passed?0.05:undefined)
+   assert.equal(ctx.feature.verificationChecks.length,1,'never invent or replay evidence')
+   if(passed)assert.equal(diagnoses.length,0,'valid decimal string must not reopen verification preparation')
+  }
+  console.log('PASS: measured numeric strings normalize without re-preparation; invalid and inflated duration claims remain unverified')
+ }finally{verification.verificationEnvironment=original}
+}
 async function terminalFailureStillPrepares() {
   const ctx = fixture({ criteria: ['现有检查无失败', '补齐本地独立检查'] })
   ctx.feature.stage = 'blocked'; ctx.feature.verificationPending = true; ctx.feature.repairRound = 3
@@ -139,5 +200,5 @@ async function callbackOutputCannotBeRelabeled() {
   console.log('PASS: successful callback-only command cannot become desktop evidence through model relabeling')
  }finally{verification.verificationEnvironment=original}
 }
-async function main(){diagnosisAndMeasurements();await terminalFailureStillPrepares();await changedEnvironmentDoesNotReplay();await parallelDurationIsNotAdded();await callbackOutputCannotBeRelabeled()}
+async function main(){await successfulSameCheckRetryDoesNotRepair();retryEvidenceCannotHideOtherFailures();await decimalStringDurationDoesNotRepeatPreparation();diagnosisAndMeasurements();await terminalFailureStillPrepares();await changedEnvironmentDoesNotReplay();await parallelDurationIsNotAdded();await callbackOutputCannotBeRelabeled()}
 main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>fs.rmSync(sandbox,{recursive:true,force:true,maxRetries:3}))

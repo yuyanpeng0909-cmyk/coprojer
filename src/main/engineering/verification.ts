@@ -3,10 +3,24 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import type { Feature, Project, VerificationGap, RuntimeMeasurement } from '../../shared/engineering'
-import type { CommandEvidence } from './execution'
+import { commandEvidenceKinds, type CommandEvidence } from './execution'
 import { nodeCommand } from './files'
 
 export const digest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+// Normalize a model's decimal representation, never infer or expand evidence.
+export function measuredDuration(value: unknown): number | undefined {
+  const seconds = typeof value === 'number' ? value
+    : typeof value === 'string' && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value.trim()) ? Number(value.trim()) : NaN
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined
+}
+// Keep the audit ledger intact. Only an actual later success of the same
+// command, source and evidence scope resolves a prior failed attempt.
+export function currentCommandEvidence(commands: CommandEvidence[]): CommandEvidence[] {
+  return commands.filter((command, index) => command.code === 0 || !command.sourceFingerprint ||
+    !commands.slice(index + 1).some(later => later.code === 0 && later.command === command.command &&
+      later.sourceFingerprint === command.sourceFingerprint && !commandEvidenceKinds(later).includes('history') &&
+      commandEvidenceKinds(command).every(kind => commandEvidenceKinds(later).includes(kind))))
+}
 // Optional JSONL runner protocol, parsed from this command's actual stdout.
 // Pair starts/completions by mode; never sum parallel instance durations.
 export function runtimeMeasurements(output: string): RuntimeMeasurement[] {

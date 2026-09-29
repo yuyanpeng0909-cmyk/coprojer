@@ -313,6 +313,13 @@ export async function runCommand(
   const runtime = isolated ? safePath(root, '.runtime/coprojer-checks/' + runId) : undefined
   if (runtime) mkdirSync(join(runtime, 'user-data'), { recursive: true })
   const env = commandEnvironment()
+  // Windows PowerShell may fall back to cwd/Microsoft when a child host cannot
+  // resolve its profile. Generated module discovery data must not change the
+  // source snapshot and invalidate otherwise successful independent checks.
+  const moduleCache = runtime ? join(runtime, 'powershell', 'ModuleAnalysisCache')
+    : safePath(root, '.runtime/powershell/ModuleAnalysisCache')
+  mkdirSync(dirname(moduleCache), { recursive: true })
+  env.PSModuleAnalysisCachePath = moduleCache
   if (runtime) Object.assign(env, { COPROJER_TEST_USER_DATA: join(runtime, 'user-data'), COPROJER_TEST_RUN_ID: runId,
     COPROJER_EVIDENCE_DIR: join(root, '.runtime', 'verification-evidence', runId),
     HOME: join(runtime, 'user-data'), USERPROFILE: join(runtime, 'user-data'), APPDATA: join(runtime, 'user-data'),

@@ -4,6 +4,8 @@
 
 Coprojer 面向个人开发者与需要工程引导的使用者，基于 Electron、React 和 TypeScript。接入自己的模型服务后，由任务规划、原型前端、开发、测试校验四类角色协作；需求、方案、实际文件修改和验收证据保留在同一个项目中。
 
+**Windows x64：[下载 Coprojer 0.1.0 安装包](https://github.com/yuyanpeng0909-cmyk/coprojer/releases/tag/v0.1.0)。** 仅包含 Coprojer 主程序，不附带番茄钟示例工程、个人工作区或模型凭据。
+
 ![真实番茄钟项目工作台：下一步、交付状态与功能列表](docs/screenshots/pomodoro/02-workbench.png)
 
 **开发更新：2026-09-28。** 新增新手入门、阿里云快速导入、模型榜单推荐与实例推理设置、流量监控、验证条件自动准备，并改进长任务上下文与中断恢复。当前提供源码和本机运行能力。
@@ -22,7 +24,18 @@ Coprojer 面向个人开发者与需要工程引导的使用者，基于 Electro
 
 ## 快速启动
 
-需要 Node.js **22.12+**、npm，以及有有效凭据的模型连接。当前交付源码与本机运行能力，尚无安装包或云服务发行版。本轮环境为 Windows，其他操作系统没有在本轮实测。
+### Windows 安装
+
+在 [v0.1.0 Release](https://github.com/yuyanpeng0909-cmyk/coprojer/releases/tag/v0.1.0) 下载 Coprojer-Setup-0.1.0-x64.exe，运行向导并选择当前用户的安装目录。安装完成后从开始菜单打开 Coprojer；启动桌面界面不需要克隆源码或安装 npm 依赖。
+
+- 安装包面向 Windows x64，已在 Windows 10 x64 环境检查；未验证 ARM64 或其他操作系统。
+- 执行工程开发命令仍需要本机 Node.js **22.12+** 与 npm，并自行配置有效的模型连接。
+- 此首发安装包尚未代码签名，Windows 可能显示未知发布者提示；发布页提供 SHA-256 供核对。
+- 正式版资料位于 %APPDATA%/Coprojer/，与开发版 Coprojer-dev 分离，不自动复制开发版凭据。卸载保留应用资料。
+
+### 从源码运行
+
+需要 Node.js **22.12+**、npm，以及有有效凭据的模型连接。
 
 ```powershell
 git clone https://github.com/yuyanpeng0909-cmyk/coprojer.git
@@ -294,6 +307,8 @@ Coprojer 内置「启动并打开预览」面向接受 `--host` / `--port` 参�
 | `npm run dev` | 开发与热更新 |
 | `npm run typecheck` | TypeScript |
 | `npm run build` | 检查并构建到 out/ |
+| `npm run build:win` | 构建 Windows x64 安装包到 release/，不自动上传 |
+| `node scripts/package-smoke.cjs` | 用隔离资料验证实际打包程序启动与重启 |
 | `npm start` | 构建后启动 |
 | `npm test` | 全量构建和 46 个串行脚本 |
 | `npm run test:onboarding` | 新手引导与真实状态进度 |

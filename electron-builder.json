@@ -1,0 +1,30 @@
+{
+  "appId": "com.coprojer.desktop",
+  "productName": "Coprojer",
+  "directories": { "output": "release" },
+  "files": [
+    "out/**/*",
+    "package.json",
+    "licenses/**/*",
+    "!**/*.map"
+  ],
+  "asar": true,
+  "npmRebuild": false,
+  "electronDist": "node_modules/electron/dist",
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "artifactName": "Coprojer-Setup-${version}-${arch}.${ext}",
+    "executableName": "Coprojer"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Coprojer",
+    "runAfterFinish": false,
+    "deleteAppDataOnUninstall": false
+  }
+}
