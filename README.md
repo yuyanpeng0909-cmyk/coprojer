@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/coprojer-mark.svg" width="64" height="64" alt="Coprojer" />
+  <img src="docs/assets/coprojer-mark.png" width="64" height="64" alt="Coprojer" />
 </p>
 
 <h1 align="center">Coprojer</h1>
