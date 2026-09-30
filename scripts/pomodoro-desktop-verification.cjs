@@ -1,7 +1,8 @@
 // Offline model fixtures; real production orchestration, writes and commands.
 const { fs,path,assert,sandbox,fixture,model,call,answer,load }=require('./fixtures/verification-runtime.cjs')
 const {spawnSync}=require('node:child_process'),crypto=require('node:crypto')
-const repo=path.resolve(__dirname,'..'),source=path.join(repo,'test/番茄钟助手')
+const repo=path.resolve(__dirname,'..')
+const source=path.resolve(process.env.COPROJER_POMODORO_SOURCE||path.join(repo,'examples/pomodoro'))
 const parent=path.join(repo,'.runtime/native-preparation-audit')
 const runDir=fs.mkdtempSync(path.join(parent,'isolated-')),root=path.join(runDir,'project')
 fs.mkdirSync(root)

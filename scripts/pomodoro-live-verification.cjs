@@ -3,7 +3,8 @@
 const fs = require('node:fs/promises'), sync = require('node:fs'), path = require('node:path')
 const { createHash } = require('node:crypto'), { spawnSync } = require('node:child_process')
 const { _electron: electron } = require('playwright'), assert = require('node:assert/strict')
-const repo = path.resolve(__dirname, '..'), source = path.join(repo, 'test/番茄钟助手')
+const repo = path.resolve(__dirname, '..')
+const source = path.resolve(process.env.COPROJER_POMODORO_SOURCE || path.join(repo, 'examples/pomodoro'))
 const output = path.join(repo, '.runtime/pomodoro-live-verification')
 async function fingerprints(root) {
   const result = {}

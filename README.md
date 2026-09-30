@@ -6,10 +6,10 @@
 
 <p align="center"><strong>把想法一步步做成可验证的项目。</strong></p>
 
-<p align="center">Windows x64 · v0.1.0 · 接入你自己的模型</p>
+<p align="center">Windows x64 · 本地工作空间 · 接入你自己的模型</p>
 
 <p align="center">
-  <a href="https://github.com/yuyanpeng0909-cmyk/coprojer/releases/tag/v0.1.0"><strong>下载 Windows 版</strong></a>
+  <a href="https://github.com/yuyanpeng0909-cmyk/coprojer/releases/latest"><strong>下载 Windows 版</strong></a>
   &nbsp;·&nbsp; <a href="#快速开始">快速开始</a>
   &nbsp;·&nbsp; <a href="docs/README.md">使用文档</a>
 </p>
@@ -18,7 +18,7 @@ Coprojer 是面向个人开发者与需要工程引导的使用者的 **AI 工�
 
 [![Coprojer 工作台：查看项目进度、下一步与逐项验收](docs/screenshots/pomodoro/02-workbench.png)](docs/screenshots/pomodoro/02-workbench.png)
 
-<p align="center"><sub>2026-09-27「番茄钟助手」真实项目记录 · 点击查看原图 · <a href="docs/USER_GUIDE.md#真实项目完整操作流程">查看完整操作案例</a></sub></p>
+<p align="center"><sub>番茄钟助手项目工作台 · 点击查看原图 · <a href="examples/pomodoro/README.md">了解示例与开发流程</a></sub></p>
 
 ## 用 Coprojer 做什么
 
@@ -37,11 +37,11 @@ Coprojer 是面向个人开发者与需要工程引导的使用者的 **AI 工�
 
 ### 1. 安装 Coprojer
 
-前往 [v0.1.0 发布页](https://github.com/yuyanpeng0909-cmyk/coprojer/releases/tag/v0.1.0)，下载 **Coprojer-Setup-0.1.0-x64.exe**，按向导安装。
+前往 [Releases](https://github.com/yuyanpeng0909-cmyk/coprojer/releases/latest)，下载 Windows x64 安装包，按向导安装。
 
 - 当前提供 **Windows x64** 安装包；安装并打开界面无需克隆源码。
 - 工程开发需要本机安装 **Node.js 22.12+**（含 npm）。
-- 首发安装包尚未代码签名，Windows 可能提示未知发布者；校验信息见发布页。
+- 安装说明、签名状态与校验信息见对应发布页。
 
 ### 2. 连接模型
 
@@ -67,19 +67,31 @@ npm ci
 npm run dev
 ```
 
-安装依赖后，Windows 也可双击 `start-dev.cmd`。开发命令与代码导航见[开发指南](docs/USER_GUIDE.md#开发与本地资料)。
+安装依赖后，Windows 也可双击 `start-dev.cmd`。开发命令与代码导航见[开发指南](docs/DEVELOPMENT.md)。
 
 </details>
+
+## 示例项目
+
+[番茄钟助手](examples/pomodoro/README.md)提供可独立运行的 Electron 应用与单元测试。结合[流程讲解](docs/examples/pomodoro.md)，对照需求、原型、代码修改、验证与验收，了解 Coprojer 如何推进一个项目。
+
+```text
+src/        Coprojer 主程序
+examples/   示例项目与自身测试
+scripts/    主程序回归与开发工具
+docs/       使用指南、开发说明与验证记录
+licenses/   第三方许可声明
+```
 
 ## 文档与示例
 
 | 想了解什么 | 从这里开始 |
 | --- | --- |
 | 首次配置与实际操作 | [新手入门](docs/ONBOARDING.md) · [完整图文指南](docs/USER_GUIDE.md) |
-| 看一个真实项目如何推进 | [番茄钟助手操作案例](docs/USER_GUIDE.md#真实项目完整操作流程) |
+| 看一个项目如何推进 | [番茄钟流程讲解](docs/examples/pomodoro.md) · [示例代码](examples/pomodoro/README.md) |
 | 模型、智能体与技能 | [模型配置](docs/USER_GUIDE.md#首次创建与模型配置) · [智能体与技能](docs/AGENT_SKILLS.md) |
 | 所有能力与使用边界 | [功能与验证矩阵](docs/FEATURE_CATALOG.md) · [文档索引](docs/README.md) |
-| 开发与版本变化 | [开发指南](docs/USER_GUIDE.md#开发与本地资料) · [更新记录](CHANGELOG.md) |
+| 开发与版本变化 | [开发指南](docs/DEVELOPMENT.md) · [更新记录](CHANGELOG.md) |
 
 ## 使用前了解
 
@@ -87,4 +99,4 @@ npm run dev
 - **本地工作空间，按需连接模型。** 工程与应用资料保存在本机；模型调用需要联网，相关上下文会发送给你配置的服务。
 - **留意执行权限。** 工程命令以本机用户权限运行，建议先在独立项目或副本中试用。
 
-安装包仅包含 Coprojer 主程序。截图中的案例工作空间、模型凭据与个人资料不随安装包分发；历史案例结果见[验证记录](docs/verification/2026-09-27-pomodoro-walkthrough.md)。
+安装包包含 Coprojer 主程序，示例源码可从仓库获取。个人工作空间和模型凭据由使用者自行配置；测试范围与原始证据见[验证记录](docs/verification/README.md)。

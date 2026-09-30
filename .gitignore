@@ -45,7 +45,10 @@ engineering-v[0-9]*.json
 .idea/
 .vscode/
 
-# Nested demo/test builds and dependencies
-docs/test/**/node_modules/
-docs/test/**/dist/
-docs/test/**/output/
+# Legacy local workspaces; maintained examples live in examples/
+/test/番茄钟助手/
+/docs/test/
+
+# Private state created when working through examples
+examples/**/.coprojer/
+examples/**/verification/

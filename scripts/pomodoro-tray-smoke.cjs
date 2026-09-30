@@ -2,7 +2,7 @@ const { _electron: electron } = require('playwright')
 const assert = require('node:assert/strict')
 const fs = require('node:fs/promises')
 const path = require('node:path')
-const root = path.resolve('test/番茄钟助手')
+const root = path.resolve(process.env.COPROJER_POMODORO_SOURCE || path.join(__dirname, '../examples/pomodoro'))
 const output = path.resolve('.runtime/verification-evidence')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function main() {

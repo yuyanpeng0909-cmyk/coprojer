@@ -1,36 +1,33 @@
-# Coprojer 文档索引
+# 文档
 
-索引更新：2026-09-30。产品概览与快速开始见[项目首页](../README.md)，完整操作与历史案例见[图文指南](USER_GUIDE.md)，开发批次见[更新记录](../CHANGELOG.md)。各文档的功能与验证日期以正文为准。
+从[项目首页](../README.md)了解 Coprojer，按下列入口开始使用、学习示例或参与开发。
 
 ## 入门与使用
 
 | 文档 | 内容 |
 | --- | --- |
-| [新手入门](ONBOARDING.md) | 首次配置、真实项目进度、逐页引导与恢复 |
-| [完整图文指南](USER_GUIDE.md) | 安装与模型配置、全部功能、番茄钟操作案例、开发命令与代码导航 |
-| [工程指南](ENGINEERING_GUIDE.md) | 开发阶段、停止恢复、资料、验证及验收边界 |
-| [功能与验证矩阵](FEATURE_CATALOG.md) | 产品入口、能力范围与测试索引 |
-| [需求工作区](REQUIREMENTS_WORKSPACE.md) | 需求、原型、功能图和规格 |
-| [圆桌与多端](ROUNDTABLE.md) | 多模型讨论、人工决定及子项目 |
+| [使用指南](USER_GUIDE.md) | 安装、模型配置、项目开发与验收 |
+| [新手入门](ONBOARDING.md) | 跟随真实项目逐步操作 |
+| [番茄钟流程示例](examples/pomodoro.md) | 用一个具体项目理解需求、原型、开发、验证与验收 |
+| [示例代码](../examples/README.md) | 独立运行的项目、测试和阅读入口 |
+| [工程指南](ENGINEERING_GUIDE.md) | 阶段、队列、中断恢复与资料管理 |
+| [功能与验证矩阵](FEATURE_CATALOG.md) | 产品能力与对应的验证入口 |
 
-## 模型、智能体与监控
+## 专题指南
 
-| 文档 | 内容 |
+| 主题 | 文档 |
 | --- | --- |
-| [阿里云快速导入](ALIYUN_IMPORT.md) | 型号识别、额度保护、装配与凭据边界 |
-| [能力榜单推荐](MODEL_RECOMMENDATIONS.md) | 已接入候选、来源证据、策略与确认应用 |
-| [实例推理设置](AGENT_REASONING.md) | 已适配型号、推理档位/预算与 AA 对齐 |
-| [模型流量监控](MODEL_TRAFFIC.md) | 请求、Token、失败率、耗时及统计口径 |
-| [智能体与技能](AGENT_SKILLS.md) | 角色、实例配置、专属技能及团队隔离 |
+| 需求与原型 | [需求工作区](REQUIREMENTS_WORKSPACE.md) · [圆桌与多端](ROUNDTABLE.md) |
+| 模型配置 | [阿里云快速导入](ALIYUN_IMPORT.md) · [能力证据推荐](MODEL_RECOMMENDATIONS.md) |
+| 智能体 | [技能与配置](AGENT_SKILLS.md) · [实例推理设置](AGENT_REASONING.md) |
+| 运行与验证 | [模型监控](MODEL_TRAFFIC.md) · [验证条件准备](VERIFICATION_PREPARATION.md) |
 
-## 验证与开发
+## 开发与维护
 
-- [验证条件自动准备](VERIFICATION_PREPARATION.md)：缺口诊断、有限准备、独立复验、失败保留与恢复。
-- [2026-09-28 发布验证](verification/2026-09-28-release.md)：本次发布范围、分段回归、文档与敏感信息检查。
-- [长任务上下文修复](verification/2026-09-28-long-task-context.md)：大工具组、摘要扁平化、归档和恢复。
-- [长任务无进展保护](verification/2026-09-28-execution-convergence.md)：显式未完成处理、重复失败暂停、受控回归及真实运行边界。
-- [原生检查审计](verification/2026-09-28-native-preparation-audit.md)：实际桌面检查、未完成证据与保留失败。
-- [2026-09-27 案例记录](verification/2026-09-27-pomodoro-walkthrough.md)：历史番茄钟续跑与全窗口截图。
-- [UI 1.6 规范](UI_SPEC.md)与[开发约定](../AGENTS.md)：风格、布局、测试显示器和截图要求。
+- [开发指南](DEVELOPMENT.md)：环境、仓库结构、测试与打包。
+- [领域词汇](architecture/DOMAIN.md)：功能、需求基线、验证和验收的定义。
+- [UI 规范](UI_SPEC.md)与[开发约定](../AGENTS.md)：界面与验证要求。
+- [更新记录](../CHANGELOG.md)：版本变化。
+- [验证记录](verification/README.md)：按实际运行保存的测试结果、截图来源和待验证事项。
 
-受控协议测试、真实模型调用、原生桌面操作和人工验收分别记录。历史报告保持原日期和当时结论，本次发布报告不把旧结果改写成新的实测。
+日常使用说明保持独立；版本日期与具体运行结果记录在更新日志和验证文档中。
