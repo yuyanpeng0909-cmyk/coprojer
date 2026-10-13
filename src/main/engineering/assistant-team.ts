@@ -5,6 +5,10 @@ import { EngineeringStore, now, uid } from './store'
 import { assistantConnection, assistantUsage } from './general-assistant'
 import { complete, parseJson, type Connection } from './model'
 import { resolveReasoning } from '../../shared/reasoning'
+import { cloneTeamAgent } from './project-team'
+import { rmSync } from 'node:fs'
+import { builtinSkills, ownSkill } from '../../shared/agents'
+import { agentInstructionsVersion, defaultAgentInstructions } from '../../shared/agent-instructions'
 
 const roles = Object.keys(agentRoleLabels) as AgentRole[]
 export class AssistantTeam {
@@ -63,7 +67,7 @@ export class AssistantTeam {
     const controller = new AbortController(); this.requests.set(sessionId, controller)
     try { this.store.save() } catch (error) { session.messages.splice(length); Object.assign(session, previous); this.requests.delete(sessionId); throw error }
     try {
-      const reply = await complete(connection, 'ASSISTANT_TEAM_PLAN：为 Coprojer 推荐可落地的团队。只使用给出的已接入 modelId；职责只有 planner/designer/developer/reviewer。planner 和 designer 各一位；developer 和 reviewer 各至少一位，总共 4–12 位。按项目目标和实际分工推荐最少必要数量，人数不等于并行能力。信息不足沿用现有型号并说明；不要猜测价格、工具能力或质量排名。项目方案会隔离创建或复用项目专用实例，不复制共享实例的专属技能；全局方案会修改明确引用的共享成员。已有成员可设置 sourceAgentId，新成员省略。只返回 JSON {"members":[{"key":"unique","role":"planner","name":"任务规划","modelId":"已接入ID","sourceAgentId":"可选现有ID","reason":"职责分工、型号依据与不确定性"}]}。不要执行任何修改。', [{ role: 'user', content: this.store.redact(JSON.stringify({ preference, project: p ? { name: p.name, brief: p.brief, features: p.features.map(f => ({ title: f.title, description: f.description.slice(0, 1000), stage: f.stage })), teamAgentIds: p.teamAgentIds } : null, agents, models: this.store.data.models.map(m => ({ id: m.id, model: m.model, protocol: m.protocol })), memories: this.workspace.memories.filter(m => !m.projectId || m.projectId === p?.id).map(m => m.text) })) }], [], AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]))
+      const reply = await complete(connection, 'ASSISTANT_TEAM_PLAN：为 Coprojer 推荐可落地的团队。只使用给出的已接入 modelId；职责只有 planner/designer/developer/reviewer。planner 和 designer 各一位；developer 和 reviewer 各至少一位，总共 4–12 位。按项目目标和实际分工推荐最少必要数量，人数不等于并行能力。信息不足沿用现有型号并说明；不要猜测价格、工具能力或质量排名。项目方案会隔离创建或复用项目专用实例，复制共享模板的专属技能，之后独立配置；全局方案会修改明确引用的共享成员。已有成员可设置 sourceAgentId，新成员省略。只返回 JSON {"members":[{"key":"unique","role":"planner","name":"任务规划","modelId":"已接入ID","sourceAgentId":"可选现有ID","reason":"职责分工、型号依据与不确定性"}]}。不要执行任何修改。', [{ role: 'user', content: this.store.redact(JSON.stringify({ preference, project: p ? { name: p.name, brief: p.brief, features: p.features.map(f => ({ title: f.title, description: f.description.slice(0, 1000), stage: f.stage })), teamAgentIds: p.teamAgentIds } : null, agents, models: this.store.data.models.map(m => ({ id: m.id, model: m.model, protocol: m.protocol })), memories: this.workspace.memories.filter(m => !m.projectId || m.projectId === p?.id).map(m => m.text) })) }], [], AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]))
       if (controller.signal.aborted) throw new Error('方案生成已停止。')
       if (this.fingerprint(session) !== fingerprint) throw new Error('配置已变化，请重新生成团队方案。')
       const members = this.validate(parseJson(reply.text).members, session)
@@ -92,14 +96,23 @@ export class AssistantTeam {
     const { plan, session } = this.preview(id), members = this.validate(plan.members, session)
     const project = session.projectId ? this.store.project(session.projectId) : undefined
     const affected = project ? [project] : this.store.data.projects
-    if (affected.some(p => p.activity || p.designActivity || p.roundtable?.status === 'running' || p.prd?.status === 'generating')) throw new Error('相关项目正在执行，请等待任务结束后应用配置。')
+    if (affected.some(p => p.activity || p.designActivity || p.roundtable?.status === 'running' || p.prd?.status === 'generating' || p.executionPlan?.status === 'running')) throw new Error('相关项目正在执行，请等待任务结束后应用配置。')
     const previousAgents = this.store.data.agents, previousDefaults = this.store.data.defaultTeamAgentIds, previousProjects = new Map(affected.map(p => [p, structuredClone(p)])), previousPlan = { ...plan }
+    const previousSkills = this.store.data.skills, roots: string[] = []
     const next = [...previousAgents], assigned: AgentConfig[] = []
+    try {
     for (const member of members) {
-      const source = next.find(a => a.id === member.sourceAgentId)
+      const original = next.find(a => a.id === member.sourceAgentId)
+      const source = project && original && !original.ownerProjectId ? next.find(a => a.ownerProjectId === project.id && a.templateId === original.id && !assigned.some(used => used.id === a.id)) || original : original
       const reusable = source && (project ? source.ownerProjectId === project.id : !source.ownerProjectId)
-      const agent: AgentConfig = reusable ? { ...source, name: member.name, modelId: member.modelId } : { id: uid(), ownerProjectId: project?.id, name: member.name, role: member.role, modelId: member.modelId, instructions: source?.instructions || '负责' + agentRoleLabels[member.role] + '，遵循项目要求并提供真实结果。', tools: source ? [...source.tools] : defaultAgentTools(member.role), skillIds: [] }
+      const agent: AgentConfig = reusable ? { ...source, name: member.name, modelId: member.modelId } : source && project
+        ? { ...cloneTeamAgent(this.store, source, project.id, roots), name: member.name, modelId: member.modelId }
+        : { id: uid(), ownerProjectId: project?.id, name: member.name, role: member.role, modelId: member.modelId, instructions: source?.instructions || defaultAgentInstructions[member.role], instructionsVersion: source?.instructionsVersion ?? agentInstructionsVersion, tools: source ? [...source.tools] : defaultAgentTools(member.role), skillIds: [] }
       if (reusable) next[next.findIndex(a => a.id === agent.id)] = agent; else next.push(agent)
+      if (!reusable && !source) {
+        const skills = builtinSkills.filter(s => s.roles.includes(agent.role) && s.requiredTools.every(t => agent.tools.includes(t))).map(s => ownSkill(s, agent.id))
+        this.store.data.skills = [...this.store.skills(), ...skills]; agent.skillIds = skills.map(s => s.id)
+      }
       agent.reasoning = resolveReasoning(this.store.data.models.find(m => m.id === agent.modelId)!, source?.reasoning)
       assigned.push(agent)
     }
@@ -120,7 +133,10 @@ export class AssistantTeam {
       }
     }
     plan.status = 'applied'; plan.appliedAt = now(); plan.result = project ? '已为「' + project.name + '」应用 ' + assigned.length + ' 位项目专用成员；其他项目配置未改变。' : '已应用全局成员配置，并设为新项目默认团队。独立设置的项目讨论型号保持原选择；影响范围见此方案。'
-    try { this.store.save() } catch (error) {
+    this.store.save()
+    } catch (error) {
+      this.store.data.skills = previousSkills
+      for (const root of roots) rmSync(root, { recursive: true, force: true })
       this.store.data.agents = previousAgents; this.store.data.defaultTeamAgentIds = previousDefaults
       for (const [p, original] of previousProjects) {
         for (const key of ['teamAgentIds', 'plannerId', 'designerId', 'discussionModelId', 'designModelId'] as const) if (!(key in original)) delete p[key]

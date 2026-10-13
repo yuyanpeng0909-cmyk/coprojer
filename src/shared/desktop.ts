@@ -13,6 +13,7 @@ export interface AppInfo {
 }
 
 export interface DesktopApi {
+  onEngineeringRequests: (listener: (requests: import('./request-feedback').PendingRequest[]) => void) => () => void
   researchPanel: () => Promise<ResearchPanelContext | null>
   openResearchPanel: (
     projectId: string,

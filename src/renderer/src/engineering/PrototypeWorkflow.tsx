@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Project, PrototypeBrief } from '../../../shared/engineering'
-import { activePrototypeBriefs } from '../../../shared/prototype-workflow'
+import { activePrototypeBriefs, canReviewPrd } from '../../../shared/prototype-workflow'
 
 export default function PrototypeWorkflow({ project, targetId, onPreview, onReview }: {
   project: Project; targetId?: string; onPreview(targetId?: string): void; onReview(): void
@@ -62,7 +62,7 @@ function PrdWorkflow({ project, onReview, onEdit }: { project: Project; onReview
   return <section className="prototype-opinion accepted" aria-label="原型生成 PRD" aria-live="polite">
     <div className="prototype-opinion-copy"><strong>{prd?.status === 'generating' ? '正在根据已确认原型生成 PRD' : prd?.status === 'review' ? 'PRD 已生成，请审阅需求' : prd?.status === 'confirmed' ? 'PRD 已确认，按原型设计实现方案' : '原型已确定，继续整理 PRD'}</strong>
     <p>已验收 {briefs.length} 个界面原型；PRD、方案和开发沿用这些版本。</p></div>
-    {prd && ['review', 'confirmed'].includes(prd.status)
+    {canReviewPrd(project)
       ? <button className="ui-button secondary small" disabled={pending} onClick={onReview}>审阅 PRD</button>
       : prd?.status !== 'generating' && <button className="ui-button primary small" disabled={pending} onClick={() => { setError(''); void window.desktop.engineering.preparePrd(project.id).catch(e => setError(String(e))) }}>根据已确认原型生成 PRD</button>}
     <button className="ui-button secondary small" disabled={pending} onClick={onEdit}>补充修改意见</button>

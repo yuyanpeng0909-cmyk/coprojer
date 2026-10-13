@@ -1,4 +1,5 @@
 import { defaultAgentTools, type AgentConfig, type AgentRole, type SkillDefinition } from './engineering'
+import { agentInstructionsVersion, defaultAgentInstructions } from './agent-instructions'
 
 export const builtinSkills: SkillDefinition[] = [
   { id: 'requirements', name: '需求与任务规划', version: '1.0.0', description: '梳理范围、依赖和可验证的验收标准。', roles: ['planner'], requiredTools: [], origin: 'builtin', content: '区分本期与暂缓范围；补全业务规则、边界和可验证验收项。按依赖拆分可独立验收的功能，保留人工决策与未决问题。复用已有功能，不降低已确认目标。方案说明实现、测试、启动方式；不要代替用户确认。' },
@@ -8,14 +9,14 @@ export const builtinSkills: SkillDefinition[] = [
 ]
 
 export function defaultAgents(modelId = ''): AgentConfig[] {
-  const definitions: [AgentRole, string, string][] = [
-    ['planner', '任务规划智能体', '整理需求与任务依赖，准备可执行方案，保留人工确认。'],
-    ['designer', '原型前端智能体', '根据需求制作可交互原型，保留页面与状态的交接依据。'],
-    ['developer', '开发智能体', '实现已确认需求，复用项目公共内容，修改后运行必要检查。'],
-    ['reviewer', '验证智能体', '独立检查实际代码，运行测试并逐项核对验收标准。不要仅复述开发者的完成声明。'],
+  const definitions: [AgentRole, string][] = [
+    ['planner', '需求与架构'],
+    ['designer', '交互与原型'],
+    ['developer', '全栈开发'],
+    ['reviewer', '独立测试'],
   ]
-  return definitions.map(([role, name, instructions]) => ({
-    id: role, role, name, instructions, modelId, tools: defaultAgentTools(role),
+  return definitions.map(([role, name]) => ({
+    id: role, role, name, instructions: defaultAgentInstructions[role], instructionsVersion: agentInstructionsVersion, modelId, tools: defaultAgentTools(role),
     skillIds: builtinSkills.filter(skill => skill.roles.includes(role)).map(skill => ownedSkillId(role, skill.id)),
   }))
 }

@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ChevronDown, ChevronRight, List, RefreshCw, Search } from 'lucide-react'
 import { requirementsFingerprint, scopeLabels, type Project } from '../../../shared/engineering'
+import { requirementsPreparation } from '../../../shared/prototype-workflow'
 import { DecisionHistory } from './DecisionCard'
 import { mergedFeatureFor } from './delivery'
 import './specification.css'
@@ -47,6 +48,7 @@ export default function SpecificationWorkspace({ project, busy, perform, onDiscu
   const jumping = useRef(false)
   const fingerprint = useMemo(() => requirementsFingerprint(snapshot), [snapshot])
   const currentFingerprint = requirementsFingerprint(project)
+  const preparation = requirementsPreparation(project)
   const stale = fingerprint !== currentFingerprint || snapshot.chat.length !== project.chat.length
   const confirmed = snapshot.requirementsBaseline?.fingerprint === fingerprint && snapshot.requirementsBaseline.messageCount === snapshot.chat.length
   const storageKey = `coprojer.spec.review.${project.id}`
@@ -93,6 +95,16 @@ export default function SpecificationWorkspace({ project, busy, perform, onDiscu
     })
   }
   const refresh = () => { setSnapshot(project); setError(''); if (stale) setReviewed([]) }
+  const preparePrd = async () => {
+    setError('')
+    await perform(async () => {
+      try {
+        await window.desktop.engineering.preparePrd(project.id)
+        const fresh = (await window.desktop.engineering.state()).projects.find(item => item.id === project.id)
+        if (fresh) { setSnapshot(fresh); setReviewed([]) }
+      } catch (error) { setError(error instanceof Error ? error.message : String(error)); throw error }
+    }, 'PRD 已生成，请审阅后确认需求。')
+  }
   const confirm = async (prepare: boolean) => {
     const ok = await perform(async () => {
       if (prepare) {
@@ -109,7 +121,8 @@ export default function SpecificationWorkspace({ project, busy, perform, onDiscu
     }, prepare ? '需求已确认，方案已准备好。' : '完整需求基线已写入共享上下文。')
     setError(ok ? '' : '未能完成全部操作。请查看提示；内容变化后需刷新并重新审阅。')
   }
-  const disabled = busy || !!project.activity || project.designActivity || stale || !features.length
+  const pending = busy || !!project.activity || !!project.designActivity
+  const disabled = pending || stale || !features.length || preparation !== 'ready'
   return (
     <section className="specification-workspace" aria-label="需求与规格审阅">
       <div className="specification-toolbar">
@@ -119,6 +132,12 @@ export default function SpecificationWorkspace({ project, busy, perform, onDiscu
         <button className="ui-button secondary small" onClick={refresh}><RefreshCw size={12} />刷新审阅内容</button>
       </div>
       {stale && <div className="specification-warning" role="status">需求或讨论已变化。当前保留你正在审阅的版本，刷新后才能确认。</div>}
+      {preparation !== 'ready' && <div className="specification-warning specification-preparation" role="status">
+        <div>{preparation === 'prototype' ? '请先试用并验收当前原型，再生成 PRD。' : preparation === 'generating' ? '正在根据已确认原型生成 PRD，完成后刷新审阅内容。' : '原型已验收，PRD 尚未就绪。请先生成 PRD，审阅后再确认需求。'}
+          {preparation === 'prd' && project.prd?.error && <p>上次生成失败：{project.prd.error}</p>}
+        </div>
+        {preparation === 'prototype' ? <button className="ui-button secondary small" disabled={pending} onClick={onPrototype}>查看并验收原型</button> : preparation === 'prd' && <button className="ui-button primary small" disabled={pending} onClick={() => void preparePrd()}>根据已确认原型生成 PRD</button>}
+      </div>}
       <div className="specification-reader" data-toc-open={tocOpen}>
         <nav className="specification-toc" id="specification-toc" aria-label="需求目录">
           <label className="workspace-search"><Search size={13} /><input aria-label="搜索需求目录" value={query} onChange={event => { setQuery(event.target.value); setCollapsedGroups([]) }} placeholder="搜索章节、模块或功能…" /></label>
@@ -151,7 +170,7 @@ export default function SpecificationWorkspace({ project, busy, perform, onDiscu
           </section>
           <section id="spec-document" tabIndex={-1} data-spec-anchor data-current={active === 'spec-document'}>
             <h2>产品需求文档（PRD）</h2>
-            {snapshot.requirementsDocument ? <div className="message-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{snapshot.requirementsDocument}</ReactMarkdown></div> : <p>尚无完整需求文档。可返回讨论，整理目标、场景、范围和非功能要求。</p>}
+            {snapshot.requirementsDocument ? <div className="message-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{snapshot.requirementsDocument}</ReactMarkdown></div> : <p>{preparation === 'prototype' ? '尚无 PRD。请先查看并验收原型。' : preparation === 'prd' || preparation === 'generating' ? '尚无 PRD。请使用上方的生成入口，完成后在此审阅。' : '尚无完整需求文档。可返回讨论，整理目标、场景、范围和非功能要求。'}</p>}
           </section>
           {!!snapshot.decisions?.length && <section id="spec-decisions" tabIndex={-1} data-spec-anchor><h2>决策与未决事项</h2><DecisionHistory decisions={snapshot.decisions} /></section>}
           {groups.map(group => <div key={group.id} id={group.id} tabIndex={-1} data-spec-anchor data-current={active === group.id} className="specification-group"><h2>功能规格 · {group.label}</h2>

@@ -76,7 +76,9 @@ async function startRoundtableProvider() {
       }
     }
     const chair = system.includes('你是本轮圆桌主持人')
-    const toolsDone = input.some((m) => m.role === 'tool' || m.type === 'function_call_output')
+    const turnBoundary = input.findLastIndex(m => m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('[当前讨论发言 '))
+    const currentInput = input.slice(turnBoundary >= 0 ? turnBoundary + 1 : 0)
+    const toolsDone = currentInput.some((m) => m.role === 'tool' || m.type === 'function_call_output')
     const design = system.includes('产品界面设计 AI')
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     const output = [
@@ -131,7 +133,7 @@ async function startRoundtableProvider() {
       !chair &&
       !design
     ) {
-      const step = input.filter(
+      const step = currentInput.filter(
         (m) => m.role === 'tool' || m.type === 'function_call_output',
       ).length
       if (body.tools?.length && body.model === '产品模型') {
@@ -171,7 +173,7 @@ async function startRoundtableProvider() {
       }
     } else if (control.decisions && !chair && !design && !toolsDone) {
       const decisions = JSON.parse(
-        system.split('已记录的决策（人工答案优先，暂缓不是同意）：').at(-1),
+        system.split('已记录的决策（人工答案优先，暂缓不是同意）：').at(-1).split('\n')[0],
       )
       const first = body.model === '产品模型'
       const question =

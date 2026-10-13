@@ -151,12 +151,12 @@ test('a resumed agent cleans old summaries before its first request on every pro
       requests++
       assert.equal(messages.filter(m => m.content.includes(summaryHeader)).length, 1)
       assert.equal(messages.map(m => m.content).join('\n').split(summaryHeader).length - 1, 1)
-      assert.deepEqual(messages[0], originalUser)
+      assert.deepEqual(messages[0], { ...originalUser, sequence: 1 })
       assert.ok(messages.some(m => m.content === laterUser.content))
       assert.match(JSON.stringify(messages), /LATEST_NEXT_ACTION/)
       const saved = Object.values(service.store.data.executionCheckpoints)[0]
       assert.equal(saved.messages.map(m => m.content).join('\n').split(summaryHeader).length - 1, 1)
-      return { text: 'fixture continuation', calls: [] }
+      return { text: JSON.stringify({status:'complete',summary:'fixture continuation',nextStep:'review'}), calls: [] }
     }
     await service.agentLoop(project, feature, service.store.data.agents.find(a => a.id === 'developer'), '', new AbortController().signal,
       { resume: { role: 'developer', steps: 3, messages: [originalUser, { role: 'user', content: legacySummary() }, laterUser], commands: [], prototypeReadUntil: 0 } })
@@ -177,14 +177,14 @@ test('artifact paging preserves all log output, version checks and scope isolati
     restored += page.content; offset = page.nextOffset; version = page.version
   } while (offset !== null)
   assert.equal(restored, original)
-  assert.throws(() => new ExecutionArtifacts(service.store, 'different-project', feature.id).read({ id: output.artifact.id }), /不存在/)
-  assert.throws(() => new ExecutionArtifacts(service.store, project.id, feature.id).read({ id: output.artifact.id, version: 'stale' }), /版本已变化/)
+  assert.throws(() => new ExecutionArtifacts(service.store.artifactHost(), 'different-project', feature.id).read({ id: output.artifact.id }), /不存在/)
+  assert.throws(() => new ExecutionArtifacts(service.store.artifactHost(), project.id, feature.id).read({ id: output.artifact.id, version: 'stale' }), /版本已变化/)
 })
 test('archive streaming redacts credentials split across output chunks', () => {
   const { service, project, feature } = fixture()
   const key = 'fixture-secret-boundary-value'
   service.store.key = () => key
-  const artifacts = new ExecutionArtifacts(service.store, project.id, feature.id)
+  const artifacts = new ExecutionArtifacts(service.store.artifactHost(), project.id, feature.id)
   const stream = artifacts.stream('redaction')
   stream.append('PREFIX ' + 'x'.repeat(200) + key.slice(0, 12))
   stream.append(key.slice(12) + ' ' + 'y'.repeat(200) + ' sk-abcdef')
@@ -238,7 +238,7 @@ test('the real agent loop survives eight large reads in a single round', async (
     paired(messages)
     assert.ok(model.modelRequestCharacters(connection, system, messages, tools) <= 144000)
     if (++requests === 1) return { text: '', calls: Array.from({ length: 8 }, (_, i) => ({ id: 'read-' + i, name: 'read_file', arguments: JSON.stringify({ path: 'large-read-' + i + '.txt' }) })) }
-    return { text: '读取后继续完成', calls: [] }
+    return { text: JSON.stringify({status:'complete',summary:'读取后继续完成',nextStep:'review'}), calls: [] }
   }
   await service.agentLoop(project, feature, service.store.data.agents.find(a => a.id === 'developer'), '', new AbortController().signal)
   assert.equal(requests, 2)
@@ -262,7 +262,7 @@ test('large completed writes compact and continue on each protocol without repla
       }
       assert.match(JSON.stringify(messages), /artifact:/)
       assert.match(JSON.stringify(messages), /large.txt/)
-      return { text: '完成', calls: [] }
+      return { text: JSON.stringify({status:'complete',summary:'完成',nextStep:'review'}), calls: [] }
     }
     await service.agentLoop(project, feature, service.store.data.agents.find(a => a.id === 'developer'), '', new AbortController().signal)
     assert.equal(calls, 2)
@@ -278,7 +278,7 @@ test('provider capacity recovery is bounded and does not replay completed tools'
     if (++calls === 1) return r.call('write_file', { path: 'capacity.txt', content: 'x'.repeat(24000) })
     if (calls === 2) { rejectedSize = model.modelRequestCharacters(connection, system, messages, tools); throw new model.ModelContextLimitError('fixture context_length_exceeded', rejectedSize) }
     assert.ok(model.modelRequestCharacters(connection, system, messages, tools) < rejectedSize)
-    return { text: '容量恢复后完成', calls: [] }
+    return { text: JSON.stringify({status:'complete',summary:'容量恢复后完成',nextStep:'review'}), calls: [] }
   }
   await service.agentLoop(project, feature, service.store.data.agents.find(a => a.id === 'developer'), '', new AbortController().signal)
   assert.equal(calls, 3)

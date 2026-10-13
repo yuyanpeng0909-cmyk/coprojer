@@ -13,10 +13,10 @@ const cache = new Map()
 function load(file) {
   file = path.resolve(file)
   if (cache.has(file)) return cache.get(file)
-  if (file.endsWith(path.join('engineering', 'model.ts'))) return { complete: async (...args) => modelReply(...args), parseJson: JSON.parse }
   const exports = {}; cache.set(file, exports)
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   new Function('exports', 'require', code)(exports, name => name === 'electron' ? { app: { getPath: () => root }, safeStorage: {} } : name.startsWith('.') ? load(path.resolve(path.dirname(file), name + '.ts')) : require(name))
+  if (file.endsWith(path.join('engineering', 'model.ts'))) exports.complete = async (...args) => modelReply(...args)
   return exports
 }
 const { defaultAgents, migrateAgentSkills, ownSkill, builtinSkills } = load('src/shared/agents.ts')

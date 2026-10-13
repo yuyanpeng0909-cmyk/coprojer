@@ -1,5 +1,7 @@
 import type { ModelMessage } from './model'
 import type { ExecutionProgressState } from './execution-progress'
+import type { ExecutionManifest } from '../../shared/model-profile'
+import type { ReadCoverage } from './read-registry'
 import type { VerificationEvidenceKind, VerificationStatus, RuntimeMeasurement } from '../../shared/engineering'
 
 export type ExecutionRole = 'developer' | 'reviewer' | 'diagnoser' | 'preparer'
@@ -28,6 +30,15 @@ export function verificationStatus(
 
 export const executionStepLimit = 36
 export interface CommandEvidence {
+  legacyScopeBinding?: { ruleVersion: 'validated-checkpoint-v1'; checkpointFingerprint: string; environment: 'unknown' }
+  taskRevision?: number
+  contractFingerprint?: string
+  environmentFingerprint?: string
+  logicalCallId?: string
+  providerCallId?: string
+  stepId?: string
+  executionRunId?: string
+  artifact?: { id: string }
   id?: string
   at?: string
   sourceFingerprint?: string
@@ -45,6 +56,13 @@ export interface CommandEvidence {
 // Main-process state only. Saved at a completed tool-round boundary, never
 // halfway through side effects. It is not part of the renderer's project model.
 export interface ExecutionCheckpoint {
+  version?: 2 | 3 | 4
+  continuity?: import('./context-continuity').ContextContinuity
+  pending?: import('./runtime').PendingToolGroup
+  pendingSources?: Record<string, string>
+  lastSequence?: number
+  manifest?: ExecutionManifest
+  reads?: ReadCoverage[]
   role: ExecutionRole
   fingerprint: string
   sourceFingerprint: string

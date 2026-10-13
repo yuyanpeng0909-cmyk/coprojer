@@ -24,7 +24,7 @@ export const workspaceNavigation = [
   { id: 'activity', label: '执行记录', icon: Activity },
 ] as const
 export type ProjectView = (typeof workspaceNavigation)[number]['id'] | DeliveryView
-export type WorkspaceSection = 'projects' | 'models' | 'agents' | 'appearance' | 'onboarding'
+export type WorkspaceSection = 'projects' | 'models' | 'agents' | 'team' | 'appearance' | 'onboarding'
 export default function WorkspaceSidebar({
   researchTab,
   onResearchTab,
@@ -117,6 +117,7 @@ export default function WorkspaceSidebar({
         {project && <>
         <div className="sidebar-section-label">项目工作区</div>
         <nav aria-label="项目导航">
+          <button aria-label="项目团队" title="项目团队" aria-current={section === 'team' ? 'page' : undefined} className={section === 'team' ? 'selected' : ''} onClick={() => onSection('team')}><Bot size={15} /><span className="nav-label">项目团队</span></button>
           {workspaceNavigation.map(({ id, label, icon: Icon }) => (
             <Fragment key={id}>
               <button
@@ -217,7 +218,7 @@ export default function WorkspaceSidebar({
       <nav className="studio-config" aria-label="工作空间设置">
         {[
           { id: 'models', label: '模型连接', icon: Settings2, count: state.models.length },
-          { id: 'agents', label: '智能体', icon: Bot, count: state.agents.length },
+          { id: 'agents', label: '智能体', icon: Bot, count: state.agents.filter(a => !a.ownerProjectId).length },
           { id: 'appearance', label: '外观与偏好', icon: SlidersHorizontal },
         ].map(({ id, label, icon: Icon, count }) => (
           <button

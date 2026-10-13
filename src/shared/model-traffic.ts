@@ -28,7 +28,7 @@ export interface TrafficRequest extends TokenUsage {
   connectionId: string
   model: string
   protocol: Protocol
-  purpose: 'inference' | 'test'
+  purpose: 'inference' | 'test' | 'count' | 'compaction'
   startedAt: string
   finishedAt?: string
   durationMs?: number

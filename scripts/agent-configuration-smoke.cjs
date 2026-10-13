@@ -12,6 +12,7 @@ async function main() {
   await fs.writeFile(join(source,'SKILL.md'),'---\nname: fixture-design\ndescription: 本地布局与交互规范\n---\n按需读取 references/guide.md。')
   await fs.writeFile(join(source,'references/guide.md'),'LOCAL_RESOURCE_MARKER')
   const requests = [], failures = []
+  let plannerSkillId = 'planner::requirements'
   const server = http.createServer(async(req,res)=>{
     try {
       let raw=''; for await (const chunk of req) raw+=chunk
@@ -24,7 +25,7 @@ async function main() {
       else {
         const previous=body.messages.filter(m=>m.role==='tool')
         if(!previous.length) calls=[{id:'foreign',type:'function',function:{name:'read_skill',arguments:JSON.stringify({id:'designer::fixture-design'})}}]
-        else if(previous.length===1) { assert.match(previous[0].content,/不属于/); calls=[{id:'own',type:'function',function:{name:'read_skill',arguments:JSON.stringify({id:'planner::requirements'})}}] }
+        else if(previous.length===1) { assert.match(previous[0].content,/不属于/); calls=[{id:'own',type:'function',function:{name:'read_skill',arguments:JSON.stringify({id:plannerSkillId})}}] }
         else { assert.match(previous.at(-1).content,/梳理|区分本期/); text='专属技能已按需读取，跨智能体调用已被拒绝。' }
       }
       if(body.stream) {
@@ -60,7 +61,7 @@ async function main() {
       const dialogs=page.locator('dialog[open]'); if(await dialogs.count()) assert.ok(await dialogs.evaluate(d=>d.scrollWidth<=d.clientWidth+1),'dialog must not overflow')
     }
     await screenshot('agents',1280,840); await screenshot('agents',860,600)
-    await page.locator('.eng-agent-card').filter({hasText:'原型前端智能体'}).getByRole('button',{name:'技能',exact:true}).click()
+    await page.locator('.eng-agent-card').filter({hasText:'交互与原型'}).getByRole('button',{name:'技能',exact:true}).click()
     const skills=page.getByRole('dialog',{name:'智能体专属技能'})
     await desktop.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]})},source)
     await skills.getByRole('button',{name:'导入本地技能',exact:true}).click()
@@ -68,7 +69,7 @@ async function main() {
     assert.ok(!(await state()).skills.some(s=>s.sourceId==='fixture-design'))
     await screenshot('local-preview',860,600)
     await skills.getByRole('button',{name:'确认安装并启用',exact:true}).click()
-    await skills.getByText('已安装并启用，仅供「原型前端智能体」使用。').waitFor()
+    await skills.getByText('已安装并启用，仅供「交互与原型」使用。').waitFor()
     assert.equal((await state()).skills.find(s=>s.sourceId==='fixture-design').ownerAgentId,'designer')
     await skills.getByRole('checkbox',{name:/fixture-design/}).uncheck()
     await page.waitForFunction(()=>document.querySelector('.eng-owned-skill input:not(:checked)'))
@@ -105,9 +106,9 @@ async function main() {
     await assert.rejects(invoke('saveAgent',{...second,skillIds:['designer::fixture-design']}),/其他智能体/)
     await page.getByRole('button',{name:'模型配置助手',exact:true}).click()
     const assistant=page.getByRole('dialog',{name:'模型配置助手'})
-    await assistant.getByLabel('任务规划智能体能力类别',{exact:true}).selectOption('text')
-    await assistant.getByLabel('开发智能体能力类别',{exact:true}).selectOption('coding')
-    await assistant.getByLabel('验证智能体能力类别',{exact:true}).selectOption('coding')
+    await assistant.getByLabel('需求与架构能力类别',{exact:true}).selectOption('text')
+    await assistant.getByLabel('全栈开发能力类别',{exact:true}).selectOption('coding')
+    await assistant.getByLabel('独立测试能力类别',{exact:true}).selectOption('coding')
     await assistant.getByRole('button',{name:'一键推荐模型',exact:true}).click()
     await assistant.getByRole('button',{name:'一键应用模型配置',exact:true}).waitFor()
     assert.equal((await state()).agents.find(a=>a.id==='developer').modelId,'model-a')
@@ -120,6 +121,7 @@ async function main() {
     assert.equal((await state()).agents.find(a=>a.id==='developer').modelId,'model-b')
     await assistant.getByRole('button',{name:'关闭面板',exact:true}).click()
     const pid=await invoke('createProject',{name:'隔离技能验证',parent,brief:'验证按需加载',modelId:'model-a'})
+    plannerSkillId = (await state()).projects.find(p => p.id === pid).plannerId + '::requirements'
     await invoke('discuss',pid,'请检查当前任务的规划技能。')
     const deadline=Date.now()+30000
     for (;;) {
@@ -129,7 +131,7 @@ async function main() {
       await new Promise(resolve=>setTimeout(resolve,100))
     }
     const project=(await state()).projects.find(p=>p.id===pid)
-    assert.ok(project.events.some(e=>e.kind==='skill'&&e.message.includes('planner::requirements')), JSON.stringify({events:project.events,chat:project.chat,requests:requests.length}))
+    assert.ok(project.events.some(e=>e.kind==='skill'&&e.message.includes(plannerSkillId)), JSON.stringify({events:project.events,chat:project.chat,requests:requests.length}))
     assert.ok(requests.some(b=>b.tools?.some(t=>t.function?.name==='read_skill')))
     assert.deepEqual(errors,[]); assert.deepEqual(failures,[])
     console.log('PASS: real Electron local preview/install/toggle, remote recommendation+confirmed install (mock services), per-instance isolation, model assistant preview/apply, on-demand skill tool calls, 1280x840 and 860x600 layouts')

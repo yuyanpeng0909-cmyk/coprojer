@@ -35,7 +35,7 @@ function provider(ctx, options = {}) {
     if (system.includes('你是 Coprojer 的开发智能体')) {
       seen.developers++; seen.phases.push('developer')
       if (seen.developers > 1 && options.repair) fs.writeFileSync(path.join(ctx.root, 'value.cjs'), 'exports.sum = (a,b) => a+b')
-      return { text: '实现已提交', calls: [] }
+      return answer({status:'complete',summary:'实现已提交',nextStep:'独立验证'})
     }
     if (!history.length) { seen.reviews++; seen.phases.push('review') }
     if (options.sourceChange && !history.length) fs.appendFileSync(path.join(ctx.root, 'value.cjs'), '\n// external change')

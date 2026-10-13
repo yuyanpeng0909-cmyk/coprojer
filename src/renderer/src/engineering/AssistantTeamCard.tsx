@@ -13,7 +13,7 @@ export default function AssistantTeamCard({ plan, state, run }: { plan: Assistan
   return <section className="assistant-plan" aria-label="团队配置方案">
     <header><strong>{plan.projectId ? '项目团队方案' : '全局团队方案'}</strong><span>{members.length} 位成员</span></header>
     <p>生效范围：{plan.projectId ? project?.name || '原项目已不存在' : '全局共享成员'}</p>
-    <p className="assistant-subtle">{plan.projectId ? '共享成员将建立项目专用实例，不复制其专属 Skill。其他项目配置保持原样。' : '将设为新项目默认团队，并修改明确引用的共享成员；独立设置的项目讨论型号保持原选择。'}</p>
+    <p className="assistant-subtle">{plan.projectId ? '共享模板会复制为项目成员，专属 Skill 与资源独立保存；已有项目副本优先复用。' : '将设为新项目默认模板，并修改明确引用的共享成员；已复制的项目团队独立配置。'}</p>
     <p className="assistant-subtle">影响项目：{plan.affectedProjects.join('、') || '目前没有项目引用这些成员'}</p>
     <div className="assistant-plan-members">{members.map(m => {
       const source = state.agents.find(a => a.id === m.sourceAgentId), model = state.models.find(model => model.id === m.previousModelId)

@@ -25,11 +25,15 @@ export async function readModelStream(
   const blocks: any[] = [],
     items: any[] = []
   let usage: Record<string, unknown> = {}
+  const eventIds = new Set<string>()
   const send = (kind: ModelDelta['kind'], value: unknown, extra = {}) => {
     if (typeof value === 'string' && (value || kind === 'tool'))
       emit({ kind, text: value, ...extra })
   }
   function event(raw: string) {
+    const eventId = raw.split(/\r?\n/).find(line => line.startsWith('id:'))?.slice(3).trim()
+    if (eventId && eventIds.has(eventId)) return
+    if (eventId) eventIds.add(eventId)
     const data = raw
       .split(/\r?\n/)
       .filter((l) => l.startsWith('data:'))
@@ -41,6 +45,11 @@ export async function readModelStream(
       return
     }
     const e = JSON.parse(data)
+    if (protocol === 'responses' && Number.isInteger(e.sequence_number)) {
+      const key = 'sequence:' + e.sequence_number
+      if (eventIds.has(key)) return
+      eventIds.add(key)
+    }
     const reportedUsage = e.usage ?? e.message?.usage ?? e.response?.usage
     if (reportedUsage && typeof reportedUsage === 'object') {
       // message_delta and usage-only Chat chunks are cumulative snapshots.
@@ -78,7 +87,7 @@ export async function readModelStream(
       }
     } else if (protocol === 'anthropic') {
       if (e.type === 'message_stop') finished = true
-      if (e.type === 'message_delta' && e.delta?.stop_reason === 'max_tokens')
+      if (e.type === 'message_delta' && ['max_tokens', 'pause_turn', 'refusal'].includes(e.delta?.stop_reason))
         throw new Error('模型输出被截断，已保留收到的内容。')
       if (e.type === 'content_block_start') {
         blocks[e.index] = { ...e.content_block }
@@ -148,10 +157,11 @@ export async function readModelStream(
     if (buffer.trim()) event(buffer)
     if (!finished) throw new Error('模型连接提前断开，已保留收到的内容，请继续讨论。')
     if (protocol === 'chat')
-      return { model: reportedModel, choices: [{ message: { ...chat, tool_calls: chat.tool_calls.filter(Boolean) } }] }
+      return { model: reportedModel, usage, choices: [{ message: { ...chat, tool_calls: chat.tool_calls.filter(Boolean) } }] }
     if (protocol === 'anthropic')
       return {
         model: reportedModel,
+        usage,
         content: blocks
           .filter(Boolean)
           .map(({ _json, ...b }) => ({ ...b, ...(_json ? { input: JSON.parse(_json) } : {}) })),

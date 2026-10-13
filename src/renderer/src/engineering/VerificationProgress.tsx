@@ -1,14 +1,20 @@
 import type { Feature } from '../../../shared/engineering'
+import { classifyEvidence } from '../../../shared/current-evidence'
 
 const phases = { diagnosing: '分析验证缺口', preparing: '准备验证条件', rechecking: '重新独立验证', blocked: '待补验证', complete: '独立验证完成' }
 const dispositions = { automatic: '可自动补齐', external: '外部条件', unknown: '待技术诊断' }
-export default function VerificationProgress({ feature }: { feature: Feature }) {
+export default function VerificationProgress({ feature, activity }: { feature: Feature; activity?: string | null }) {
   const state = feature.verificationPreparation
   if (!state) return null
-  const failed = feature.results.some(r => r.status === 'failed') || feature.verificationChecks?.some(c => c.code !== 0) || state.attempts.at(-1)?.status === 'defect'
-  const failedCommands = failed ? [...new Set(feature.verificationChecks?.filter(c => c.code !== 0).map(c => c.command) ?? [])] : []
+  const applicable = feature.evidenceProjection
+    ? feature.evidenceProjection.taskRevision === feature.revision ? feature.evidenceProjection.records.filter(c => c.disposition === 'current') : []
+    : classifyEvidence(feature.verificationChecks ?? []).filter(c => c.disposition === 'current').map(c => c.record)
+  const failed = feature.results.some(r => r.status === 'failed' && (r.taskRevision === undefined || r.taskRevision === feature.revision)) || applicable.some(c => c.code !== 0) || state.attempts.at(-1)?.status === 'defect'
+  const failedCommands = failed ? [...new Set(applicable.filter(c => c.code !== 0).map(c => c.command))] : []
   return <section className="eng-verification-progress" aria-label="验证条件准备">
     <div className="eng-verification-heading"><strong role="status">{state.phase === 'blocked' && failed ? '检查未通过' : phases[state.phase]}</strong><span>准备 {state.round} / {state.limit} 轮 · 代码修复 {feature.repairRound} / 3 轮</span></div>
+    {feature.stage === 'verifying' && activity && ['diagnosing', 'preparing'].includes(state.phase) &&
+      <p role="status" aria-live="polite">{activity} · 单次模型响应最多等待 3 分钟</p>}
     {state.phase === 'blocked' && failedCommands.length > 0 && <p>实际检查未通过：{failedCommands.join('；')}。失败尚未解决，不能进入成果验收。</p>}
     <p>{state.phase === 'blocked' && state.gaps.length > 0 && state.gaps.every(g => g.disposition !== 'automatic')
       ? '仍有 ' + state.gaps.length + ' 项未验证。具体依据和最少需要补充的条件见下方。' : state.summary}</p>

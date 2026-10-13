@@ -103,7 +103,7 @@ export default function PrototypePreview({ project }: { project: Project }) {
           <iframe
             key={`${revision.id}-${reload}`}
             title="原型实时预览"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-forms"
             referrerPolicy="no-referrer"
             srcDoc={document}
           />

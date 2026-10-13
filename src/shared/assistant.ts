@@ -8,6 +8,9 @@ export interface AssistantAction {
   text?: string
 }
 export interface AssistantSession {
+  runtimeBudget?: import('./runtime-budget').RuntimeBudget
+  contextPolicy?: import('./model-profile').ContextPolicy
+  contextRuntime?: import('./model-profile').ContextRuntimeState
   id: string
   title: string
   projectId?: string

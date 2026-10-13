@@ -1,9 +1,24 @@
 import type { ModelInput, Protocol } from '../../shared/engineering'
+import { createHash, randomUUID } from 'node:crypto'
+import type { ModelProfile, RequestBudget } from '../../shared/model-profile'
+import type { TokenUsage } from '../../shared/model-traffic'
+import { modelProfile, requestBudget } from './model-profile'
+import { observeInputUsage, rememberInputCount } from './context-budget'
+import { assertProtocolHistory } from './protocol-history'
 import { reasoningRequest, type AgentReasoning } from '../../shared/reasoning'
 import { readModelStream, type DeltaListener } from './stream'
 import { tokenUsage } from '../../shared/model-traffic'
 import type { TrafficRecorder, TrafficObservation } from './model-traffic'
 export class ContextBudgetError extends Error { name = 'ContextBudgetError' }
+
+export class ModelTransportError extends Error {
+  readonly name = 'ModelTransportError'
+  constructor(message: string, readonly codes: string[], readonly beforeResponse: boolean) { super(message) }
+  get retryable(): boolean {
+    return this.beforeResponse && this.codes.some(code => ['UND_ERR_SOCKET', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN',
+      'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(code))
+  }
+}
 
 export class ModelContextLimitError extends ContextBudgetError {
   constructor(message: string, readonly requestCharacters?: number, readonly limit?: number) {
@@ -23,6 +38,9 @@ export interface ToolCall {
   arguments: string
 }
 export interface ModelMessage {
+  origin?: { identity: ModelProfile['identity']; nativeCompatibilityKey?: string; nativeScope?: string }
+  /** Local history identity; protocol encoders never send it as a provider field. */
+  sequence?: number
   role: 'user' | 'assistant' | 'tool'
   content: string
   calls?: ToolCall[]
@@ -32,14 +50,43 @@ export interface ModelMessage {
   anthropicBlocks?: Record<string, unknown>[]
 }
 export interface ModelReply {
+  origin?: ModelMessage['origin']
   text: string
   model?: string
   calls: ToolCall[]
   reasoning?: string
   responseItems?: Record<string, unknown>[]
   anthropicBlocks?: Record<string, unknown>[]
+  usage?: TokenUsage
+  responseId?: string
 }
-export type Connection = ModelInput & { name: string; apiKey: string; reasoning?: AgentReasoning; traffic?: TrafficRecorder; trafficPurpose?: 'inference' | 'test'; onRequest?: () => void; onResponse?: (update: TrafficObservation) => void }
+export interface PreparedModelRequest {
+  readonly opaqueWindow?: boolean
+  readonly nativeScope?: string
+  readonly version: 1
+  readonly protocol: Protocol
+  readonly model: string
+  readonly path: string
+  readonly payload: string
+  readonly hash: string
+  readonly stream: boolean
+  readonly profile: ModelProfile
+  readonly budget: RequestBudget
+}
+function executableReply(reply: ModelReply): ModelReply {
+  const ids = new Set<string>()
+  for (const call of reply.calls) {
+    if (!call.id || typeof call.id !== 'string' || ids.has(call.id) || typeof call.name !== 'string' || !call.name || typeof call.arguments !== 'string')
+      throw new Error('模型工具调用标识重复或字段不完整，本轮工具未执行。')
+    ids.add(call.id)
+    try {
+      const args = JSON.parse(call.arguments)
+      if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error()
+    } catch { throw new Error('模型工具调用参数不是完整 JSON 对象，本轮工具未执行。') }
+  }
+  return reply
+}
+export type Connection = ModelInput & { name: string; apiKey: string; nativeScope?: string; requestTimeoutMs?: number; reasoning?: AgentReasoning; traffic?: TrafficRecorder; trafficPurpose?: 'inference' | 'test'; onRequest?: () => void; onResponse?: (update: TrafficObservation) => void; onOperation?: (operation: import('../../shared/model-profile').ContextOperation) => void }
 
 export function normalizedBase(value: string): string {
   const url = new URL(value.trim())
@@ -100,14 +147,17 @@ async function request(
   body?: unknown,
   signal?: AbortSignal,
   onDelta?: DeltaListener,
+  prepared?: PreparedModelRequest,
 ): Promise<any> {
   // Bound the serialized request across all protocols, including skills and tools.
   // This is a character guard, not a provider token estimate.
-  const payload = serializeRequest(c, body, !!onDelta)
-  if (payload && payload.length > 160_000)
+  const payload = prepared?.payload ?? serializeRequest(c, body, !!onDelta)
+  if (prepared) assertPreparedCapacity(prepared)
+  if (payload && !prepared && payload.length > 160_000 && c.capabilities?.contextPolicy?.mode !== 'adaptive')
     throw new ModelContextLimitError('本次模型请求超过 160000 字符上限（含资料、技能、工具和对话，并非 token 数）。原始资料已保留。', payload.length, 160000)
+  if (payload && Buffer.byteLength(payload) > Math.min(16 * 1024 * 1024, c.capabilities?.transportByteLimit ?? Infinity)) throw new ContextBudgetError('模型请求超过传输字节保护上限。')
   const startedAt = Date.now()
-  const transportError = (error: unknown): Error => {
+  const transportError = (error: unknown, beforeResponse = false): Error => {
     const codes: string[] = []
     let cause: any = error
     for (let depth = 0; cause && depth < 6; depth++, cause = cause.cause) {
@@ -125,13 +175,18 @@ async function request(
             ? 'TLS 或证书校验失败'
             : '网络请求失败'
     // Never serialize cause.message: it may contain credentials or a request URL.
-    return new Error(`${reason}（${code}；耗时 ${Math.round((Date.now() - startedAt) / 1000)} 秒）。请检查模型服务与网络连接。`)
+    return new ModelTransportError(`${reason}（${code}；耗时 ${Math.round((Date.now() - startedAt) / 1000)} 秒）。请检查模型服务与网络连接。`, [...new Set(codes)], beforeResponse)
   }
   // A design response may contain a complete HTML document and can spend
   // several minutes in reasoning before its first text delta. Keep the
   // timeout bounded, but do not turn a healthy slow stream into a partial
   // result after the old 150-second limit.
-  const timeout = AbortSignal.timeout(10 * 60 * 1000)
+  const timeoutMs = Number.isSafeInteger(c.requestTimeoutMs) && c.requestTimeoutMs! > 0
+    ? Math.min(c.requestTimeoutMs!, 10 * 60 * 1000) : 10 * 60 * 1000
+  const timeout = AbortSignal.timeout(timeoutMs)
+  const timeoutError = () => new Error(timeoutMs < 10 * 60 * 1000
+    ? `模型响应超时（${Math.ceil(timeoutMs / 1000)} 秒）；本轮未执行尚未完整返回的工具。已完成的执行进度保留，请检查模型响应速度或调整推理强度后继续。`
+    : '模型响应超过 10 分钟未完成，已保留已收到的内容，请重试。')
   let response: Response
   const url = endpoint(normalizedBase(c.baseUrl), path)
   signal?.throwIfAborted()
@@ -146,9 +201,9 @@ async function request(
     })
   } catch (error) {
     if (timeout.aborted && !signal?.aborted)
-      throw new Error('模型响应超过 10 分钟未完成，已保留已收到的内容，请重试。')
+      throw timeoutError()
     if (signal?.aborted) throw error
-    throw transportError(error)
+    throw transportError(error, true)
   }
   c.onResponse?.({ httpStatus: response.status })
   try {
@@ -160,18 +215,17 @@ async function request(
       /context_length_exceeded|maximum context length|context window.{0,80}(?:exceed|limit)|(?:input|prompt).{0,60}(?:too long|exceeds.{0,30}token)|上下文.{0,30}(?:超出|超过|过长)/i.test(raw))
       throw new ModelContextLimitError('模型上下文容量不足：' + cleanError(raw, c.apiKey), payload?.length)
     if (!response.ok) throw new Error(`模型服务返回 ${response.status}：${cleanError(raw, c.apiKey)}`)
-    try {
-      const result = JSON.parse(raw)
-      c.onResponse?.({ usage: tokenUsage(c.protocol, result?.usage) })
-      return result
-    } catch {
+    let result: any
+    try { result = JSON.parse(raw) } catch {
       throw new Error('服务未返回有效 JSON，请检查接口类型与服务地址。')
     }
+    c.onResponse?.({ usage: tokenUsage(c.protocol, result?.usage) })
+    return result
   } catch (error) {
     // AbortSignal.timeout aborts the response body reader as well as fetch.
     // Normalize both paths so every caller gets the same actionable message.
     if (timeout.aborted && !signal?.aborted)
-      throw new Error('模型响应超过 10 分钟未完成，已保留已收到的内容，请重试。')
+      throw timeoutError()
     if (!signal?.aborted && error instanceof TypeError) throw transportError(error)
     throw error
   }
@@ -191,15 +245,20 @@ export async function complete(
   tools: ToolDefinition[] = [],
   signal?: AbortSignal,
   onDelta?: DeltaListener,
+  prepared?: PreparedModelRequest,
 ): Promise<ModelReply> {
-  if (!c.traffic || !c.id) return completeRequest(c, system, messages, tools, signal, onDelta)
+  prepared ??= prepareModelRequest(c, system, messages, tools, !!onDelta)
+  assertPreparedCapacity(prepared)
+  if (prepared.protocol !== c.protocol || prepared.model !== c.model || prepared.profile.identity.baseUrl !== c.baseUrl)
+    throw new Error('已准备请求与当前连接不匹配。')
+  if (!c.traffic || !c.id) return completeRequest(c, system, messages, tools, signal, onDelta, prepared)
   let recording: ReturnType<TrafficRecorder['start']> | undefined
   const traced: Connection = { ...c,
-    onRequest: () => { try { recording = c.traffic!.start(c, c.trafficPurpose ?? 'inference') } catch { /* Monitoring cannot interrupt inference. */ } },
-    onResponse: update => { try { recording?.observe(update) } catch { /* Keep inference independent of monitoring. */ } },
+    onRequest: () => { c.onRequest?.(); try { recording = c.traffic!.start(c, c.trafficPurpose ?? 'inference') } catch { /* Monitoring cannot interrupt inference. */ } },
+    onResponse: update => { c.onResponse?.(update); try { recording?.observe(update) } catch { /* Keep inference independent of monitoring. */ } },
   }
   try {
-    const reply = await completeRequest(traced, system, messages, tools, signal, onDelta)
+    const reply = await completeRequest(traced, system, messages, tools, signal, onDelta, prepared)
     try { recording?.finish('succeeded') } catch { /* Keep the valid reply. */ }
     return reply
   } catch (error) {
@@ -216,6 +275,18 @@ function serializeRequest(c: Connection, body: unknown, stream: boolean): string
 }
 
 function buildModelRequest(c: Connection, system: string, messages: ModelMessage[], tools: ToolDefinition[]) {
+  // Current-segment replies may roundtrip native state. Persistent history requires
+  // a matching declared compatibility key; canonical history remains unchanged.
+  messages = messages.map(message => {
+    const origin = message.origin
+    const same = !!origin && origin.identity.connectionId === c.id && origin.identity.baseUrl === c.baseUrl && origin.identity.model === c.model && origin.identity.protocol === c.protocol
+    const compatible = same && !!origin.nativeCompatibilityKey && origin.nativeCompatibilityKey === c.capabilities?.nativeCompatibilityKey
+    if (c.nativeScope ? same && (origin?.nativeScope === c.nativeScope || compatible) : !origin || same) return message
+    if ((message.reasoning || message.responseItems?.length || message.anthropicBlocks?.length) && !message.content && !message.calls?.length)
+      throw new Error('持久历史仅有未确认兼容的原生状态，缺少规范内容；保留原件，请核对后显式续接。')
+    const { reasoning: _reasoning, responseItems: _responses, anthropicBlocks: _blocks, ...portable } = message
+    return portable
+  })
   if (c.protocol === 'anthropic') {
     const input: any[] = []
     for (const m of messages) {
@@ -235,7 +306,7 @@ function buildModelRequest(c: Connection, system: string, messages: ModelMessage
               type: 'tool_use',
               id: call.id,
               name: call.name,
-              input: parseJson(call.arguments),
+              input: JSON.parse(call.arguments),
             })),
           ],
         })
@@ -324,7 +395,60 @@ function buildModelRequest(c: Connection, system: string, messages: ModelMessage
 }
 
 export function modelRequestCharacters(c: Connection, system: string, messages: ModelMessage[], tools: ToolDefinition[], stream = true): number {
-  return serializeRequest(c, buildModelRequest(c, system, messages, tools).body, stream)!.length
+  return prepareModelRequest(c, system, messages, tools, stream).budget.requestCharacters
+}
+export function prepareModelRequest(c: Connection, system: string, messages: ModelMessage[], tools: ToolDefinition[], stream = true): PreparedModelRequest {
+  assertProtocolHistory(messages, c.protocol)
+  const profile = modelProfile(c), request = buildModelRequest(c, system, messages, tools)
+  if (tools.length && profile.declared.toolCalling === false) throw new ContextBudgetError('当前连接声明不支持工具调用，已保存进度。')
+  const body = request.body as Record<string, any>
+  const parameter = profile.declared.outputParameter ?? (c.protocol === 'anthropic' ? 'max_tokens' : undefined)
+  if (parameter && profile.declared.maxOutputTokens !== undefined) body[parameter] = profile.declared.maxOutputTokens
+  const payload = serializeRequest(c, body, stream)!
+  return Object.freeze({ version: 1, nativeScope: c.nativeScope, protocol: c.protocol, model: c.model, path: request.path, payload,
+    hash: createHash('sha256').update(payload).digest('hex'), stream, profile,
+    budget: requestBudget(payload, profile, parameter ? body[parameter] : undefined) })
+}
+export function assertPreparedMeasurement(prepared: PreparedModelRequest): void {
+  if (prepared.budget.requiresProviderCount && prepared.budget.estimateMethod !== 'provider-count-v1')
+    throw new ContextBudgetError('原生或多模态内容缺少可靠 token 计数，原始视图保留。')
+}
+export function assertPreparedCapacity(prepared: PreparedModelRequest): void {
+  assertPreparedMeasurement(prepared)
+  const budget = prepared.budget
+  if (budget.requestCharacters > budget.characterLimit)
+    throw new ModelContextLimitError(`本次模型请求超过 ${budget.characterLimit} 字符上限（含资料、技能、工具和对话，并非 token 数）。原始资料已保留。`, budget.requestCharacters, budget.characterLimit)
+  if (budget.requestBytes > budget.byteLimit)
+    throw new ModelContextLimitError(`本次模型请求超过 ${budget.byteLimit} UTF-8 字节保护上限（并非已知模型窗口）。原始资料已保留。`, budget.requestBytes, budget.byteLimit)
+  if (budget.contextWindowTokens !== undefined && budget.estimatedTotalTokens > budget.contextWindowTokens)
+    throw new ContextBudgetError('当前必需输入与预留超过已声明窗口估算：' + JSON.stringify(budget) + '；已保存现场，未删减目标、授权或标准。')
+}
+
+/** Auxiliary operations have their own ledger; never merge their usage into inference. */
+export async function auxiliaryModelRequest(c: Connection, kind: 'count' | 'compaction', prepared: PreparedModelRequest, body: Record<string, unknown>, signal?: AbortSignal): Promise<any> {
+  const operation: import('../../shared/model-profile').ContextOperation = { id: randomUUID(), kind, parentHash: prepared.hash,
+    wireHash: createHash('sha256').update(JSON.stringify(body)).digest('hex'), at: new Date().toISOString(), status: 'prepared' }
+  c.onOperation?.(structuredClone(operation))
+  let recording: ReturnType<TrafficRecorder['start']> | undefined
+  try {
+    const result = await request({ ...c, onRequest: () => { c.onRequest?.(); try { recording = c.traffic?.start(c, kind) } catch {} },
+      onResponse: update => { if (update.usage && Object.values(update.usage).some(v => v !== undefined)) operation.usage = update.usage; try { recording?.observe(update) } catch {} } },
+      kind === 'count' ? 'responses/input_tokens' : 'responses/compact', body, signal)
+    operation.status = 'completed'; c.onOperation?.(structuredClone(operation)); try { recording?.finish('succeeded') } catch {}
+    return result
+  } catch (error) {
+    try { recording?.finish(signal?.aborted ? 'cancelled' : 'failed', 'response') } catch {}
+    operation.status = 'failed'; operation.error = cleanError(String(error), c.apiKey)
+    c.onOperation?.(structuredClone(operation)); throw error
+  }
+}
+export async function verifyModelRequest(c: Connection, prepared: PreparedModelRequest, signal?: AbortSignal): Promise<PreparedModelRequest> {
+  if (!prepared.budget.adaptive || c.capabilities?.tokenCounting !== 'responses' || prepared.budget.estimateMethod === 'provider-count-v1') return prepared
+  const source = JSON.parse(prepared.payload), body: Record<string, unknown> = { model: source.model, input: source.input }
+  for (const key of ['instructions', 'tools', 'tool_choice', 'text', 'reasoning']) if (source[key] !== undefined) body[key] = source[key]
+  const result = await auxiliaryModelRequest(c, 'count', prepared, body, signal)
+  rememberInputCount(prepared.profile, prepared.payload, result.input_tokens)
+  return Object.freeze({ ...prepared, budget: requestBudget(prepared.payload, prepared.profile, prepared.budget.reserves.outputTokens) })
 }
 async function completeRequest(
   c: Connection,
@@ -333,13 +457,18 @@ async function completeRequest(
   tools: ToolDefinition[] = [],
   signal?: AbortSignal,
   onDelta?: DeltaListener,
+  prepared?: PreparedModelRequest,
 ): Promise<ModelReply> {
   const protocol: Protocol = c.protocol
-  const prepared = buildModelRequest(c, system, messages, tools)
-  const result = await request(c, prepared.path, prepared.body, signal, onDelta)
+  prepared ??= prepareModelRequest(c, system, messages, tools, !!onDelta)
+  const result = await request(c, prepared.path, {}, signal, onDelta, prepared)
+  const receipt = { usage: tokenUsage(protocol, result?.usage), responseId: typeof result?.id === 'string' ? result.id : undefined }
+  if (!prepared.opaqueWindow) observeInputUsage(prepared.budget, receipt.usage.inputTokens)
   if (protocol === 'anthropic') {
     if (!Array.isArray(result?.content)) throw new Error('服务返回中缺少模型回复，请检查模型名称和协议。')
-    return {
+    if (['max_tokens', 'refusal', 'pause_turn'].includes(result.stop_reason)) throw new Error('模型输出被截断或尚未完成，本轮工具未执行。')
+    return executableReply({
+      ...receipt,
       anthropicBlocks: result.content,
       model: typeof result.model === 'string' ? result.model : undefined,
       reasoning: (result.content ?? [])
@@ -353,11 +482,12 @@ async function completeRequest(
       calls: (result.content ?? [])
         .filter((p: any) => p.type === 'tool_use')
         .map((p: any) => ({ id: p.id, name: p.name, arguments: JSON.stringify(p.input) })),
-    }
+    })
   }
   if (protocol === 'responses') {
     if (!Array.isArray(result?.output) || ['failed', 'incomplete'].includes(result.status)) throw new Error('服务返回中缺少完整模型回复，请检查模型名称和协议。')
-    return {
+    return executableReply({
+      ...receipt,
       responseItems: result.output,
       model: typeof result.model === 'string' ? result.model : undefined,
       text: (result.output ?? [])
@@ -368,11 +498,13 @@ async function completeRequest(
       calls: (result.output ?? [])
         .filter((item: any) => item.type === 'function_call')
         .map((item: any) => ({ id: item.call_id, name: item.name, arguments: item.arguments })),
-    }
+    })
   }
   const message = result.choices?.[0]?.message
   if (!message) throw new Error('服务返回中缺少模型回复，请检查模型名称和协议。')
-  return {
+  if (['length', 'content_filter'].includes(result.choices?.[0]?.finish_reason)) throw new Error('模型输出被截断，本轮工具未执行。')
+  return executableReply({
+    ...receipt,
     text: typeof message.content === 'string' ? message.content : '',
     model: typeof result.model === 'string' ? result.model : undefined,
     reasoning: message.reasoning_content,
@@ -381,7 +513,7 @@ async function completeRequest(
       name: call.function?.name,
       arguments: call.function?.arguments,
     })),
-  }
+  })
 }
 export function parseJson(text: string): any {
   const clean = text

@@ -67,12 +67,15 @@ export class RoundtableDecisions {
     c: Connection,
     args: any,
     signal: AbortSignal,
+    decisionId?: string,
   ): Promise<string> {
     signal.throwIfAborted()
     if (!p.roundtable) throw new Error('决策卡只用于圆桌讨论。')
-    if (p.decisions?.some((d) => d.status === 'pending')) throw new Error('请先处理当前决策卡。')
+    const existing = decisionId ? p.decisions?.find(d => d.id === decisionId && d.sourceMessageId === entry.id) : undefined
+    if (existing && existing.status !== 'pending') return JSON.stringify(existing)
+    if (p.decisions?.some((d) => d.status === 'pending' && d !== existing)) throw new Error('请先处理当前决策卡。')
     const question = this.text(args.question, '决策问题', 240)
-    if (p.decisions?.some((d) => d.question === question))
+    if (p.decisions?.some((d) => d.question === question && d !== existing))
       throw new Error('该问题已记录，请参考已有决定；暂缓事项交给其他模型研究，不要重复弹卡。')
     if (!Array.isArray(args.options) || args.options.length > 5)
       throw new Error('建议选项最多四项，也可以只允许自由输入。')
@@ -88,8 +91,8 @@ export class RoundtableDecisions {
       throw new Error('选项不能重复；“后面再说”由系统提供。')
     if (args.targetId !== undefined && !p.targets?.some((t) => t.id === args.targetId))
       throw new Error('子项目不存在。')
-    const decision: RoundtableDecision = {
-      id: uid(),
+    const decision: RoundtableDecision = existing ?? {
+      id: decisionId ?? uid(),
       question,
       context: this.text(args.context, '决策背景', 1200),
       options,
@@ -102,7 +105,7 @@ export class RoundtableDecisions {
       sourceMessageId: entry.id,
       at: now(),
     }
-    ;(p.decisions ??= []).push(decision)
+    if (!existing) (p.decisions ??= []).push(decision)
     entry.status = 'complete'
     entry.finishedAt = now()
     const phase = p.roundtable.phase
@@ -183,7 +186,7 @@ export class RoundtableDecisions {
     this.waiters.get(id)?.()
   }
 
-  resolve(p: Project, c: Connection, args: any): string {
+  resolve(p: Project, c: Connection, args: any, persist = true): string {
     const d = p.decisions?.find((d) => d.id === args.id)
     if (!d || d.status !== 'deferred') throw new Error('只能研究人工已暂缓、尚未解决的决策。')
     if (d.modelId === c.id) throw new Error('此问题已交给后续其他模型研究，请勿自己立即撤销暂缓。')
@@ -191,7 +194,7 @@ export class RoundtableDecisions {
     d.status = 'resolved'
     d.resolvedBy = c.name
     d.resolvedAt = now()
-    this.save(p)
+    if (persist) this.save(p)
     return JSON.stringify(d)
   }
 }

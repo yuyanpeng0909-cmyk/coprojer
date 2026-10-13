@@ -5,6 +5,7 @@ import { AssistantModelSelect, hasAssistantModel, ModelUsage } from './Assistant
 import { defaultModelCapability, modelCapabilityLabels, type AAScore, type ArenaScore, type ModelEvidenceCandidate, type ModelCapability, type ModelSelectionPolicy } from '../../../shared/model-evidence'
 import { isAgentModelPlan } from './model-plan'
 import { agentModelLabel } from '../../../shared/reasoning'
+import { LoadingStatus } from '../components/RequestFeedback'
 
 function EvidenceSourceLink({ url, children }: { url: string; children: string }) {
   const [error, setError] = useState('')
@@ -88,7 +89,7 @@ export default function ModelAssistant({ state, refresh }: { state: EngineeringS
       const agent = state.agents.find(a => a.id === choice.agentId)
       return <article key={choice.agentId}><h4>{agent?.name} <span className="eng-tag">{modelCapabilityLabels[choice.category]}</span></h4><p>当前：{agentModelLabel(state.models.find(m => m.id === choice.previousModelId), agent?.reasoning)}</p><p><strong>{choice.supported ? '推荐' : '保留'}：{agentModelLabel(state.models.find(m => m.id === choice.modelId), choice.reasoning ?? agent?.reasoning)}</strong></p><p>{choice.reason}</p></article>
     })}<p className="eng-hint">{plan.caveat}</p>{!changes && <p role="status">没有需要自动应用的变更，可调整能力类别后重新推荐。</p>}<button className="ui-button primary" disabled={!!busy || !changes} onClick={() => void run('应用模型配置', async () => { await window.desktop.engineering.applyAgentModels(plan.id); await refresh(); setPlan(null); setNotice('已应用 ' + changes + ' 项模型变更。智能体职责、专属技能和项目专属配置保持原样。') })}>一键应用模型配置</button></section>}
-    {busy && <p role="status" className="eng-inline-result">{busy}…</p>}
+    {busy && <LoadingStatus key={busy} label={busy} />}
     {notice && <p role="status" className="eng-inline-result">{notice}</p>}
     {error && <p role="alert" className="eng-inline-error">{error}</p>}
   </div>

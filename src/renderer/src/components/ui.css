@@ -213,3 +213,15 @@
 .inbox-list-heading {
   flex-shrink: 0;
 }
+.lucide-loader-circle { animation: ui-request-spin 1s linear infinite; }
+.ui-request-status { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; color: var(--secondary); font-size: 12px; }
+.ui-request-status > svg { flex: none; }
+.ui-request-status > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-request-status small { flex: none; font-variant-numeric: tabular-nums; }
+.ui-request-status.compact { max-width: 260px; font-size: 11px; }
+.dialog-request-feedback { padding: 0 20px; flex-shrink: 0; }
+.dialog-request-feedback:has(.ui-request-status) { padding-bottom: 10px; }
+.ui-count-progress { display: grid; gap: 6px; font-size: 12px; color: var(--secondary); }
+@keyframes ui-request-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lucide-loader-circle { animation: none; } }
+@media (max-width: 950px) { .studio-toolbar-actions > .ui-request-status.compact { max-width: 130px; } }

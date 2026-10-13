@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
+import { RequestActivity } from './RequestFeedback'
 
 export function Tabs<T extends string>({
   value,
@@ -123,6 +124,7 @@ export function Overlay({
         </button>
       </div>
       <div className="dialog-body">{open && children}</div>
+      <div className="dialog-request-feedback"><RequestActivity /></div>
       {footer && <div className="dialog-footer">{footer}</div>}
     </dialog>
   )

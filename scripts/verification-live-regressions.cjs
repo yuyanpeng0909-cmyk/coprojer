@@ -124,7 +124,7 @@ async function main() {
   assert.deepEqual(commandEvidenceKinds({ evidenceKind: 'mock' }), ['mock'])
   const combined = fixture({ criteria: ['实际行为', '短时测量'] })
   combined.feature.stage = 'blocked'; combined.feature.verificationPending = true
-  fs.writeFileSync(path.join(combined.root, 'tests/verify.cjs'), 'require("node:assert/strict").equal(require("../value.cjs").sum(2,3),5);setTimeout(()=>console.log("MEASURED_RUN"),30)')
+  fs.writeFileSync(path.join(combined.root, 'tests/verify.cjs'), 'require("node:assert/strict").equal(require("../value.cjs").sum(2,3),5);console.log(JSON.stringify({event:"started",mode:"single",durationMs:30}));setTimeout(()=>{console.log(JSON.stringify({event:"passed",mode:"single",delayMs:0,observedDelayMs:0}));console.log("MEASURED_RUN")},30)')
   model.complete = async (_connection, system, messages) => {
     if (!messages.some(m => m.role === 'tool')) return call('run_command', { program: 'node', args: ['tests/verify.cjs'], evidenceKinds: ['application', 'duration'] })
     return answer({ results: combined.feature.criteria.map((criterion, i) => ({ criterion, passed: true, status: 'passed', evidence: 'MEASURED_RUN', commandIds: ['check-1'], evidenceKind: i ? 'duration' : 'application', ...(i ? { measuredDurationSeconds: 0.03 } : {}) })) })

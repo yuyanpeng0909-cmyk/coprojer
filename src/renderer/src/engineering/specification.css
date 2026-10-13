@@ -4,6 +4,9 @@
 .specification-toolbar .baseline-status { display: inline-flex; }
 .specification-toolbar > button:last-child { margin-left: auto; }
 .specification-warning { padding: 8px 18px; background: var(--panel-tint); color: var(--tone-orange); border-bottom: 1px solid var(--border); font-size: 12px; }
+.specification-preparation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.specification-preparation > div { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.specification-preparation p { margin: 4px 0 0; max-height: 72px; overflow: auto; }
 .specification-toolbar .specification-toc-toggle { display: none; }
 .specification-reader { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 0; flex: 1; }
 .specification-toc { overflow: auto; border-right: 1px solid var(--border); padding: 12px 10px; background: var(--panel-tint); font-size: 12px; }

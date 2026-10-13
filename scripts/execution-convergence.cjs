@@ -133,6 +133,28 @@ cases.push(['a changed read version is new evidence', async () => {
   }
   await run(ctx.service); assert.equal(ctx.feature.stage, 'acceptance')
 }])
+cases.push(['tool exceptions keep source-version and actual-write progress metadata', async () => {
+  const files = load('src/main/engineering/files.ts'), execute = files.executeTool
+  try {
+    for (const name of ['run_command', 'write_file']) {
+      const ctx = fixture(); let n = 0, effects = 0
+      files.executeTool = async (...args) => {
+        if (args[4] !== name) return execute(...args)
+        if (name === 'write_file') fs.writeFileSync(path.join(ctx.project.root, 'effect.txt'), 'actual effect ' + ++effects)
+        throw new Error('same injected post-dispatch error')
+      }
+      model.complete = async () => {
+        if (n === 9) return incomplete
+        if (name === 'run_command') fs.writeFileSync(path.join(ctx.project.root, 'context-0.txt'), 'version ' + n)
+        return call(name, name === 'run_command' ? { program: 'node', args: ['tests/behavior.cjs'] } : { path: 'effect.txt', content: 'requested effect' }, ++n)
+      }
+      await run(ctx.service); paused(ctx)
+      assert.equal(n, 9, name + ': distinct source/effect must not be a repeated failure')
+      assert.ok(saved(ctx.service).progress.failures.every(([, count]) => count < 3))
+      if (name === 'write_file') assert.equal(effects, 9)
+    }
+  } finally { files.executeTool = execute }
+}])
 cases.push(['explicit complete budget report can proceed to real verification', async () => {
   const ctx = fixture(); let n = 0
   model.complete = async (connection, system, messages, tools) => {

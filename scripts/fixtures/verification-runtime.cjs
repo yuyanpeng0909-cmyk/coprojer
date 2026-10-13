@@ -59,4 +59,10 @@ async function run(service, reviewOnly = false) {
   }
   assert.equal(unfinished, null, 'service settles within bounded time')
 }
-module.exports = { fs, path, assert, sandbox, load, model, EngineeringService, fixture, testScript, answer, call, run }
+function restoreIsolated(profilePath) {
+  const candidate = path.resolve(profilePath)
+  assert.ok(candidate.startsWith(path.resolve(os.tmpdir()) + path.sep + 'coprojer-preparation-'))
+  assert.equal(JSON.parse(fs.readFileSync(path.join(candidate, 'crash-fixture.json'))).kind, 'isolated-context-crash-test')
+  profile = candidate; return new EngineeringService()
+}
+module.exports = { fs, path, assert, sandbox, load, model, EngineeringService, fixture, testScript, answer, call, run, restoreIsolated }

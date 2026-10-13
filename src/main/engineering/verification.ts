@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import type { Feature, Project, VerificationGap, RuntimeMeasurement } from '../../shared/engineering'
+import type { Feature, Project, VerificationGap, VerificationPreparation, RuntimeMeasurement } from '../../shared/engineering'
 import { commandEvidenceKinds, type CommandEvidence } from './execution'
 import { nodeCommand } from './files'
+import { classifyEvidence, type EvidenceScope } from '../../shared/current-evidence'
 
 export const digest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 // Normalize a model's decimal representation, never infer or expand evidence.
@@ -15,11 +16,8 @@ export function measuredDuration(value: unknown): number | undefined {
 }
 // Keep the audit ledger intact. Only an actual later success of the same
 // command, source and evidence scope resolves a prior failed attempt.
-export function currentCommandEvidence(commands: CommandEvidence[]): CommandEvidence[] {
-  return commands.filter((command, index) => command.code === 0 || !command.sourceFingerprint ||
-    !commands.slice(index + 1).some(later => later.code === 0 && later.command === command.command &&
-      later.sourceFingerprint === command.sourceFingerprint && !commandEvidenceKinds(later).includes('history') &&
-      commandEvidenceKinds(command).every(kind => commandEvidenceKinds(later).includes(kind))))
+export function currentCommandEvidence(commands: CommandEvidence[], scope?: EvidenceScope): CommandEvidence[] {
+  return classifyEvidence(commands, scope).filter(row => scope ? row.disposition === 'current' : row.disposition !== 'superseded').map(row => row.record)
 }
 // Optional JSONL runner protocol, parsed from this command's actual stdout.
 // Pair starts/completions by mode; never sum parallel instance durations.
@@ -58,6 +56,18 @@ export function nativeEvidenceSupported(criterion: string, item: { evidenceKind?
   // Explicitly admitted missing native input cannot become a pass by relabeling.
   return !/(?:无法|未能|未做|未实测|未验证|缺少|没有)[^。\n]{0,60}(?:鼠标|悬停|桌面交互|原生输入)|(?:鼠标|悬停|桌面交互|原生输入)[^。\n]{0,40}(?:未验证|未实测|不可用)|(?:mouse|hover|desktop interaction|native input)[^.\n]{0,60}(?:not tested|not verified|unavailable|requires separate)/i.test(evidence)
 }
+// Keep the complete action ledger in storage; replay outcomes and pointers,
+// not every historical read body in each new system prompt.
+export function preparationHistory(attempts: VerificationPreparation['attempts']): unknown[] {
+  return attempts.slice(-4).map(attempt => ({
+    round: attempt.round, status: attempt.status,
+    result: attempt.result.slice(0, 600), nextStep: attempt.nextStep.slice(0, 600),
+    actionCount: attempt.actions.length,
+    created: [...new Set(attempt.actions.filter(action => action.startsWith('created:')).map(action => action.slice(8, 248)))].slice(-12),
+    blockers: [...new Set(attempt.actions.filter(action => action.includes('工具错误：'))
+      .map(action => action.slice(0, 300)))].slice(-6),
+  }))
+}
 export function preparationPrompt(role: 'diagnoser' | 'preparer'): string {
   if (role === 'diagnoser') return `VERIFICATION_DIAGNOSIS：只读诊断验证缺口。核对已有文件、脚本、依赖、主机事实和最新确认范围。没有脚本/缺开发依赖通常可自动补齐，不能直接推给用户。未知能力先检查；只有具体平台、设备、凭据、授权或确实不可提供的观察能力缺失才 external。混合缺口分别分类。不能运行命令或修改文件。输出 JSON {"gaps":[{"id":"原缺口ID","disposition":"automatic 或 external 或 unknown","reason":"核对过的文件/主机事实和判断依据","nextStep":"具体准备动作或最小外部输入"}],"summary":"结论"}。缺证据不等于业务缺陷；未知保留技术阻塞。`
   return `VERIFICATION_PREPARATION：承担单独可审计的验证准备，不负责实现业务或独立判定通过。只补齐 automatic 缺口。可添加 tests/test/__tests__/scripts/fixtures 测试脚本、冒烟脚本和夹具，添加 test:* 命令，安装明确缺失的项目开发依赖。npm install 必须 --save-dev --ignore-scripts（可加 --no-audit --no-fund）；安装生命周期需额外诊断，不自行解除限制。不能修改业务源码、生产依赖、原有脚本/断言或验收标准；不能用 mock 替换真实测试。已有脚本需修复时添加保留标准的补充检查脚本。必须用隔离目录：每次 run_command 提供 COPROJER_TEST_USER_DATA 和 COPROJER_EVIDENCE_DIR，截图/日志放后者。脚本必须在 finally 关闭自己创建的测试进程，不能操作无关进程或真实工作数据。只运行有界测试，不启动常驻服务。禁止系统安装、提权、付费和外部账号授权。若发现业务缺陷停止准备，输出 defect 并提供文件、复现和交接；不能擅自修复。最终只输出 JSON {"status":"ready 或 blocked 或 defect","summary":"已执行动作及实际结果","nextStep":"复验命令或具体技术阻塞与最小处理步骤"}。ready 只代表准备，必须独立验证重新执行，不能宣称功能通过。`
@@ -83,7 +93,7 @@ export function desktopCapability(): Record<string, unknown> {
 export function verificationContract(p: Project, f: Feature): string {
   return digest({ root: p.root, revision: f.revision, criteria: f.criteria, description: f.description, plan: f.plan,
     prototypeId: f.prototypeId, prototype: p.prototypes?.find(v => v.id === f.prototypeId), baseline: p.requirementsBaseline,
-    targets: p.targets, dependencies: f.dependencies })
+    targets: p.targets ?? [], dependencies: f.dependencies })
 }
 export function verificationEnvironment(p: Project): Record<string, unknown> {
   let runtime: Record<string, unknown>

@@ -456,6 +456,11 @@
   font-size: 11px;
   color: var(--secondary);
   min-height: 44px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .eng-agent-card footer {
   border-top: 1px solid var(--border);
@@ -1440,3 +1445,20 @@
 .eng-evidence-table thead th { white-space: nowrap; }
 .eng-evidence-references details { border: 0; padding: 6px 0 0; }
 .eng-evidence-references summary { color: var(--secondary); font-size: 11px; font-weight: 400; }
+.eng-context-details { font-size: 12px; margin-bottom: 12px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-control); min-width: 0; overflow-wrap: anywhere; }
+.eng-context-details summary { cursor: pointer; }
+.eng-context-details dl { display: grid; grid-template-columns: minmax(68px, auto) minmax(0, 1fr); gap: 6px 10px; }
+.eng-context-details dt { color: var(--secondary); }
+.eng-context-details dd { margin: 0; }
+.eng-context-details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; font-size: 11px; }
+.eng-context-details button { margin: 4px 6px 4px 0; }
+.eng-context-details form label { display: grid; gap: 4px; margin: 8px 0; }
+.eng-context-details input { width: 100%; min-width: 0; }
+.eng-team-actions { display: flex; align-items: flex-end; gap: 10px; margin: 16px 0; flex-wrap: wrap; }
+.eng-team-actions .eng-field { flex: 1 1 220px; max-width: 420px; }
+.eng-team-history { display: flex; align-items: center; gap: 6px; margin-top: 16px; color: var(--secondary); }
+.eng-team-legacy { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; }
+.eng-team-legacy .eng-agents { margin-top: 12px; }
+.eng-connection-identity { overflow-wrap: anywhere; }
+.eng-model-references section { max-height: 180px; overflow: auto; overflow-wrap: anywhere; }
+.eng-model-references summary { cursor: pointer; color: var(--secondary); }

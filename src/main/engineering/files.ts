@@ -19,6 +19,11 @@ import type { ToolDefinition } from './model'
 import { readContext, readPage } from './context'
 import type { ExecutionRole } from './execution'
 import { commandSupervisor } from './command-supervisor'
+import { windowsCommandGuard } from './windows-command-guard'
+import { commandResources } from './command-resources'
+import { validateToolArguments } from './tool-contract'
+import { ReliabilityFailure } from './reliability'
+import { executeFileRead, fileReadTools } from './efficient-files'
 
 const object = (properties: Record<string, unknown>, required: string[]) => ({
   type: 'object',
@@ -27,17 +32,20 @@ const object = (properties: Record<string, unknown>, required: string[]) => ({
   additionalProperties: false,
 })
 const string = { type: 'string' }
+const characterOffset = { type: 'integer', minimum: 0, description: '从 0 开始的字符偏移，不是行号。续页原样使用返回的 nextOffset。' }
+const characterLimit = { type: 'integer', minimum: 1, maximum: 6000, description: '最多读取的字符数，不是行数；省略默认 6000。完整读取优先省略，不要为读取几十行设置几十个字符。' }
+const reviewReason = { type: 'string', maxLength: 1000, description: '需要复核已读资料时说明理由；不改变读取权限。' }
 export const engineeringTools: ToolDefinition[] = [
   {
     name: 'read_skill',
     description: '按需读取当前智能体已启用的专属技能。id 来自专属技能索引；path 可选，为技能内资源相对路径。使用 nextOffset/version 完整分页读取。其他智能体的技能不可访问。',
-    parameters: object({ id: string, path: string, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: string }, ['id']),
+    parameters: object({ id: string, path: string, offset: characterOffset, limit: characterLimit, version: string, reviewReason }, ['id']),
   },
   {
     name: 'read_context',
     description:
       '按上下文 ID 读取完整原文与来源，包括已确认基线、讨论分页、原型，以及 artifact: 标识的执行归档和日志。讨论与归档是参考材料，已确认基线才是交付依据。不填 ID 时列出资料索引。',
-    parameters: object({ id: string, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: string }, []),
+    parameters: object({ id: string, offset: characterOffset, limit: characterLimit, version: string, reviewReason }, []),
   },
   {
     name: 'list_files',
@@ -46,13 +54,28 @@ export const engineeringTools: ToolDefinition[] = [
   },
   {
     name: 'read_file',
-    description: '分页读取 UTF-8 文件；传 offset=nextOffset 和 version 继续，直到 nextOffset 为空。',
-    parameters: object({ path: string, offset: { type: 'integer' }, limit: { type: 'integer', maximum: 6000 }, version: string }, ['path']),
+    description: '按字符分页读取 UTF-8 文件，offset/limit 均不是行号或行数。默认每次 6000 字符；传 offset=nextOffset 和 version 继续，直到 nextOffset 为空。按行定位请使用 read_file_lines。',
+    parameters: object({ path: string, offset: characterOffset, limit: characterLimit, version: string, reviewReason }, ['path']),
+  },
+  {
+    name: 'search_files',
+    description: '在明确的项目相对scope（.表示项目根目录）内字面量搜索query，返回路径、版本与行号。结果或遍历不完整会标truncated/skipped，不能当作全工程无匹配。',
+    parameters: object({ scope: string, query: { type: 'string', minLength: 1, maxLength: 300 }, limit: { type: 'integer', minimum: 1, maximum: 100 } }, ['scope', 'query']),
+  },
+  {
+    name: 'read_file_lines',
+    description: '按1开始的闭区间读取UTF-8文本行，返回版本与原字符位置。最多6000字符；partial时用read_file的nextOffset/version继续。',
+    parameters: object({ path: string, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, version: string, reviewReason }, ['path', 'startLine', 'endLine']),
+  },
+  {
+    name: 'patch_file',
+    description: '读取后以expectedVersion、明确行范围及唯一匹配的oldText替换局部内容。版本、范围或匹配冲突时无修改；不自动退回整文件覆盖。',
+    parameters: object({ path: string, expectedVersion: string, startLine: { type: 'integer', minimum: 1 }, endLine: { type: 'integer', minimum: 1 }, oldText: { type: 'string', minLength: 1, maxLength: 300000 }, newText: { type: 'string', maxLength: 300000 } }, ['path', 'expectedVersion', 'startLine', 'endLine', 'oldText', 'newText']),
   },
   {
     name: 'write_file',
     description: '创建或替换项目中的 UTF-8 文本文件；内容必须完整。不能修改 .coprojer。',
-    parameters: object({ path: string, content: string }, ['path', 'content']),
+    parameters: object({ path: string, content: { type: 'string', maxLength: 300000 } }, ['path', 'content']),
   },
   {
     name: 'run_command',
@@ -61,8 +84,8 @@ export const engineeringTools: ToolDefinition[] = [
     parameters: object(
       {
         program: { type: 'string', enum: ['npm', 'node'] },
-        args: { type: 'array', items: string },
-        timeoutSeconds: { type: 'number' },
+        args: { type: 'array', items: string, maxItems: 40 },
+        timeoutSeconds: { type: 'number', minimum: 5, maximum: 300, description: '超时秒数；默认 120 秒，允许 5—300 秒。不接受 timeoutMs。' },
         evidenceKind: { type: 'string', enum: ['unit', 'mock', 'application', 'desktop', 'duration', 'history', 'inspection'] },
         evidenceKinds: { type: 'array', description: '本命令实际覆盖的证据类型；例如真实应用短时测量同时为 application 和 duration。不得把历史核对、mock 或 API 回调标为桌面输入。', items: { type: 'string', enum: ['unit', 'mock', 'application', 'desktop', 'duration', 'history', 'inspection'] } },
       },
@@ -70,6 +93,19 @@ export const engineeringTools: ToolDefinition[] = [
     ),
   },
 ]
+/** Shared read path; callers supply only scoped content readers, never a store. */
+export function executeReadOnly(root: string, name: string, args: Record<string, any>, readers: {
+  context(args: Record<string, any>): string
+  artifact(args: Record<string, any>): string
+}): string {
+  if (!['read_context', 'list_files', 'read_file'].includes(name)) throw new Error('当前端口只允许读取工具。')
+  validateToolArguments(engineeringTools.find(t => t.name === name)!, args)
+  if (name === 'read_context') return typeof args.id === 'string' && args.id.startsWith('artifact:') ? readers.artifact(args) : readers.context(args)
+  if (name === 'list_files') return JSON.stringify(listFiles(root))
+  const file = safePath(root, args.path)
+  if (lstatSync(file).size > 400_000) throw new Error('文件过大，请拆分文件。')
+  return readPage(readFileSync(file, 'utf8'), args)
+}
 export function safePath(root: string, name: string): string {
   if (
     typeof name !== 'string' ||
@@ -85,7 +121,7 @@ export function safePath(root: string, name: string): string {
       (p) =>
         p === '..' ||
         ['.git', '.coprojer', 'node_modules'].includes(p.toLowerCase()) ||
-        /[. ]$/.test(p),
+        (p !== '.' && /[. ]$/.test(p)),
     )
   )
     throw new Error('此路径不可由工程文件工具访问。')
@@ -100,6 +136,11 @@ export function safePath(root: string, name: string): string {
       throw new Error('不能通过符号链接访问工程文件。')
   }
   return target
+}
+/** In-place writes must not also modify aliases outside the authorized project. */
+export function assertExclusiveWriteTarget(file: string): void {
+  const stat = lstatSync(file, { throwIfNoEntry: false })
+  if (stat?.isFile() && stat.nlink > 1) throw new Error('不能修改存在硬链接的工程文件；其他路径可能指向项目外，文件未改动。')
 }
 export function listFiles(root: string): string[] {
   const result: string[] = []
@@ -152,6 +193,20 @@ export function sourceFingerprint(root: string): string {
   walk(root)
   return hash.digest('hex')
 }
+/** Per-resource counterpart used only to explain changes during a pending group. */
+export function sourceVersions(root: string): Record<string, string> {
+  const versions: Record<string, string> = {}
+  const walk = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (['node_modules', '.git', '.coprojer', 'dist', 'out', 'coverage', '.runtime', '.scratch', '.cache', '.vite'].includes(entry.name.toLowerCase())) continue
+      const full = join(directory, entry.name), name = relative(root, full).split(sep).join('/')
+      if (entry.isSymbolicLink()) versions[name] = 'symlink:' + lstatSync(full).mtimeMs
+      else if (entry.isDirectory()) walk(full)
+      else if (!/\.(log|tsbuildinfo)$/.test(entry.name) && !generatedVerificationArtifact(root, full)) versions[name] = createHash('sha256').update(readFileSync(full)).digest('hex')
+    }
+  }
+  walk(root); return versions
+}
 const testPath = (path: string) => /^(tests?|__tests__|scripts|fixtures)[/]/.test(path) || /^(vitest|playwright)\.config\.[cm]?[jt]s$/.test(path)
 export class PreparationBoundaryError extends Error {}
 function preparationSnapshot(root: string): Map<string, string> {
@@ -167,7 +222,7 @@ function preparationSnapshot(root: string): Map<string, string> {
   }
   walk(root); return result
 }
-function assertPreparationChanges(before: Map<string, string>, after: Map<string, string>): void {
+export function assertPreparationChanges(before: Map<string, string>, after: Map<string, string>): void {
   for (const name of new Set([...before.keys(), ...after.keys()])) {
     if (before.get(name) === after.get(name) || name === 'package-lock.json') continue
     if (name === 'package.json' && before.has(name) && after.has(name)) {
@@ -230,6 +285,24 @@ function preparationCommand(project: Project, args: any): void {
     (argv.length === 2 && argv[0] === 'run' && /^(test(?::[\w-]+)*|build|typecheck|lint|check)$/.test(argv[1])))) return
   if (args.program === 'node' && argv.length === 1 && testPath(argv[0].replace(/\\/g, '/'))) { safePath(project.root, argv[0]); return }
   throw new Error('准备阶段只能执行项目检查/构建脚本或安装缺失的开发依赖；不允许内联代码、系统安装、常驻进程或外部命令。')
+}
+async function commandGuard(directory: string): Promise<string> {
+  const source = windowsCommandGuard(), version = createHash('sha256').update(source).digest('hex')
+  const folder = join(dirname(dirname(directory)), 'native-guard', version)
+  const executable = join(folder, 'guard.exe'), digest = executable + '.sha256'
+  if (existsSync(executable) && existsSync(digest) && createHash('sha256').update(readFileSync(executable)).digest('hex') === readFileSync(digest, 'utf8')) return executable
+  const compiler = ['Framework64', 'Framework'].map(name => join(process.env.SystemRoot!, 'Microsoft.NET', name, 'v4.0.30319', 'csc.exe')).find(existsSync)
+  if (!compiler) throw new ReliabilityFailure('缺少 Windows 命令守护编译器；未启动命令。')
+  mkdirSync(folder, { recursive: true }); writeFileSync(join(folder, 'guard.cs'), source)
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(compiler, ['/nologo', '/target:exe', '/out:' + executable, join(folder, 'guard.cs')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    let diagnostic = ''; child.stdout.on('data', c => { diagnostic += c }); child.stderr.on('data', c => { diagnostic += c })
+    const timer = setTimeout(() => { child.kill(); reject(new ReliabilityFailure('Windows 命令守护准备超时，未启动命令。')) }, 30000)
+    child.on('error', error => { clearTimeout(timer); reject(error) })
+    child.on('close', code => { clearTimeout(timer); if (code) reject(new ReliabilityFailure('Windows 命令守护准备失败：' + diagnostic)); else resolve() })
+  })
+  writeFileSync(digest, createHash('sha256').update(readFileSync(executable)).digest('hex'))
+  return executable
 }
 export function nodeCommand(
   program: string,
@@ -305,11 +378,12 @@ export async function runCommand(
   progress: (text: string) => void,
   isolated = false,
   createArchive?: (runId: string) => CommandOutputArchive,
+  durable?: { runId: string; nonce: string; directory: string; maxOutputBytes: number; secrets: string[] },
 ): Promise<{ code: number; output: string; runId: string; artifact?: ExecutionArtifact; archiveError?: string }> {
   signal.throwIfAborted()
   if (isolated) cleanupVerificationRuns(root)
   const command = nodeCommand(program, args)
-  const runId = randomUUID()
+  const runId = durable?.runId ?? randomUUID()
   const runtime = isolated ? safePath(root, '.runtime/coprojer-checks/' + runId) : undefined
   if (runtime) mkdirSync(join(runtime, 'user-data'), { recursive: true })
   const env = commandEnvironment()
@@ -325,27 +399,33 @@ export async function runCommand(
     HOME: join(runtime, 'user-data'), USERPROFILE: join(runtime, 'user-data'), APPDATA: join(runtime, 'user-data'),
     LOCALAPPDATA: join(runtime, 'user-data'), npm_config_cache: join(runtime, 'npm-cache') })
   const timeoutMs = Math.max(5, Math.min(seconds || 120, 300)) * 1000
-  if (runtime) {
-    const helper = join(runtime, 'supervisor.cjs')
-    writeFileSync(helper, '(' + commandSupervisor.toString() + ')()')
-    command.args = [helper, JSON.stringify({ ...command, root, runtime, timeoutMs, result: join(runtime, 'result.json') })]
+  if (runtime || durable) {
+    if (durable) mkdirSync(durable.directory, { recursive: true, mode: 0o700 })
+    const guard = durable && process.platform === 'win32' ? await commandGuard(durable.directory) : undefined
+    signal.throwIfAborted()
+    const helper = join(durable?.directory ?? runtime!, 'supervisor.cjs')
+    writeFileSync(helper, 'const commandResources = ' + commandResources.toString() + ';(' + commandSupervisor.toString() + ')()')
+    command.args = [helper, JSON.stringify({ ...command, root, runtime, timeoutMs, guard, durable: durable ? { ...durable, secrets: undefined } : undefined, result: join(durable?.directory ?? runtime!, 'result.json') })]
   }
   const archive = createArchive?.(runId)
   return new Promise((resolveCommand, reject) => {
     const child = spawn(command.executable, command.args, {
       cwd: root,
       windowsHide: true,
-      detached: process.platform !== 'win32',
+      // libuv kills non-detached Windows children when the owning process exits.
+      // The durable supervisor must survive long enough to stop its job and save proof;
+      // its stdin pipe still binds its lifetime to this owner.
+      detached: !!durable || process.platform !== 'win32',
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
-    if (runtime && child.pid) writeFileSync(join(runtime, 'lease.json'), JSON.stringify({ kind: 'coprojer-verification-run', id: runId, root: realpathSync(root), pid: child.pid }))
     let output = '',
       tail = '',
       reason = ''
+    let recordingError: unknown
     const flush = () => {
       if (tail) {
-        progress(tail.slice(-10000))
+        try { progress(tail.slice(-10000)) } catch (error) { recordingError = error; stop('运行记录保存失败') }
         tail = ''
       }
     }
@@ -361,7 +441,7 @@ export async function runCommand(
     const interval = setInterval(flush, 900)
     const stop = (why: string) => {
       reason = why
-      if (runtime) child.stdin.end()
+      if (runtime || durable) child.stdin.end()
       else if (child.pid) killTree(child.pid)
     }
     const abort = () => stop('执行已停止')
@@ -392,6 +472,7 @@ export async function runCommand(
       append(stdoutDecoder.end()); append(stderrDecoder.end())
       cleanup()
       reason ||= cleanupRuntime()
+      if (recordingError) { reject(recordingError); return }
       resolveCommand({
         runId,
         ...archive?.finish(),
@@ -399,49 +480,15 @@ export async function runCommand(
         output: `${output}${reason ? `\n${reason}` : ''}`,
       })
     })
+    try {
+      if (runtime && child.pid) writeFileSync(join(runtime, 'lease.json'), JSON.stringify({ kind: 'coprojer-verification-run', id: runId, root: realpathSync(root), pid: child.pid }))
+      // The durable helper cannot launch the command before this input arrives.
+      if (durable) child.stdin.write(JSON.stringify({ secrets: durable.secrets }) + '\n')
+    } catch (cause) { recordingError = new ReliabilityFailure('命令运行标识保存失败，已停止启动。', { cause }); stop('命令运行标识保存失败') }
   })
 }
-export async function executeTool(
-  store: EngineeringStore,
-  project: Project,
-  featureId: string,
-  role: ExecutionRole,
-  name: string,
-  args: any,
-  signal: AbortSignal,
-): Promise<string> {
-  signal.throwIfAborted()
-  if (role === 'diagnoser' && !['read_context', 'list_files', 'read_file'].includes(name))
-    throw new Error('缺口诊断只允许读取，不能执行命令或修改工程。')
-  if (name === 'read_context') return typeof args.id === 'string' && args.id.startsWith('artifact:')
-    ? new ExecutionArtifacts(store, project.id, featureId).read(args) : readContext(project, args)
-  if (name === 'list_files') return JSON.stringify(listFiles(project.root))
-  if (name === 'read_file') {
-    const file = safePath(project.root, args.path)
-    if (lstatSync(file).size > 400_000) throw new Error('文件过大，请拆分文件。')
-    return readPage(readFileSync(file, 'utf8'), args)
-  }
-  if (name === 'write_file') {
-    if (!['developer', 'preparer'].includes(role)) throw new Error('验证角色不能修改工程文件。')
-    if (typeof args.content !== 'string' || args.content.length > 300_000)
-      throw new Error('文件内容为空类型或超过大小上限。')
-    const file = safePath(project.root, args.path)
-    if (role === 'preparer') preparationWrite(project, featureId, args.path, args.content)
-    const canonical = relative(project.root, file).split(sep).join('/')
-    let change = project.changes.find((c) => c.path === canonical && c.featureId === featureId)
-    const before = change ? change.before : existsSync(file) ? readFileSync(file, 'utf8') : null
-    if (role === 'preparer' && !existsSync(file)) project.features.find(f => f.id === featureId)?.verificationPreparation?.attempts.at(-1)?.actions.push('created:' + canonical)
-    mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, args.content)
-    if (!change) {
-      change = { path: canonical, before, after: args.content, featureId }
-      project.changes.push(change)
-    }
-    change.after = args.content
-    store.save()
-    return `已写入 ${canonical}（${Buffer.byteLength(args.content)} 字节）`
-  }
-  if (name === 'run_command') {
+export function authorizeCommand(project: Project, role: ExecutionRole, args: any): void {
+  if (!['developer', 'reviewer', 'preparer'].includes(role)) throw new Error('当前角色不能执行命令。')
     if (role === 'preparer') preparationCommand(project, args)
     if (role === 'reviewer') {
       const first = args.args?.[0]
@@ -459,6 +506,51 @@ export async function executeTool(
         throw new Error('验证角色请执行项目中的测试脚本。')
       if (args.program === 'node') safePath(project.root, args.args[0])
     }
+}
+
+export async function executeTool(
+  store: EngineeringStore,
+  project: Project,
+  featureId: string,
+  role: ExecutionRole,
+  name: string,
+  args: any,
+  signal: AbortSignal,
+): Promise<string> {
+  signal.throwIfAborted()
+  const definition = engineeringTools.find(tool => tool.name === name)
+  if (!definition) throw new Error(`未知工程工具：${name}`)
+  args = validateToolArguments(definition, args)
+  if (role === 'diagnoser' && !['read_context', 'list_files', ...fileReadTools].includes(name))
+    throw new Error('缺口诊断只允许读取，不能执行命令或修改工程。')
+  if (fileReadTools.includes(name)) return executeFileRead(project.root, name, args, signal)
+  if (name === 'patch_file') throw new Error('局部补丁需要可靠文件效果策略；请先显式迁移旧任务。')
+  if (['read_context', 'list_files', 'read_file'].includes(name)) return executeReadOnly(project.root, name, args, {
+    context: input => readContext(project, input), artifact: input => new ExecutionArtifacts(store.artifactHost(), project.id, featureId).read(input),
+  })
+  if (name === 'write_file') {
+    if (!['developer', 'preparer'].includes(role)) throw new Error('验证角色不能修改工程文件。')
+    if (typeof args.content !== 'string' || args.content.length > 300_000)
+      throw new Error('文件内容为空类型或超过大小上限。')
+    const file = safePath(project.root, args.path)
+    if (role === 'preparer') preparationWrite(project, featureId, args.path, args.content)
+    const canonical = relative(project.root, file).split(sep).join('/')
+    let change = project.changes.find((c) => c.path === canonical && c.featureId === featureId)
+    const before = change ? change.before : existsSync(file) ? readFileSync(file, 'utf8') : null
+    if (role === 'preparer' && !existsSync(file)) project.features.find(f => f.id === featureId)?.verificationPreparation?.attempts.at(-1)?.actions.push('created:' + canonical)
+    mkdirSync(dirname(file), { recursive: true })
+    assertExclusiveWriteTarget(file)
+    writeFileSync(file, args.content)
+    if (!change) {
+      change = { path: canonical, before, after: args.content, featureId }
+      project.changes.push(change)
+    }
+    change.after = args.content
+    store.save()
+    return `已写入 ${canonical}（${Buffer.byteLength(args.content)} 字节）`
+  }
+  if (name === 'run_command') {
+    authorizeCommand(project, role, args)
     const before = snapshotTextFiles(project.root)
     const protectedBefore = role === 'preparer' ? preparationSnapshot(project.root) : undefined
     try {
@@ -470,7 +562,7 @@ export async function executeTool(
         signal,
         (text) => store.event(project, 'output', text, featureId),
         role !== 'developer',
-        runId => new ExecutionArtifacts(store, project.id, featureId).stream('命令 ' + runId + ': ' + args.program + ' ' + args.args.join(' ')),
+        runId => new ExecutionArtifacts(store.artifactHost(), project.id, featureId).stream('命令 ' + runId + ': ' + args.program + ' ' + args.args.join(' ')),
       )
       return JSON.stringify(result)
     } finally {

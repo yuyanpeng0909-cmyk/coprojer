@@ -9,10 +9,10 @@ let respond = async () => ({ text: '已根据当前状态给出建议。', calls
 function load(file) {
   file = path.resolve(file)
   if (cache.has(file)) return cache.get(file)
-  if (file.endsWith(path.join('engineering', 'model.ts'))) return { complete: async (...args) => { calls.push(args); return respond(...args) }, parseJson: JSON.parse }
   const exports = {}; cache.set(file, exports)
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   new Function('exports', 'require', code)(exports, name => name === 'electron' ? { app: { getPath: () => root }, safeStorage: {} } : name.startsWith('.') ? load(path.resolve(path.dirname(file), name + '.ts')) : require(name))
+  if (file.endsWith(path.join('engineering', 'model.ts'))) exports.complete = async (...args) => { calls.push(args); return respond(...args) }
   return exports
 }
 const { EngineeringStore } = load('src/main/engineering/store.ts')
@@ -67,8 +67,13 @@ async function main() {
   assert.equal(JSON.stringify(store.data.projects[1]), baselineB); assert.equal(JSON.stringify(store.data.agents.filter(a => !a.ownerProjectId)), globalAgents)
   assert.equal(store.data.projects[0].teamAgentIds.length, 4); assert.equal(store.data.projects[0].discussionModelId, 'm2')
   assert.ok(store.data.projects[0].teamAgentIds.every(id => store.data.agents.find(a => a.id === id).ownerProjectId === 'project-a'))
-  assert.ok(store.data.agents.filter(a => a.ownerProjectId).every(a => a.skillIds.length === 0))
+  assert.ok(store.data.agents.filter(a => a.ownerProjectId).every(a => a.skillIds.length > 0 && a.skillIds.every(id => store.data.skills.some(s => s.id === id && s.ownerAgentId === a.id))))
   const afterApply = JSON.stringify(store.data); team.applyAssistantTeamPlan(plan.id); assert.equal(JSON.stringify(store.data), afterApply)
+  const teamIds = [...store.data.projects[0].teamAgentIds], memberCount = store.data.agents.length, skillCount = store.data.skills.length
+  const repeated = await team.recommendAssistantTeam(a.id, '再次使用相同共享模板')
+  team.applyAssistantTeamPlan(repeated.id)
+  assert.deepEqual(store.data.projects[0].teamAgentIds, teamIds, 'repeat recommendations reuse project copies')
+  assert.equal(store.data.agents.length, memberCount); assert.equal(store.data.skills.length, skillCount)
   const rollbackPlan = await team.recommendAssistantTeam(b.id, '验证保存失败'), snapshot = JSON.stringify(store.data)
   const save = store.save.bind(store); store.save = () => { throw Error('disk full') }
   assert.throws(() => team.applyAssistantTeamPlan(rollbackPlan.id), /disk full/)

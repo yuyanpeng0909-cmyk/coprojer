@@ -1,16 +1,19 @@
 import { app, safeStorage } from 'electron'
-import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync, openSync, fsyncSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { defaultAgentTools } from '../../shared/engineering'
 import { builtinSkills, defaultAgents, migrateAgentSkills } from '../../shared/agents'
+import { upgradeAgentInstructions } from '../../shared/agent-instructions'
 import { normalizeContext } from './context'
 import { syncPrototypeBriefs } from '../../shared/prototype-workflow'
 import type { SkillDefinition } from '../../shared/engineering'
 import type { AgentConfig, EngineeringState, ModelConfig, Project } from '../../shared/engineering'
 import type { ExecutionCheckpoint } from './execution'
+import { executionKey } from './execution'
 import { cleanupVerificationRuns } from './files'
 import { nativeEvidenceSupported, pendingGaps } from './verification'
+import { ReliabilityFailure } from './reliability'
 
 export const uid = () => randomUUID()
 export const now = () => new Date().toISOString()
@@ -27,6 +30,9 @@ interface DiskState {
   skills?: SkillDefinition[]
   projects: Project[]
   executionCheckpoints?: Record<string, ExecutionCheckpoint>
+  contextSnapshots?: Record<string, import('./runtime').RuntimeSnapshot>
+  receiptJournals?: Record<string, import('./receipt-ledger').ReceiptJournal>
+  runtimeOriginals?: Record<string, { projectId: string; featureId: string; at: string; checkpoint?: ExecutionCheckpoint; journal?: import('./receipt-ledger').ReceiptJournal; context?: Project['features'][number]['contextRuntime']; policy?: Project['features'][number]['runtimePolicy']; models?: Project['features'][number]['executionModels'] }>
 }
 export class EngineeringStore {
   readonly path: string
@@ -51,7 +57,19 @@ export class EngineeringStore {
       )
         throw new Error('工程资料格式无法识别，原文件已保留。')
       this.data = saved
+      // Keep paused execution fingerprints intact. Upgrade these members on a later
+      // restart after their project's checkpoints have been completed or discarded.
+      const pausedProjects = new Set(this.data.projects.filter(p => p.features?.some(f => this.data.executionCheckpoints?.[executionKey(p.id, f.id)])).map(p => p.id))
+      for (const agent of this.data.agents) {
+        const paused = ['developer', 'reviewer'].includes(agent.role) && pausedProjects.size > 0 && (!agent.ownerProjectId || pausedProjects.has(agent.ownerProjectId))
+        if (!paused) upgradeAgentInstructions(agent)
+      }
       for (const agent of this.data.agents) agent.tools ??= defaultAgentTools(agent.role)
+      const legacyNames = { planner: '任务规划智能体', designer: '原型前端智能体', developer: '开发智能体', reviewer: '验证智能体' }
+      for (const preset of defaultAgents()) {
+        const agent = this.data.agents.find(a => a.id === preset.role && !a.ownerProjectId && a.name === legacyNames[preset.role])
+        if (agent) { agent.name = preset.name }
+      }
       this.data.skills ??= []
       for (const agent of defaultAgents(this.data.models[0]?.id || '')) {
         if (!this.data.agents.some(a => a.role === agent.role)) {
@@ -170,9 +188,18 @@ export class EngineeringStore {
     this.data.skills = migrateAgentSkills(this.data.agents, this.data.skills || [])
     this.save()
   }
+  artifactHost() {
+    return { path: this.path, redact: (value: string) => this.redact(value),
+      secrets: () => this.data.models.flatMap(model => { try { const key = this.key(model.id); return key ? [key] : [] } catch { return [] } }) }
+  }
   save(): void {
+    try { this.writeDurable() } catch (cause) { throw new ReliabilityFailure('工程记录保存失败，已停止新动作；请核对存储与恢复记录。', { cause }) }
+  }
+  private writeDurable(): void {
     const temp = `${this.path}.tmp`
     writeFileSync(temp, JSON.stringify(this.data, null, 2), { mode: 0o600 })
+    const descriptor = openSync(temp, 'r+')
+    try { fsyncSync(descriptor) } finally { closeSync(descriptor) }
     // Windows readers may briefly prevent replacement. Retry the atomic rename;
     // never delete the last good file or fall back to a partial in-place write.
     for (let attempt = 0; ; attempt++) {
@@ -191,7 +218,7 @@ export class EngineeringStore {
     }
   }
   snapshot(): EngineeringState {
-    const { executionCheckpoints: _checkpoints, ...visible } = this.data
+    const { executionCheckpoints: _checkpoints, contextSnapshots: _contextSnapshots, receiptJournals: _receiptJournals, runtimeOriginals: _originals, ...visible } = this.data
     return JSON.parse(
       JSON.stringify({
         ...visible,

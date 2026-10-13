@@ -7,7 +7,7 @@ async function successfulSameCheckRetryDoesNotRepair() {
   'if(!fs.existsSync(".runtime/retried")){fs.writeFileSync(".runtime/retried","1");console.error("AssertionError: first attempt failed");process.exit(1)}console.log("REAL_RETRY_PASSED")')
  let developments=0
  model.complete=async(_c,system,messages)=>{
-  if(system.includes('你是 Coprojer 的开发智能体'))return answer(++developments===1?{summary:'Existing check ready.'}:{status:'incomplete',summary:'Unexpected repair requested.'})
+  if(system.includes('你是 Coprojer 的开发智能体'))return answer(++developments===1?{status:'complete',summary:'Existing check ready.',nextStep:'review'}:{status:'incomplete',summary:'Unexpected repair requested.'})
   const count=messages.filter(m=>m.role==='tool').length
   if(count<2)return call('run_command',{program:'node',args:['tests/retry.cjs'],evidenceKind:'unit'})
   return answer({results:[{criterion:ctx.feature.criteria[0],passed:true,status:'passed',evidence:'Same check actually passed on retry.',evidenceKind:'unit',commandIds:['check-2']}]})
@@ -47,13 +47,19 @@ async function decimalStringDurationDoesNotRepeatPreparation() {
     'setTimeout(()=>console.log(JSON.stringify({event:"passed",mode:"foreground",delayMs:1,observedDelayMs:2})),50)')
    model.complete=async(_c,system,messages)=>{
     if(system.includes('VERIFICATION_DIAGNOSIS')) { diagnoses.push(true);return answer({gaps:ctx.feature.verificationPreparation.gaps.map(g=>({...g,disposition:'unknown',reason:'Unsupported duration report.',nextStep:'Correct the report.'}))}) }
-    if(system.includes('你是 Coprojer 的开发智能体'))return answer({summary:'Existing fixture ready.'})
+    if(system.includes('你是 Coprojer 的开发智能体'))return answer({status:'complete',summary:'Existing fixture ready.',nextStep:'review'})
     if(!messages.some(m=>m.role==='tool'))return call('run_command',{program:'node',args:['tests/measure.cjs'],evidenceKind:'duration'})
     return answer({results:[{criterion:ctx.feature.criteria[0],passed:true,status:'passed',evidence:'Fresh actual timer.',evidenceKind:'duration',measuredDurationSeconds:seconds,commandIds:['check-1']}]})
    }
    await run(ctx.service)
    assert.equal(ctx.feature.stage,passed?'acceptance':'blocked','reported seconds: '+JSON.stringify(seconds))
    assert.equal(ctx.feature.results[0].measuredDurationSeconds,passed?0.05:undefined)
+   if(seconds==='0.05') {
+    assert.deepEqual(ctx.feature.results[0].normalizations,[{field:'measuredDurationSeconds',original:'0.05',effective:0.05,ruleVersion:'strict-positive-decimal-v1'}])
+    const evidencePath=path.resolve('.runtime/context-runtime/m1')
+    fs.mkdirSync(evidencePath,{recursive:true})
+    fs.writeFileSync(path.join(evidencePath,'duration-normalization.json'),JSON.stringify(ctx.feature.results[0],null,2))
+   }
    assert.equal(ctx.feature.verificationChecks.length,1,'never invent or replay evidence')
    if(passed)assert.equal(diagnoses.length,0,'valid decimal string must not reopen verification preparation')
   }
@@ -129,7 +135,7 @@ async function changedEnvironmentDoesNotReplay() {
    assert.equal(history.length,0,'stale environment conversation cannot be replayed')
    if(!fs.existsSync(path.join(ctx.root,'tests/current-environment.cjs')))return call('write_file',{path:'tests/current-environment.cjs',content:'console.log("CURRENT_ENVIRONMENT")'})
   }
-  if(system.includes('你是 Coprojer 的开发智能体'))return answer({summary:'Already implemented.'})
+  if(system.includes('你是 Coprojer 的开发智能体'))return answer({status:'complete',summary:'Already implemented.',nextStep:'review'})
   if(finish && !history.length)return call('run_command',{program:'node',args:['tests/prepared.cjs'],evidenceKind:'unit'})
   return answer({results:ctx.feature.criteria.map(criterion=>({criterion,passed:finish,status:finish?'passed':'unverified',evidence:finish?'Fresh independent command.':'Missing check.',commandIds:finish?['check-1']:[],evidenceKind:'unit'}))})
  }
@@ -165,7 +171,7 @@ async function parallelDurationIsNotAdded() {
   'setTimeout(()=>{},10100)')
  model.complete=async(_c,system,messages)=>{
   if(system.includes('VERIFICATION_DIAGNOSIS'))return answer({gaps:ctx.feature.verificationPreparation.gaps.map(g=>({...g,disposition:'unknown',reason:'Measured modes do not support sum.',nextStep:'Correct report against current command.'}))})
-  if(system.includes('你是 Coprojer 的开发智能体'))return answer({summary:'Measurement fixture ready.'})
+  if(system.includes('你是 Coprojer 的开发智能体'))return answer({status:'complete',summary:'Measurement fixture ready.',nextStep:'review'})
   if(!messages.some(m=>m.role==='tool'))return call('run_command',{program:'node',args:['tests/measure.cjs'],evidenceKind:'duration'})
   return answer({results:[{criterion:ctx.feature.criteria[0],passed:true,status:'passed',evidence:'Model incorrectly adds parallel modes.',evidenceKind:'duration',measuredDurationSeconds:seconds,commandIds:['check-1']}]})
  }
@@ -188,7 +194,7 @@ async function callbackOutputCannotBeRelabeled() {
  fs.writeFileSync(path.join(ctx.root,'tests/callback.cjs'),'console.log("API_CALLBACK_ONLY")')
  model.complete=async(_c,system,messages)=>{
   if(system.includes('VERIFICATION_DIAGNOSIS'))return answer({gaps:[]})
-  if(system.includes('你是 Coprojer 的开发智能体'))return answer({summary:'Ready.'})
+  if(system.includes('你是 Coprojer 的开发智能体'))return answer({status:'complete',summary:'Ready.',nextStep:'review'})
   if(!messages.some(m=>m.role==='tool'))return call('run_command',{program:'node',args:['tests/callback.cjs'],evidenceKind:'desktop'})
   return answer({results:[{criterion:ctx.feature.criteria[0],passed:true,status:'passed',evidence:'Model claims native mouse verification passed.',evidenceKind:'desktop',commandIds:['check-1']}]})
  }

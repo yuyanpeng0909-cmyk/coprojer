@@ -24,7 +24,7 @@ export function DefaultAssistantSettings({ state, refresh, onOpen }: { state: En
       {state.models.map(m => <option key={m.id} value={m.id}>{m.model}</option>)}
     </select></label>
     <p className="eng-hint">使用 qwen3.7-flash 时，可点击已有 DashScope 连接的“复用连接”，获取并选择具体模型 ID 后保存；地址、协议和密钥沿用该连接。</p>
-    <div className="eng-assistant-actions"><button className="ui-button primary" disabled={busy || selected === (state.defaultAssistantModelId || '')} onClick={() => void save()}>保存默认模型</button><button className="ui-button secondary" onClick={onOpen}><Bot size={14} />打开通用助手</button></div>
+    <div className="eng-assistant-actions"><button className="ui-button primary" disabled={busy || selected === (state.defaultAssistantModelId || '')} onClick={() => void save()}>{busy && <LoaderCircle size={13} />}{busy ? '保存中…' : '保存默认模型'}</button><button className="ui-button secondary" onClick={onOpen}><Bot size={14} />打开通用助手</button></div>
     {notice && <p className="eng-inline-result" role="status">{notice}</p>}{error && <p className="eng-inline-error" role="alert">{error}</p>}
   </section>
 }

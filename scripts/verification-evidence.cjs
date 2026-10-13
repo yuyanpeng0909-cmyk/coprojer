@@ -38,7 +38,7 @@ function provider(options = {}) {
   const seen = { developers: 0, tests: 0, verified: false }
   model.complete = async (_connection, system, messages) => {
     if (system.includes('VERIFICATION_DIAGNOSIS')) return { text: JSON.stringify({ gaps: [{ criterion: 'macOS 托盘实测', disposition: 'external', reason: '本回归运行在当前主机，无目标 macOS 设备。', nextStep: '提供对应源码版本的 macOS 实机记录。' }] }), calls: [] }
-    if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: '实现已完成', calls: [] } }
+    if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: JSON.stringify({status:'complete',summary:'实现已完成',nextStep:'独立验证'}), calls: [] } }
     if (!options.noTest && !messages.some(message => message.role === 'tool')) {
       seen.tests++
       return { text: '', calls: [{ id: 'check-' + seen.tests, name: 'run_command', arguments: JSON.stringify({ program: 'node', args: ['tests/behavior.cjs'] }) }] }

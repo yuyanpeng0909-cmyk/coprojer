@@ -63,9 +63,24 @@ export function pinnedPrototype(project: Project, feature: Feature) {
   return prototype
 }
 
-export function requirePrd(project: Project): void {
+export function canReviewPrd(project: Project): boolean {
   const accepted = activePrototypeBriefs(project).filter(b => b.status === 'accepted')
-  if (!accepted.length) return
-  if (!project.prd || !project.requirementsDocument?.trim() || !['review', 'confirmed'].includes(project.prd.status) || accepted.some(b => b.fingerprint !== designFingerprint(project, b.targetId) || !project.prd!.sources.some(s => s.prototypeId === b.prototypeId && s.fingerprint === b.fingerprint && (s.targetId || '') === (b.targetId || ''))))
+  return !accepted.length || !!(project.prd && project.requirementsDocument?.trim() && ['review', 'confirmed'].includes(project.prd.status) && accepted.every(b => b.fingerprint === designFingerprint(project, b.targetId) && project.prd!.sources.some(s => s.prototypeId === b.prototypeId && s.fingerprint === b.fingerprint && (s.targetId || '') === (b.targetId || ''))))
+}
+
+export function requirePrd(project: Project): void {
+  if (!canReviewPrd(project))
     throw new Error('请先根据已确认原型生成并审阅 PRD，再确认需求。')
+}
+
+// Mirror the confirmation prerequisites without mutating the displayed project.
+export function requirementsPreparation(project: Project): 'prototype' | 'prd' | 'generating' | 'ready' {
+  const draft = { ...project, prd: project.prd && { ...project.prd },
+    prototypeBriefs: Object.fromEntries(Object.entries(project.prototypeBriefs || {}).map(([key, brief]) => [key, { ...brief }])) }
+  syncPrototypeBriefs(draft)
+  if (activePrototypeBriefs(draft).some(brief => {
+    const current = draft.features.some(f => f.stage === 'requirements' && f.scope !== 'later' && (!brief.targetId || f.targetId === brief.targetId))
+    return current && (brief.status !== 'accepted' || brief.fingerprint !== designFingerprint(draft, brief.targetId))
+  })) return 'prototype'
+  return canReviewPrd(draft) ? 'ready' : draft.prd?.status === 'generating' ? 'generating' : 'prd'
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Download, FolderOpen, LoaderCircle, Search, Trash2 } from 'lucide-react'
 import { agentRoleLabels, toolLabels, type AgentConfig, type EngineeringState, type SkillDefinition, type SkillImportPreview } from '../../../shared/engineering'
 import { AssistantModelSelect, hasAssistantModel, ModelUsage } from './AssistantModels'
+import { LoadingStatus } from '../components/RequestFeedback'
 
 const api = () => window.desktop.engineering
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': Error: /, '')
@@ -82,7 +83,7 @@ export default function AgentSkills({ agent, skills, state, refresh }: { agent: 
       <details><summary>查看技能正文与文件清单</summary><pre>{preview.skill.content}</pre><ul>{preview.skill.resources?.map(r => <li key={r.path}>{r.path}</li>)}</ul></details>
       <div className="eng-skill-actions"><button className="ui-button secondary" disabled={!!busy} onClick={() => void work('取消安装', async () => { await api().discardSkillPreview(agent.id, preview.id); previewId.current = null; setPreview(null) })}>取消安装</button><button className="ui-button primary" disabled={!!busy || !!missing.length} onClick={() => void work('安装专属技能', async () => { await api().installSkill(agent.id, preview.id); previewId.current = null; setPreview(null); setNotice('已安装并启用，仅供「' + agent.name + '」使用。') })}>确认安装并启用</button></div>
     </section>}
-    {busy && <p className="eng-inline-result" role="status"><LoaderCircle size={13} /> {busy}…</p>}
+    {busy && <LoadingStatus key={busy} label={busy} />}
     {notice && <p className="eng-inline-result" role="status">{notice}</p>}
     {error && <p className="eng-inline-error" role="alert">{error}</p>}
   </div>

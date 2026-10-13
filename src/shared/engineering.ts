@@ -4,6 +4,7 @@ import type { ModelCapability, ModelCapabilityEvidence, ModelRecommendationOptio
 import type { ModelChecks, OnboardingPreferences, OnboardingPatch } from './onboarding'
 import type { AgentReasoning } from './reasoning'
 import type { ModelTrafficSnapshot, TrafficQuery } from './model-traffic'
+import type { ContextRuntimeState, ModelCapabilities } from './model-profile'
 export type Protocol = 'chat' | 'responses' | 'anthropic'
 export interface ModelConfig {
   id: string
@@ -13,6 +14,7 @@ export interface ModelConfig {
   protocol: Protocol
   hasKey: boolean
   checks?: ModelChecks
+  capabilities?: ModelCapabilities
 }
 export interface ModelInput extends Omit<ModelConfig, 'hasKey' | 'name' | 'checks'> {
   /** Legacy clients may send a name; new connections derive it from the model ID. */
@@ -49,26 +51,34 @@ export const toolLabels = {
   read_skill: '专属技能与资源',
   list_files: '目录浏览',
   read_file: '读取文件',
+  search_files: '搜索文件',
+  read_file_lines: '按行读取',
+  patch_file: '局部补丁',
   write_file: '修改文件',
   run_command: '运行命令与测试',
 }
 export type EngineeringToolName = keyof typeof toolLabels
 export type AgentRole = 'planner' | 'designer' | 'developer' | 'reviewer'
 export const agentRoleLabels: Record<AgentRole, string> = {
-  planner: '任务规划', designer: '原型前端', developer: '开发', reviewer: '测试校验',
+  planner: '需求与架构', designer: '交互与原型', developer: '全栈开发', reviewer: '独立测试',
 }
-export const defaultAgentTools = (role: AgentRole): EngineeringToolName[] =>
+export const allowedAgentTools = (role: AgentRole): EngineeringToolName[] =>
   (Object.keys(toolLabels) as EngineeringToolName[]).filter(
-    (name) => role === 'developer' || (role === 'reviewer' ? name !== 'write_file' : !['write_file', 'run_command'].includes(name)),
+    (name) => role === 'developer' || (role === 'reviewer' ? !['write_file', 'patch_file'].includes(name) : !['write_file', 'patch_file', 'run_command'].includes(name)),
   )
+// Optional optimizations never silently expand existing permissions or onboarding requirements.
+export const defaultAgentTools = (role: AgentRole): EngineeringToolName[] => allowedAgentTools(role).filter(name => !['search_files', 'read_file_lines', 'patch_file'].includes(name))
 export interface AgentConfig {
+  readConcurrency?: 1 | 2 | 4
   reasoning?: AgentReasoning
   ownerProjectId?: string
+  templateId?: string
   id: string
   name: string
   role: AgentRole
   modelId: string
   instructions: string
+  instructionsVersion?: number
   tools: EngineeringToolName[]
   skillIds?: string[]
 }
@@ -181,6 +191,11 @@ export interface VerificationPreparation {
   }[]
 }
 export interface CriterionResult {
+  normalizations?: { field: string; original: string; effective: number; ruleVersion: string }[]
+  modelExplanation?: string
+  taskRevision?: number
+  executionRunId?: string
+  contractFingerprint?: string
   criterion: string
   passed: boolean
   status?: VerificationStatus
@@ -193,12 +208,30 @@ export interface CriterionResult {
   measurements?: RuntimeMeasurement[]
 }
 export interface Feature {
+  contextPolicy?: import('./model-profile').ContextPolicy
+  runtimeBudget?: import('./runtime-budget').RuntimeBudget
+  runtimePolicy?: 'receipts-readonly-v1' | 'receipts-effects-v1' | 'legacy'
+  executionModels?: Partial<Record<'developer' | 'reviewer' | 'diagnoser' | 'preparer', string>>
+  runtimeHandoff?: { id: string; at: string; action: 'migrate' | 'switch' | 'legacy'; role: string; modelId: string; reason: string; originalId: string; taskRevision: number }
+  runtimeHandoffs?: NonNullable<Feature['runtimeHandoff']>[]
+  contextRuntime?: ContextRuntimeState
+  verificationHistory?: NonNullable<Feature['verificationChecks']>
+  evidenceProjection?: {
+    version: 1
+    taskRevision: number
+    executionRunId: string
+    sourceFingerprint: string
+    contractFingerprint: string
+    environmentFingerprint: string
+    updatedAt: string
+    records: { id?: string; command: string; code: number; disposition: import('./current-evidence').EvidenceDisposition; supersededBy?: string; runId?: string; artifactId?: string; taskRevision?: number; sourceFingerprint?: string; durationMs?: number; output: string }[]
+  }
   prototypeResult?: { prototypeId: string; passed: boolean; status?: VerificationStatus; evidence: string }
   verificationPending?: boolean
   verificationPreparation?: VerificationPreparation
   verificationFingerprint?: string
   verificationContractFingerprint?: string
-  verificationChecks?: { id: string; command: string; code: number; output: string; sourceFingerprint: string; at: string; durationMs: number; evidenceKind?: VerificationEvidenceKind; evidenceKinds?: VerificationEvidenceKind[]; measurements?: RuntimeMeasurement[]; runId?: string }[]
+  verificationChecks?: { id: string; command: string; code: number; output: string; sourceFingerprint: string; at: string; durationMs: number; evidenceKind?: VerificationEvidenceKind; evidenceKinds?: VerificationEvidenceKind[]; measurements?: RuntimeMeasurement[]; runId?: string; taskRevision?: number; contractFingerprint?: string; environmentFingerprint?: string; executionRunId?: string; logicalCallId?: string; providerCallId?: string; stepId?: string; artifact?: { id: string } }[]
   targetId?: string
   id: string
   module: string
@@ -223,6 +256,7 @@ export interface Feature {
   prototypeId?: string
 }
 export interface ChatEntry {
+  designJob?: { id: string; instruction: string; state: 'queued' | 'running' | 'complete' | 'error' | 'stopped' }
   id: string
   role: 'user' | 'assistant'
   text: string
@@ -242,6 +276,11 @@ export interface ChatEntry {
   designOutput?: string
 }
 export interface DiscussionToolEvent {
+  logicalCallId?: string
+  argumentsHash?: string
+  committed?: boolean
+  decisionId?: string
+  designJobId?: string
   id: string
   name: string
   arguments: string
@@ -318,10 +357,14 @@ export interface BatchConfirmResult {
   error?: string
 }
 export interface Project {
+  contextPolicy?: import('./model-profile').ContextPolicy
+  runtimeBudget?: import('./runtime-budget').RuntimeBudget
+  contextRuntime?: ContextRuntimeState
   pinned?: boolean
   archivedAt?: string | null
   teamAgentIds?: string[]
   prd?: {
+    operationId?: string
     status: 'generating' | 'review' | 'confirmed' | 'error' | 'stale'
     sources: { prototypeId: string; targetId?: string; fingerprint: string; derivedFingerprint?: string }[]
     error?: string
@@ -445,6 +488,7 @@ export function requirementsFingerprint(project: Project): string {
   })
 }
 export interface EngineeringState {
+  batchPlanProgress?: Record<string, { completed: number; total: number; failed: number }>
   onboarding?: OnboardingPreferences
   defaultTeamAgentIds?: string[]
   assistant?: AssistantWorkspace
@@ -506,8 +550,14 @@ export interface EngineeringApi {
   preflight(parent?: string): Promise<{ ready: boolean; checks: { name: string; ok: boolean; detail: string }[] }>
   testCapabilities(input: ModelInput): Promise<string>
   state(): Promise<EngineeringState>
+  readRuntimeArtifact(query: import('./model-profile').RuntimeArtifactQuery): Promise<string>
+  adjustRuntimeBudget(target: import('./runtime-budget').RuntimeBudgetTarget, limits: import('./runtime-budget').RuntimeAllowance, reason: string): Promise<void>
+  setContextPolicy(target: import('./runtime-budget').RuntimeBudgetTarget, policy: import('./model-profile').ContextPolicy | null): Promise<void>
+  reconcileRuntime(projectId: string, featureId: string): Promise<void>
+  prepareRuntimeHandoff(projectId: string, featureId: string, input: { action: 'migrate' | 'switch' | 'legacy'; modelId?: string; executionModels?: Partial<Record<'developer' | 'reviewer' | 'diagnoser' | 'preparer', string>> }): Promise<void>
   saveModel(input: ModelInput): Promise<ModelConfig>
-  deleteModel(id: string): Promise<void>
+  previewModelRemoval(id: string): Promise<import('./model-removal').ModelRemovalPreview>
+  deleteModel(id: string, replacementId?: string): Promise<void>
   testModel(input: ModelInput): Promise<string>
   listModels(input: ModelInput): Promise<string[]>
   modelTraffic(query?: TrafficQuery): Promise<ModelTrafficSnapshot>
@@ -517,6 +567,8 @@ export interface EngineeringApi {
   discardAliyunImport(previewId: string): Promise<void>
   openAliyunPage(page: keyof typeof aliyunPages): Promise<void>
   saveAgent(input: AgentConfig): Promise<void>
+  addProjectAgent(projectId: string, sourceId: string): Promise<string>
+  isolateProjectTeam(projectId: string): Promise<void>
   createProject(input: {
     name: string
     parent: string
@@ -589,6 +641,7 @@ export const scopeLabels: Record<Scope, string> = {
   later: '暂缓',
 }
 export const engineeringMethods: (keyof EngineeringApi)[] = [
+  'prepareRuntimeHandoff',
   'openModelEvidenceSource',
   'updateOnboarding',
   'createAssistantSession', 'selectAssistantSession', 'updateAssistantSession', 'deleteAssistantSession', 'stopAssistantMessage',
@@ -600,8 +653,13 @@ export const engineeringMethods: (keyof EngineeringApi)[] = [
   'confirmRequirementsAndPrepare', 'configureProject', 'archiveContext',
   'previewSkill', 'installSkill', 'discardSkillPreview', 'removeSkill', 'recommendSkills', 'recommendAgentModels', 'applyAgentModels', 'selectPrototype', 'preparePlans', 'confirmPlansAndStart', 'acceptAndContinue', 'preflight', 'testCapabilities',
   'state',
+  'readRuntimeArtifact',
+  'adjustRuntimeBudget',
+  'setContextPolicy',
+  'reconcileRuntime',
   'saveModel',
   'deleteModel',
+  'previewModelRemoval', 'addProjectAgent', 'isolateProjectTeam',
   'testModel',
   'listModels',
   'modelTraffic',

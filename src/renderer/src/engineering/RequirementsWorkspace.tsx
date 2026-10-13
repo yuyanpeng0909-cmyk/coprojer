@@ -15,6 +15,7 @@ import {
   ChevronDown,
   GitBranch,
   GripVertical,
+  LoaderCircle,
   Maximize2,
   MessageSquare,
   PanelsTopLeft,
@@ -125,7 +126,7 @@ function DiscussionMessage({ entry }: { entry: ChatEntry }) {
           <div className="message-markdown">{markdown(entry.text)}</div>
         ) : entry.status === 'streaming' ? (
           <div className="message-waiting">
-            等待模型响应<span>…</span>
+            <LoaderCircle size={13} aria-hidden="true" /> 等待模型响应<span>…</span>
           </div>
         ) : null}
         {entry.tools?.map((tool) => (

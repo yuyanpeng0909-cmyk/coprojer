@@ -45,7 +45,7 @@ function fixture() {
 const result = () => ({ text: JSON.stringify({ summary: '实际检查完成', results: [{ criterion: '相加正确', passed: true, evidence: 'tests/behavior.cjs 的断言通过' }] }), calls: [] })
 function freshReview(seen) {
   model.complete = async (connection, system, messages) => {
-    if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: '开发完成', calls: [] } }
+    if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: JSON.stringify({status:'complete',summary:'开发完成',nextStep:'独立验证'}), calls: [] } }
     seen.reviewers.push(structuredClone(messages))
     if (messages.some(m => m.role === 'tool')) return result()
     return { text: '', calls: [{ id: 'fresh-test', name: 'run_command', arguments: JSON.stringify({ program: 'node', args: ['tests/behavior.cjs'] }) }] }
@@ -55,7 +55,7 @@ function provider({ finishAtLimit = false, test = true } = {}) {
   const seen = { developers: 0, reviewers: [], finals: 0, finish: false }
   model.complete = async (connection, system, messages, tools) => {
     if (system.includes('VERIFICATION_DIAGNOSIS')) return { text: JSON.stringify({ gaps: [{ criterion: '相加正确', disposition: 'unknown', reason: '回归夹具没有准备能力。', nextStep: '补充实际检查。' }] }), calls: [] }
-    if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: '开发完成', calls: [] } }
+    if (system.includes('你是 Coprojer 的开发智能体')) { seen.developers++; return { text: JSON.stringify({status:'complete',summary:'开发完成',nextStep:'独立验证'}), calls: [] } }
     seen.reviewers.push(structuredClone(messages))
     if (seen.finish || finishAtLimit && !tools.length) return result()
     const n = seen.reviewers.length
@@ -72,6 +72,24 @@ async function run(service) {
   assert.equal(service.store.project('p').activity, null, 'service must settle')
 }
 async function main() {
+  // A real profile save can itself exceed the one-second reservation. It must
+  // renew durably while total allowance remains, including repeated slow saves.
+  const { RuntimeBudgetLease, newRuntimeBudget } = load('src/main/engineering/runtime-budget.ts')
+  let budget = newRuntimeBudget('slow-save-regression'), saves = 0
+  budget.limits.activeMs = 20000
+  const lease = new RuntimeBudgetLease({ read: () => budget, save: next => {
+    budget = next; saves++
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100)
+  } }, new AbortController().signal)
+  try {
+    lease.start(); lease.reserve('requests'); lease.check()
+    assert.equal(lease.signal.aborted, false, 'slow durable saves must not cancel a task with remaining total time')
+    assert.equal(budget.used.requests, 1)
+  } finally { lease.finish() }
+  assert.ok(saves >= 3); assert.ok(budget.used.activeMs >= 2200)
+  assert.equal(budget.activeLease, undefined)
+  console.log('PASS: repeated slow reservation saves retain bounded allowance and settle elapsed time')
+
   let { service, project, feature } = fixture()
   const seen = provider()
   await run(service)
@@ -162,11 +180,12 @@ async function main() {
 
   ;({ service, project, feature } = fixture())
   let developerResume = false, developerCalls = 0
+  project.executionPlan = { id: 'resume-plan', featureIds: ['f'], orderedFeatureIds: ['f'], currentIndex: 0, status: 'running', rationale: 'developer resume regression', at: new Date().toISOString() }
   let resumedDevelopmentHistory
   model.complete = async (connection, system, messages) => {
     if (system.includes('你是 Coprojer 的开发智能体')) {
       developerCalls++
-      if (developerResume) { resumedDevelopmentHistory = messages; return { text: '继续完成开发', calls: [] } }
+      if (developerResume) { resumedDevelopmentHistory = messages; return { text: JSON.stringify({status:'complete',summary:'继续完成开发',nextStep:'独立验证'}), calls: [] } }
       return { text: '', calls: [{ id: `dev-${developerCalls}`, name: developerCalls === 1 ? 'write_file' : 'read_file', arguments: JSON.stringify(developerCalls === 1 ? { path: 'implemented.txt', content: 'write once' } : { path: 'value.cjs' }) }] }
     }
     if (messages.some(m => m.role === 'tool')) return result()
@@ -174,12 +193,19 @@ async function main() {
   }
   await run(service)
   assert.equal(feature.stage, 'blocked')
+  assert.equal(project.executionPlan.status, 'stopped')
   developerResume = true
   service = new EngineeringService()
   await run(service)
   assert.equal(service.store.project('p').features[0].stage, 'acceptance')
+  assert.equal(service.store.project('p').executionPlan.status, 'waiting-acceptance', 'resuming the active developer must restore the plan so acceptance can continue it')
   assert.ok(resumedDevelopmentHistory.some(m => m.role === 'tool' && m.content.includes('implemented.txt')))
   assert.equal(service.store.project('p').events.filter(e => e.kind === 'tool' && e.message.startsWith('write_file')).length, 1)
+  // Recover profiles already left in this state by the older developer-resume path.
+  service.store.project('p').executionPlan.status = 'stopped'
+  service.accept('p', 'f')
+  assert.equal(service.store.project('p').executionPlan.status, 'completed')
+  assert.equal(service.store.project('p').executionPlan.currentIndex, 1)
   console.log('PASS: developer checkpoint resumes without replaying completed writes')
 
   ;({ service, project, feature } = fixture())

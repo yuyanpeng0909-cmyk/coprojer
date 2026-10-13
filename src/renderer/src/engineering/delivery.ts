@@ -24,7 +24,7 @@ export function deliveryFeatures(project: Project): Feature[] {
   return project.features.filter(feature => feature.scope === 'current' && !mergedFeatureFor(project, feature))
 }
 export function hasVerification(project: Project, feature: Feature): boolean {
-  return feature.results.length > 0 || project.events.some(event =>
+  return feature.verificationPending === true || feature.results.length > 0 || project.events.some(event =>
     event.featureId === feature.id && ['verification', 'reviewer', 'review'].includes(event.kind))
 }
 export function deliveryCount(project: Project, stage: DeliveryStage): number {

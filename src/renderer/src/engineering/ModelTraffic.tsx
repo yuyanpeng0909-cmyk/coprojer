@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, LoaderCircle } from 'lucide-react'
+import { LoadingStatus } from '../components/RequestFeedback'
 import type { ModelConfig } from '../../../shared/engineering'
 import type { ModelTrafficSnapshot, TrafficRequest, TrafficWindow } from '../../../shared/model-traffic'
 import './model-traffic.css'
@@ -53,12 +54,12 @@ export default function ModelTraffic({ models }: { models: ModelConfig[] }) {
         <option value="">全部已接入模型</option>
         {models.map(m => <option key={m.id} value={m.id}>{m.model}{connectionSuffix(m.id)} · {m.baseUrl}</option>)}
       </select></label>
-      <button className="ui-button secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={13} />刷新</button>
+      <button className="ui-button secondary" disabled={loading} onClick={() => setRefresh(v => v + 1)}>{loading ? <LoaderCircle size={13} /> : <RefreshCw size={13} />}{loading ? '读取中…' : '刷新'}</button>
     </div>
     <p className="eng-traffic-caption">已自动开启 · 每 5 秒刷新 · 仅统计本机 Coprojer 的模型调用，包含连接测试。</p>
     {error && <p role="alert" className="eng-traffic-warning">{error}{snapshot ? ' 当前保留上次成功刷新的数据。' : ''}</p>}
     {snapshot?.storageError && <p role="alert" className="eng-traffic-warning">{snapshot.storageError}</p>}
-    {loading && <p role="status" className="eng-hint">正在读取流量记录…</p>}
+    {loading && <LoadingStatus label="读取流量记录" />}
     {snapshot && totals && <>
       <dl className="eng-traffic-metrics">
         <div><dt>请求数</dt><dd data-testid="traffic-requests">{number(totals.requests)}</dd><small>当前 {totals.running} 进行中 · 近一分钟 {totals.rpm} 次</small></div>
@@ -90,7 +91,7 @@ export default function ModelTraffic({ models }: { models: ModelConfig[] }) {
         <div className="eng-traffic-heading"><h3>最近调用</h3><span>最多显示最近 50 条</span></div>
         <div className="eng-traffic-table-scroll" tabIndex={0} aria-label="最近模型调用表，可横向滚动">
           <table className="eng-traffic-table"><thead><tr><th>开始时间</th><th>模型</th><th>用途</th><th>结果</th><th>输入 / 输出 Token</th><th>耗时</th></tr></thead>
-            <tbody>{snapshot.recent.map(r => <tr key={r.id}><td>{dateTime(r.startedAt)}</td><th scope="row" className="eng-traffic-model">{r.model}{connectionSuffix(r.connectionId)}</th><td>{r.purpose === 'test' ? '连接测试' : '模型调用'}</td><td><span className={'eng-traffic-status ' + r.status}>{statuses[r.status]}</span>{r.errorKind && <small>{errors[r.errorKind]}{r.httpStatus ? ' · HTTP ' + r.httpStatus : ''}</small>}</td><td>{number(r.inputTokens)} / {number(r.outputTokens)}{(r.cachedInputTokens !== undefined || r.reasoningTokens !== undefined) && <small>其中缓存 {number(r.cachedInputTokens)} · 推理 {number(r.reasoningTokens)}</small>}</td><td>{duration(r.durationMs)}</td></tr>)}</tbody>
+            <tbody>{snapshot.recent.map(r => <tr key={r.id}><td>{dateTime(r.startedAt)}</td><th scope="row" className="eng-traffic-model">{r.model}{connectionSuffix(r.connectionId)}</th><td>{r.purpose === 'test' ? '连接测试' : r.purpose === 'count' ? '上下文计数' : r.purpose === 'compaction' ? '原生压缩' : '模型调用'}</td><td><span className={'eng-traffic-status ' + r.status}>{statuses[r.status]}</span>{r.errorKind && <small>{errors[r.errorKind]}{r.httpStatus ? ' · HTTP ' + r.httpStatus : ''}</small>}</td><td>{number(r.inputTokens)} / {number(r.outputTokens)}{(r.cachedInputTokens !== undefined || r.reasoningTokens !== undefined) && <small>其中缓存 {number(r.cachedInputTokens)} · 推理 {number(r.reasoningTokens)}</small>}</td><td>{duration(r.durationMs)}</td></tr>)}</tbody>
           </table>
         </div>
         {!snapshot.recent.length && <p className="eng-traffic-empty">暂无请求记录。</p>}

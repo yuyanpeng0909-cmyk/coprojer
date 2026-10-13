@@ -29,6 +29,7 @@ async function startProvider() {
   const control = {
     requests: [],
     errors: [],
+    transport: [],
     hold: false,
     held: [],
     failing: false,
@@ -125,6 +126,11 @@ async function startProvider() {
     res.end()
   }
   const server = http.createServer(async (req, res) => {
+    // Workflow fixtures exercise task state, not idle pooled-socket races while
+    // the client performs synchronous durable saves for a twenty-item batch.
+    res.setHeader('connection', 'close')
+    control.transport.push({ kind: 'request', socket: req.socket.remotePort, at: Date.now(), index: control.requests.length })
+    res.on('finish', () => control.transport.push({ kind: 'response', socket: req.socket.remotePort, at: Date.now() }))
     try {
       let raw = ''
       for await (const chunk of req) raw += chunk
@@ -276,7 +282,7 @@ async function startProvider() {
               }),
               call('run_command', { program: 'npm', args: ['test'] }),
             ]
-          else text = '已创建记账页面、金额汇总模块、持久化逻辑和测试。公共文件为 ledger.cjs。'
+          else text = JSON.stringify({status:'complete',summary:'已创建记账页面、金额汇总模块、持久化逻辑和测试。公共文件为 ledger.cjs。',nextStep:'独立验证'})
         }
       }
       if (control.hold) await new Promise((resolve) => control.held.push(resolve))
@@ -343,6 +349,11 @@ async function startProvider() {
       res.statusCode = 500
       res.end(JSON.stringify({ error: e.message }))
     }
+  })
+  server.on('connection', socket => {
+    const id = socket.remotePort
+    socket.on('timeout', () => control.transport.push({ kind: 'idle-timeout', socket: id, at: Date.now() }))
+    socket.on('close', () => control.transport.push({ kind: 'close', socket: id, at: Date.now() }))
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   return {

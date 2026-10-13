@@ -7,6 +7,8 @@ import type { AssistantDestination, AssistantSession, AssistantSessionPatch } fr
 import { hasAssistantModel, ModelUsage } from './AssistantModels'
 import { assistantError, type AssistantRun } from './AssistantSessions'
 import AssistantTeamCard from './AssistantTeamCard'
+import ContextDetails from './ContextDetails'
+import { LoadingStatus } from '../components/RequestFeedback'
 
 const api = () => window.desktop.engineering
 const hideActions = (text: string) => text.split(String.fromCharCode(96).repeat(3) + 'coprojer-actions')[0]
@@ -42,7 +44,7 @@ export default function Conversation({ session, state, currentProjectId, run, re
   return <section className="assistant-conversation" aria-label="当前会话">
     {currentProjectId && session.projectId !== currentProjectId && <div className="assistant-context-note">此会话仍属于{session.projectId ? project?.name || '原项目' : '全局'}。<button onClick={() => onCreate(currentProjectId)}>为当前项目新建</button></div>}
     {missingProject && <div className="assistant-context-note">原项目已删除；历史保留，项目操作已停用。</div>}
-    <div className="assistant-conversation-tools"><span>{session.summary ? '使用近期对话和历史摘录' : '使用当前会话'}{project ? '、项目状态及已确认偏好' : '及已确认偏好'}</span><details><summary aria-label="会话更多操作"><MoreHorizontal size={15} /></summary><button onClick={() => setClearing(true)} disabled={pending}>清空当前对话</button></details></div>
+    <div className="assistant-conversation-tools"><span>{session.summary ? '使用当前提问与可回查历史' : '使用当前会话'}{project ? '、项目状态及已确认偏好' : '及已确认偏好'}</span><details><summary aria-label="会话更多操作"><MoreHorizontal size={15} /></summary><button onClick={() => setClearing(true)} disabled={pending}>清空当前对话</button></details></div>
     {clearing && <div className="assistant-delete"><p>清空当前会话的消息？其他会话和偏好不会删除。</p><button className="ui-button danger" onClick={() => void run(async () => { await api().clearAssistantChat(session.id); setClearing(false) })}>确认清空</button><button className="ui-button secondary" onClick={() => setClearing(false)}>取消</button></div>}
     <div ref={scroll} className="assistant-messages" aria-label="通用助手对话" onScroll={e => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 50; if (follow.current) setNewReply(false); save({ scrollTop: el.scrollTop }) }}>
       {!session.messages.length && <div className="assistant-welcome"><MessageSquare size={25} strokeWidth={1.4} /><h2>从你想完成的事开始</h2><p>我可以带你操作 Coprojer，配好智能体，或一起看看项目卡在哪里。</p><div className="assistant-starts">
@@ -51,9 +53,10 @@ export default function Conversation({ session, state, currentProjectId, run, re
         <button disabled={missingProject} onClick={() => project ? seed('请检查当前项目的真实状态，解释阻塞和下一步，并给出对应操作入口。') : navigate('projects')}><Check size={15} /><span><strong>检查当前项目</strong><small>{project ? '看进展、配置与下一步' : '先选择一个项目'}</small></span><ArrowRight size={13} /></button>
       </div></div>}
       {!ready && <div className="assistant-setup"><strong>{state.models.length ? '先选择本次使用的模型' : '先接入一个模型'}</strong><p>配置引导无需调用模型。连接成功后就能开始对话。</p><ol><li>添加或复用模型连接</li><li>获取型号并测试连接</li><li>设置默认通用助手模型</li></ol><button className="ui-button secondary" onClick={() => navigate('models')}>打开模型连接<ArrowRight size={12} /></button></div>}
+      <ContextDetails state={session.contextRuntime} contextPolicy={session.contextPolicy} budget={session.runtimeBudget} busy={session.messages.some(m => m.status === 'pending')} scope={{ sessionId: session.id }} />
       {session.messages.map((entry, index) => <article key={entry.id} className={'assistant-message ' + entry.role}><div className="assistant-message-meta"><strong>{entry.role === 'user' ? '你' : '通用助手'}</strong><time dateTime={entry.at}>{new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div><div className="assistant-bubble">
         {entry.text && <ReactMarkdown remarkPlugins={[remarkGfm]}>{hideActions(entry.text)}</ReactMarkdown>}
-        {entry.status === 'pending' && <span role="status">{entry.requestKind === 'team' ? '正在准备团队方案…' : '正在回复…'}</span>}
+        {entry.status === 'pending' && <LoadingStatus startedAt={Date.parse(entry.at)} label={entry.requestKind === 'team' ? '准备团队方案' : entry.text ? '正在接收回复' : '等待模型响应'} />}
         {entry.error && <p className="assistant-inline-error" role="alert">{entry.error}</p>}
         {entry.planId && state.assistant?.plans.find(p => p.id === entry.planId) && <AssistantTeamCard plan={state.assistant.plans.find(p => p.id === entry.planId)!} state={state} run={run} />}
         {!!entry.actions?.length && <div className="assistant-card-actions">{entry.actions.map((action, i) => <button key={i} className="ui-button secondary" disabled={missingProject && action.destination !== 'models' && action.destination !== 'projects'} onClick={() => action.kind === 'remember' ? onRemember(action.text || '') : action.destination && navigate(action.destination)}>{action.label}<ArrowRight size={12} /></button>)}</div>}

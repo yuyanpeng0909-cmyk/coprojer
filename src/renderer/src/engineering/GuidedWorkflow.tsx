@@ -29,7 +29,8 @@ export default function GuidedWorkflow({ project, state, onMap, onModels, onOpen
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const api = window.desktop.engineering
-  const availableAgents = state.agents.filter(a => !a.ownerProjectId || a.ownerProjectId === project.id)
+  const hasOwnedTeam = state.agents.some(a => a.ownerProjectId === project.id && project.teamAgentIds?.includes(a.id))
+  const availableAgents = state.agents.filter(a => a.ownerProjectId === project.id || !hasOwnedTeam && !a.ownerProjectId || a.id === project.plannerId || a.id === project.designerId)
   const defaultAgent = (role: 'planner' | 'designer' | 'developer' | 'reviewer') => availableAgents.find(a => a.role === role && project.teamAgentIds?.includes(a.id)) || availableAgents.find(a => a.role === role && !a.ownerProjectId)
   const [team, setTeam] = useState({ plannerId: project.plannerId || defaultAgent('planner')?.id || '', designerId: project.designerId || defaultAgent('designer')?.id || '', contextBudget: project.contextBudget || 32000 })
   useEffect(() => { setTeam({ plannerId: project.plannerId || defaultAgent('planner')?.id || '', designerId: project.designerId || defaultAgent('designer')?.id || '', contextBudget: project.contextBudget || 32000 }) }, [project.id, project.plannerId, project.designerId, project.contextBudget])

@@ -1,4 +1,5 @@
 const { _electron: electron } = require('playwright')
+require('./test-display.cjs').install()
 const assert = require('node:assert/strict')
 const fs = require('node:fs/promises')
 const sync = require('node:fs')
@@ -56,8 +57,13 @@ async function main() {
       }
       if (res.destroyed) return
       res.writeHead(200, { 'content-type': 'text/event-stream' })
+      if (system.includes('VERIFICATION_PREPARATION') && !history.length) {
+        res.write('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: '核对检查路径' } }] }) + '\n\n')
+        await gate('thinking')
+      }
       if (text) res.write('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\n')
       calls.forEach((call, index) => res.write('data: ' + JSON.stringify({ choices: [{ delta: { tool_calls: [{ ...call, index }] } }] }) + '\n\n'))
+      if (system.includes('VERIFICATION_PREPARATION') && !history.length) await gate('tool-arguments')
       res.end('data: [DONE]\n\n')
     } catch (error) { res.writeHead(500); res.end(String(error)) }
   })
@@ -85,7 +91,7 @@ async function main() {
       const panel = drawer().getByRole('region', { name: '验证条件准备' })
       assert.equal(await panel.locator('pre').count(), 0, 'no internal JSON dumped into main interface')
       await panel.evaluate(el => el.scrollIntoView({ block: 'start', behavior: 'instant' }))
-      const heading = await panel.getByRole('status').boundingBox()
+      const heading = await panel.getByRole('status').first().boundingBox()
       assert.ok(heading && heading.y >= 0 && heading.y + heading.height <= size[1], 'phase heading stays in the layout screenshot')
       await page.screenshot({ path: path.join(output, name + '-' + size.join('x') + '.png'), animations: 'disabled' })
     }
@@ -95,8 +101,17 @@ async function main() {
     await drawer().getByRole('button', { name: '继续验证', exact: true }).click()
     for (const [phase, label] of [['diagnosing', '分析验证缺口'], ['preparing', '准备验证条件'], ['rechecking', '重新独立验证']]) {
       await drawer().getByRole('status').filter({ hasText: label }).waitFor()
+      if (phase === 'preparing') await drawer().getByRole('status').filter({ hasText: '等待模型响应' }).waitFor()
       await capture(phase)
       release(phase)
+      if (phase === 'preparing') {
+        for (const [step, text] of [['thinking', '模型正在推理'], ['tool-arguments', '接收工具参数']]) {
+          await drawer().getByRole('status').filter({ hasText: text }).waitFor()
+          assert.equal(sync.existsSync(path.join(root, 'tests/verify.cjs')), false, 'incomplete response must not dispatch tools')
+          await capture(step)
+          release(step)
+        }
+      }
     }
     await drawer().getByRole('status').filter({ hasText: '待补验证' }).waitFor()
     await drawer().getByRole('tab', { name: '验收', exact: true }).click()

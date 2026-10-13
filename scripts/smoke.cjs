@@ -44,7 +44,7 @@ async function main() {
         node: typeof window.require,
         bridge: Object.keys(window.desktop).sort(),
       })),
-      { node: 'undefined', bridge: ['engineering', 'getAppInfo', 'onBeforeClose', 'openResearchPanel', 'researchPanel', 'saveArtifact', 'selectFolder', 'windowControl'] },
+      { node: 'undefined', bridge: ['engineering', 'getAppInfo', 'onBeforeClose', 'onEngineeringRequests', 'openResearchPanel', 'researchPanel', 'saveArtifact', 'selectFolder', 'windowControl'] },
     )
     const duplicate = spawnSync(require('electron'), ['.'], {
       env,
