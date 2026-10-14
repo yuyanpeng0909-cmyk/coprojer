@@ -161,6 +161,7 @@ function registerHandlers(): void {
 function createWindow(panel?: ResearchPanelContext): void {
   const window = new BrowserWindow({
     title: 'Coprojer',
+    icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../docs/assets/coprojer-mark.png'),
     width: 1280,
     height: 840,
     minWidth: 860,

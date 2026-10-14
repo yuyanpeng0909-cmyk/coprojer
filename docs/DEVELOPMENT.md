@@ -58,6 +58,8 @@ npm run test:example
 
 ## 本地资料与隔离验证
 
+图标源文件为 `docs/assets/coprojer-mark.png`，同时用于 README 和应用标题栏。当前图标按用户选择提取自本地 Electron 44.3.0 的 `default_app.asar/icon.png`，原始许可见 `licenses/electron-icon-LICENSE.txt`；仅提取图标，不分发示例启动器。替换源文件后，在 Windows 运行 `pwsh -NoProfile -File scripts/build-icons.ps1`，更新安装包使用的多尺寸 `build/icon.ico`，再运行 `npm run build:win`。打包后运行 `node scripts/package-smoke.cjs`，使用隔离资料检查正式可执行程序的空白首次启动、图标和偏好持久化；输出保存在 `.runtime/package-smoke/`，不进入安装包。
+
 正式版应用资料位于 `%APPDATA%/Coprojer/`，开发版位于 `%APPDATA%/Coprojer-dev/`。主数据由应用管理，模型凭据经系统加密保存。
 
 验证时使用 `COPROJER_USER_DATA` 指定独立的应用资料目录，同时复制目标工程，防止操作影响日常工作。目标工程导出的 `.coprojer/` 资料用于追踪需求和执行记录；直接编辑这些导出文件不会反向导入应用。示例仓库不提交私人会话、模型凭据或本机执行日志。

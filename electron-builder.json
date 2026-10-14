@@ -9,14 +9,20 @@
     "!**/*.map"
   ],
   "asar": true,
+  "afterPack": "scripts/after-pack.cjs",
+  "extraResources": [{ "from": "docs/assets/coprojer-mark.png", "to": "icon.png" }],
   "npmRebuild": false,
   "electronDist": "node_modules/electron/dist",
   "win": {
     "target": [{ "target": "nsis", "arch": ["x64"] }],
     "artifactName": "Coprojer-Setup-${version}-${arch}.${ext}",
-    "executableName": "Coprojer"
+    "executableName": "Coprojer",
+    "icon": "build/icon.ico"
   },
   "nsis": {
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico",
     "oneClick": false,
     "perMachine": false,
     "allowElevation": false,

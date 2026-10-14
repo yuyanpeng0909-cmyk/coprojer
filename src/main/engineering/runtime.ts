@@ -72,7 +72,7 @@ export interface RuntimePorts {
 }
 export interface RuntimeContract {
   inspect(text: string): 'complete' | 'incomplete' | 'invalid'
-  repairInstruction: string
+  repairInstruction: string | ((text: string) => string)
   conclusionInstruction: string
   canFinish(): boolean
   incompleteSourcesMessage?: string
@@ -266,8 +266,27 @@ export async function runRuntime(input: RuntimeInput, ports: RuntimePorts, signa
     steps = group.step + 1; save()
     return undefined
   }
+  const repairReport = async (text: string): Promise<RunOutcome> => {
+    ports.records.event('verification-report-format', '结论格式不完整，基于已有记录整理一次结构化报告，不再执行工具。')
+    const instruction = typeof input.contract.repairInstruction === 'function' ? input.contract.repairInstruction(text) : input.contract.repairInstruction
+    const corrected = await request(input.instructions, [...messages, { role: 'user',
+      content: instruction + '刚才的回复格式不完整；只整理已有事实，不编造通过，也不要增加测试要求。此回合不提供工具。' }], [])
+    signal.throwIfAborted()
+    const status = corrected.calls.length ? 'invalid' : input.contract.inspect(corrected.text)
+    ports.records.event(input.replyKind, corrected.text)
+    if (status === 'complete') return finish(corrected)
+    // Preserve the latest attempted report without admitting unsolicited calls.
+    if (!corrected.calls.length) appendReply(corrected)
+    save()
+    return { status: 'paused', kind: 'progress', reason: status === 'incomplete'
+      ? '报告仍未完成，已保留事实和进度'
+      : '报告格式整理一次后仍无效；已保存事实和检查证据，不进入业务代码修复' }
+  }
   try {
     let start = input.startStep
+    const last = messages.at(-1)
+    if (!input.pending && start > 0 && last?.role === 'assistant' && !last.calls?.length && input.contract.inspect(last.content) === 'invalid')
+      return await repairReport(last.content)
     if (input.pending) {
       const group = input.pending
       if (group.version !== 1 || !group.assistant.calls?.length || group.logicalIds.length !== group.assistant.calls.length || new Set(group.logicalIds).size !== group.logicalIds.length)
@@ -292,20 +311,8 @@ export async function runRuntime(input: RuntimeInput, ports: RuntimePorts, signa
           return { status: 'paused', kind: 'progress', reason: '报告明确未完成，仍有待处理工作' }
         }
         if (status === 'invalid') {
-          ports.records.event('verification-report-format', '结论格式不完整，基于已有记录整理一次结构化报告，不再执行工具。')
-          const corrected = await request(input.instructions, [...messages, { role: 'user',
-            content: input.contract.repairInstruction + '刚才的回复格式不完整；只整理已有事实，不编造通过，也不要增加测试要求。此回合不提供工具。' }], [])
-          signal.throwIfAborted()
-          const correctedStatus = corrected.calls.length ? 'invalid' : input.contract.inspect(corrected.text)
-          if (correctedStatus !== 'invalid') {
-            ports.records.event(input.replyKind, corrected.text)
-            if (correctedStatus === 'incomplete') {
-              save(); return { status: 'paused', kind: 'progress', reason: '报告仍未完成，已保留事实和进度' }
-            }
-            return finish(corrected)
-          }
-          steps = step + 1; save()
-          return { status: 'paused', kind: 'progress', reason: '报告格式整理一次后仍无效；已保存事实和检查证据，不进入业务代码修复' }
+          steps = step + 1
+          return await repairReport(reply.text)
         }
         return finish(reply)
       }

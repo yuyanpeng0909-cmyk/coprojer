@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Layers2, Maximize2, Minus, X } from 'lucide-react'
+import { Maximize2, Minus, X } from 'lucide-react'
+import coprojerIcon from '../../../docs/assets/coprojer-mark.png'
 import EngineeringPage from './engineering/EngineeringPage'
 import { usePreferences } from './usePreferences'
 import './workbench.css'
@@ -26,7 +27,7 @@ export default function App() {
     <div className="desktop-app">
       <header className="titlebar">
         <div className="brand">
-          <Layers2 size={17} />
+          <img className="brand-icon" src={coprojerIcon} alt="" width={20} height={20} />
           <strong>Coprojer</strong>
           <span>工程工作空间</span>
         </div>

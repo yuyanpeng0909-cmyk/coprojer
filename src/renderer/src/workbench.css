@@ -25,6 +25,12 @@
   font-weight: 600;
   letter-spacing: -0.3px;
 }
+.brand-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
 .brand > span {
   color: var(--muted);
   font-size: 10px;

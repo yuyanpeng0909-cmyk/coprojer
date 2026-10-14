@@ -1701,7 +1701,13 @@ export class EngineeringService {
         (role === 'reviewer' && commands.length ? '\n当前证据以宿主任务事实中的 disposition 为准；已替代失败仅为历史，不能描述为当前阻塞。当前适用且成功的同一检查无需重跑；证据不足保留未验证。' : ''),
       contract: {
         inspect: value => role === 'developer' && (developmentStatus(value) === 'incomplete' || !value.trim()) ? 'incomplete' : reportShape(value) ? 'complete' : 'invalid',
-        repairInstruction: reportInstruction,
+        repairInstruction: value => {
+          let diagnostic = '字段或逐项验收条件不符合约定。'
+          try { parseJson(value) } catch (error) { diagnostic = 'JSON 语法错误：' + String(error).slice(0, 400) }
+          return reportInstruction + '\n格式诊断：' + diagnostic +
+            '\n只输出一个合法 JSON 对象，不加 Markdown、前后说明或尾随逗号。字符串内双引号必须正确转义，优先用中文引号避免多重转义。证据简洁引用本轮记录，不重述整份源码。' +
+            (role === 'reviewer' ? '\n验收条件必须逐字且一一对应：' + JSON.stringify(f.criteria) + '\n结构示例：' + schema : '')
+        },
         conclusionInstruction: '本次工作步数已用完。本回合仅整理已有实际证据，不提供任何工具。若足以提交，请按约定格式给出最终结论，无法确认的验收项标为 false；不要声称未执行的检查。若仍需要工具则说明尚缺工作，下次从已保存的进度继续。' + (role === 'developer' ? '开发必须返回 status/summary/nextStep JSON，尚缺实现或自测用 incomplete；只有确实已完成才用 complete。普通文字总结不能触发交付。' : ''),
         canFinish: () => prototypeReadUntil >= prototypeLength,
       },

@@ -56,6 +56,20 @@ async function main() {
     })
     assert.deepEqual(clean, { models: 0, projects: 0, node: 'undefined' })
     checks.push('Actual packaged executable starts from app.asar with no bundled user projects or model credentials')
+    const brand = await page.locator('.brand-icon').evaluate(image => ({ complete: image.complete, width: image.naturalWidth, height: image.naturalHeight }))
+    assert.ok(brand.complete && brand.width > 0 && brand.width === brand.height)
+    checks.push('Shared project icon loads in the packaged titlebar')
+    for (const [width, height] of [[1280, 840], [860, 600]]) {
+      await desktop.evaluate(({ BrowserWindow }, size) => {
+        const window = BrowserWindow.getAllWindows()[0]
+        window.setMinimumSize(1, 1)
+        window.setBounds(size)
+      }, { width, height })
+      await page.screenshot({ path: path.join(output, `packaged-${width}x${height}.png`), animations: 'disabled' })
+      assert.ok(await page.locator('.brand-icon').isVisible())
+      assert.ok(await page.getByRole('button', { name: '关闭窗口', exact: true }).isVisible())
+    }
+    checks.push('Packaged titlebar and controls remain visible at 1280x840 and 860x600')
     await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].maximize())
     await page.screenshot({ path: path.join(output, 'packaged-main-maximized.png'), animations: 'disabled' })
     await page.getByRole('button', { name: '外观与偏好', exact: true }).click()
