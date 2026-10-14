@@ -13,7 +13,8 @@ async function main() {
       let raw = ''; for await (const part of req) raw += part
       const body = JSON.parse(raw), system = body.messages[0].content, prompt = body.messages.at(-1).content
       requests.push({ model: body.model, system, prompt })
-      if (body.messages.at(-1).role === 'user' && prompt.includes('追加功能隔离检查') && body.tools?.some(t => t.function?.name === 'update_features')) {
+      if (body.messages.some(m => m.role === 'user' && m.content?.includes('追加功能隔离检查')) &&
+        !body.messages.some(m => m.role === 'tool' && m.tool_call_id === 'scoped-feature') && body.tools?.some(t => t.function?.name === 'update_features')) {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ model: body.model, choices: [{ message: { role: 'assistant', content: '', tool_calls: [{ id: 'scoped-feature', type: 'function', function: { name: 'update_features', arguments: JSON.stringify({ features: [{ title: '专用团队的新功能', module: '账户', description: '继续使用当前项目专用团队', criteria: ['绑定当前项目成员'] }] }) } }] } }] }))
         return
@@ -98,7 +99,7 @@ async function main() {
     const parent = await fs.mkdtemp(join(output, 'projects-'))
     const a = await invoke('createProject', { name: '助手项目 A', parent, brief: '一个简单工具的团队配置', modelId: 'm1' })
     const b = await invoke('createProject', { name: '助手项目 B', parent, brief: '另一个独立项目', modelId: 'm1' })
-    const before = await state(), originalB = JSON.stringify(before.projects.find(p => p.id === b)), originalAgents = JSON.stringify(before.agents)
+    const before = await state(), originalB = JSON.stringify(before.projects.find(p => p.id === b)), originalAgents = JSON.stringify(before.agents.filter(m => !m.ownerProjectId))
     const session = await invoke('createAssistantSession', a)
     await until(async () => (await assistant().locator('.assistant-scope').innerText()).includes('助手项目 A'), 'project session scope')
     await assistant().getByRole('button', { name: /^推荐智能体组合/ }).click()

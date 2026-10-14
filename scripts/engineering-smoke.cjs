@@ -125,7 +125,7 @@ async function main() {
     await page.getByRole('button', { name: '智能体', exact: true }).click()
     await page
       .locator('.eng-agent-card')
-      .filter({ hasText: '验证智能体' })
+      .filter({ hasText: '独立测试' })
       .getByRole('button', { name: '配置' })
       .click()
     dialog = page.getByRole('dialog', { name: '配置智能体' })

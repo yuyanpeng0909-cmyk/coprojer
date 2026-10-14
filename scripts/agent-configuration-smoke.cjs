@@ -61,7 +61,7 @@ async function main() {
       const dialogs=page.locator('dialog[open]'); if(await dialogs.count()) assert.ok(await dialogs.evaluate(d=>d.scrollWidth<=d.clientWidth+1),'dialog must not overflow')
     }
     await screenshot('agents',1280,840); await screenshot('agents',860,600)
-    await page.locator('.eng-agent-card').filter({hasText:'交互与原型'}).getByRole('button',{name:'技能',exact:true}).click()
+    await page.locator('.eng-agent-card').filter({has:page.getByRole('heading',{name:'交互与原型',exact:true})}).getByRole('button',{name:'技能',exact:true}).click()
     const skills=page.getByRole('dialog',{name:'智能体专属技能'})
     await desktop.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]})},source)
     await skills.getByRole('button',{name:'导入本地技能',exact:true}).click()
