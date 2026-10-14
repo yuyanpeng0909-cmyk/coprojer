@@ -182,7 +182,7 @@ async function main() {
     await idle(pid)
     p = await project(pid)
     assert.match(p.features[0].description, /用户最新编辑/)
-    assert.ok(p.events.some((e) => /过期的模型修改/.test(e.message)))
+    assert.ok(p.chat.some((entry) => entry.tools?.some((tool) => /过期的模型修改/.test(tool.result || ''))))
     await page.screenshot({
       animations: 'disabled',
       scale: 'css',
@@ -222,6 +222,8 @@ async function main() {
     )
     await assert.rejects(invoke('confirmPlan', pid, fid), /需要命令工具/)
     await invoke('saveAgent', originalReviewer)
+    const projectReviewer = (await state()).agents.find(a => a.id === (p.features.find(f => f.id === fid)).reviewerId)
+    await invoke('saveAgent', { ...projectReviewer, tools: originalReviewer.tools })
     await dialog.getByRole('button', { name: '确认方案', exact: true }).click()
     await dialog.getByRole('button', { name: '开始开发', exact: true }).waitFor()
     await assert.rejects(invoke('saveFeature', pid, fid, featureInput('篡改目标')), /不能直接改写/)
