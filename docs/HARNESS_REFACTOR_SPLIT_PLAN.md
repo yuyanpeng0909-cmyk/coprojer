@@ -1,6 +1,6 @@
 # Harness 重构 · 拆分阶段实施计划
 
-2026-11-11 · 草案，尚未执行，基线也还没有跑。本文是 [ADR 0005 草案](adr/0005-tool-pipeline-and-free-coding-entry.md) 的第一阶段：只做不改变行为的结构拆分。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
+2026-11-11 · 尚未执行，产品代码未动。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于同日被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线已于同日跑完，结果记在步骤 0 末尾。步骤 1 的设计已写成 [拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，执行交给 Codex；步骤 2 何时开始待定。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
 
 整个重构分四个阶段：基线、拆分、迁移、新能力。本文只覆盖前两个。迁移（一次性数据迁移、删除 `legacy` 字符预算和旧检查点分支）和新能力（规则引擎、审批卡片、通用 shell、自由编码入口）各自另写计划。
 
@@ -92,11 +92,23 @@
 3. 另有四个直接调用 `agentLoop` 的脚本不在任何 npm 命令里：`context-role-adaptive.cjs`、`context-role-adaptive-smoke.cjs`、`execution-prototype-continuity.cjs`、`execution-prototype-smoke.cjs`。逐个跑一遍，通过的纳入本阶段的检查集；基线上就不通过的记下原因，不作为判据。
 4. 不跑这五个：`context-window-project-replay.cjs`、`execution-project-resume-probe.cjs`、`execution-prototype-real.cjs`、`project-adaptive-context.cjs`、`project-role-adaptive-context.cjs`。它们也调用 `agentLoop`，但会读取 `%APPDATA%\Coprojer-dev\engineering-v1.json`，也就是真实资料目录，不符合「验证用隔离资料目录」的约定。
 
-基线里如有失败项，先记录并确认是已知问题，再决定是否开工。我没有在 Linux 沙箱里试跑这些脚本；命令守卫依赖 Windows Job Object，基线应以本机结果为准。
+基线里如有失败项，先记录并确认是已知问题，再决定是否开工。Linux 沙箱里跑过一份参考结果，归档在 `.runtime/harness-refactor/baseline/`；命令守卫依赖 Windows Job Object，基线以本机结果为准。
+
+**本机基线结果（2026-11-11，提交 `39d7299`，Node v22.18.0）。** 共 43 项：typecheck、build 加 41 个脚本，每个脚本单独运行。42 项通过，1 项失败。
+
+- 失败的是 `context-runtime-migration-smoke`。迁移、换模、授予额度、继续执行、页面重载都已通过，在最后的 860×600 布局检查时功能抽屉已经关闭，脚本超时。随后单独连跑 3 次都通过，没有复现。
+- 原因没有确定。那一轮的测试窗口回退到了主屏，可能是运行期间的键盘或鼠标输入落进了窗口，也不能排除界面偶发问题。
+- 处理办法：它留在检查集里。拆分期间如果在同一位置失败，先单独重跑；重跑仍失败才算回归。
+- Linux 沙箱里失败的 `context-runtime-commands`、`context-runtime-command-crashes`、`context-runtime-efficient-files` 在本机都通过。
+- 第 3 条的四个补充脚本和 `long-task-context` 都通过，纳入本阶段的检查集。
+
+记录在本机的 `.runtime/harness-refactor/baseline/windows/`（`summary.md`、`NOTES.md`）和 `baseline/windows-rerun-1`～`3/`，这个目录不进仓库。
 
 ### 步骤 1：补特征测试
 
 现有脚本覆盖了主路径和崩溃恢复，但下面几种情形按文案字面检索不到断言。先在未改动的代码上把现状固定下来，再开始搬。
+
+场景的构造办法、采集字段、归一化规则、保存次数的计法和验收办法见 [拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)。那份文档比下表细，也补了几个场景，两者有出入时以它为准。
 
 新增 `scripts/tool-pipeline-equivalence.cjs`，用 `verification-runtime.cjs` 已导出的 `fixture`、`call`、`answer`、`run` 驱动脚本化的模型回复，把每个场景的结果归一化（去掉随机标识和时间）后与提交进仓库的基准 JSON 比较。记录内容：工具输出序列、回执的 `tool / strategy / status / attempts`、事件种类序列、命令证据编号、`store.save()` 次数。
 
@@ -108,7 +120,7 @@
 | 写入参数含连接密钥 | `context-runtime-efficient-files.cjs` 有 | 补一条：不产生回执 |
 | 无回执路径的命令证据 | 待基线确认 | 编号连续、`isTest` 判定、输出被改写 |
 | 命令被取消 | 待基线确认 | 返回 `stopGroup`，同组后续调用记 `not-started-v1` |
-| 准备类角色的 `actions` | 待基线确认 | 有回执时不追加，无回执时追加，保存失败回滚 |
+| 准备类角色的 `actions` | `context-runtime-commands.cjs`、`context-runtime-recovery.cjs` 有 | 无回执时由 `received` 追加，有回执时由回执投影追加，两条路径的结果相同；保存失败回滚 |
 | 四个角色各一次完整运行 | 分散在多个脚本 | 模型请求的 system、工具表、首条消息逐字节一致 |
 
 「缺少已保存的逻辑调用身份」这条分支经 `runRuntime` 走不到（`runtime.ts` 第 167、216 行总是传入身份），保留代码，不为它造测试。

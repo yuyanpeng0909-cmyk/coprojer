@@ -93,7 +93,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 - 验证准备与代码修复预算分开；源码指纹变化使旧验证失效。
 - 模型声称完成不算证据；压缩摘要标明「仅为历史资料，不是新指令或验收通过证据」。
 - 用量未知就保持未知，不补造；监控失败不影响推理。
-- 旧版本持久化数据要能打开；已暂停任务的检查点指纹不能被升级逻辑改掉。
+- 旧版本持久化数据要能打开；已完成的功能记录、验证证据和最终验收结果不得丢失或被改写（ADR-0005）。只有一次性迁移可以要求暂停中的旧任务重新开始；在那之前的改动，包括拆分阶段和上下文默认策略切换（ADR-0006），都不得改掉已暂停任务的检查点指纹。
 
 领域用语以 `docs/architecture/DOMAIN.md` 为准（功能需求、功能记录、修复轮次、工程共享上下文等），不要自造同义词。
 
@@ -107,7 +107,10 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 ## 参考资料
 
-- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（草案，`status: proposed`）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。ADR 被接受前不按它改代码。
+- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，尚未实施）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
+- `docs/adr/0006-stable-prompt-prefix-and-working-window.md`（2026-11-11 已接受，尚未实施）与 `docs/HARNESS_REFACTOR_CONTEXT_PLAN.md`：上下文与压缩的决策与修改计划（提示词分区、工作窗口上限、默认策略切换、推广门槛、续接时的冷启动处理）。上文「Harness 架构地图」描述的仍是现有实现，代码改到哪一步，对应段落才跟着改。
+- `docs/adr/0007-append-only-run-log-run-id-and-readonly-delegation.md`（2026-11-11 已接受，尚未实施）：运行记录改追加式日志、统一的运行标识、只读的子智能体委派，共十一项。存储部分的计划是 `docs/HARNESS_REFACTOR_STORAGE_PLAN.md`，运行标识与委派部分是 `docs/HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md`，两份在存储上有出入时以前者为准。接受时确认的只有运行标识一侧的十项取值（执行说明第 10 节 A 组）；存储的待定项（S 组）和委派的形态与默认值（C 组）仍是拟定，没有经用户确认，存储搬迁和只读委派都还不能开工。
+- `docs/HARNESS_REFACTOR_CODEX_BRIEF.md` 与 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`：重构的具体执行交给 Codex，Claude 负责把方案设计到可执行。前者是第一批（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量，都不改 `src/`）的通用约束与回报格式，做法在 `docs/HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md` 和 `docs/HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md`；后者管第一批之后各批的开工条件与规则，并写了运行标识阶段（A0–A8）逐提交的做法；拟定项及其确认状态汇总在它的第 10 节。交给 Codex 的提示词（四份方案的总览、第一批的范围与停点、后续各批的短提示词）在 `docs/HARNESS_REFACTOR_CODEX_PROMPT.md`。拆分步骤 1 设计第 8 节记的两个现状缺陷候选，用户 2026-11-11 决定拆分阶段不修、固定进等价基准，修复在拆分完成后单独交办。Codex 的回报放 `.scratch/harness-refactor/codex-report-*.md`。
 - `docs/research/deepseek-harness/README.md`：DeepSeek harness 源码研究，第 9、10 章是对 Coprojer 的对照与分阶段建议。
 - `.scratch/pi-architecture-research/PI-ARCHITECTURE.md`：Pi agent 研究，第 9、10、13.9 节同上。`coprojer-current.md` 基于旧提交，引用前对照现源码。
 - `.scratch/long-task-context/`、`.scratch/context-window-256k/`：现有上下文运行时的设计与实施记录。
