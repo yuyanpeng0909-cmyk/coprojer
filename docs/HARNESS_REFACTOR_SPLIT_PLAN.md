@@ -1,6 +1,6 @@
 # Harness 重构 · 拆分阶段实施计划
 
-2026-11-12 · 步骤0基线、步骤1等价脚本及步骤2的 `ExecutionRun` 状态收拢已完成；步骤3工具端口搬出及四项验证修复已完成验收，规定35个脚本全部通过；步骤4及之后未开始。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于2026-11-11被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
+2026-11-12 · 步骤0基线、步骤1等价脚本及步骤2的 `ExecutionRun` 状态收拢已完成；步骤3工具端口搬出及四项验证修复已完成验收；步骤4阶段拆分及另行授权的recovery测试修复已完成验收，规定42个脚本全部通过，步骤5及之后未开始。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于2026-11-11被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
 
 整个重构分四个阶段：基线、拆分、迁移、新能力。本文只覆盖前两个。迁移（一次性数据迁移、删除 `legacy` 字符预算和旧检查点分支）和新能力（规则引擎、审批卡片、通用 shell、自由编码入口）各自另写计划。
 
@@ -159,7 +159,7 @@
 
 最终类型检查与独立50场景等价检查通过（0 differences），完整 `test:context-runtime` **19/19**、完整 `test:verification` **11/11**、long-task-context及四项补充 **5/5**，所有命令实际退出0，共 **35/35**。context套件内等价复验仍无差异，A0为8/8、固定计数 **40／29／59**，10个 Electron 冒烟全部通过。仅因活动预算测试后来补强真实信号覆盖，才在首轮context通过后执行最终完整套件。
 
-本步**实现及验收完成**，机械重构与测试修复分开提交，未push、未改写原提交，步骤4未开始。历史具体慢点及convergence额外失败归属仍不能从旧日志确定；不把受控实验写成旧现场完整重建。原因、阶段测时、验证及限制见 [步骤3回报](../.scratch/harness-refactor/codex-report-split-3.md) 和 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)，最终日志与证据归档在 `.runtime/harness-refactor/split-3-fixes/validation/`。
+本步**实现及验收完成**，机械重构与测试修复分开提交，未push、未改写原提交，步骤3当批未开始步骤4。历史具体慢点及convergence额外失败归属仍不能从旧日志确定；不把受控实验写成旧现场完整重建。原因、阶段测时、验证及限制见 [步骤3回报](../.scratch/harness-refactor/codex-report-split-3.md) 和 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)，最终日志与证据归档在 `.runtime/harness-refactor/split-3-fixes/validation/`。
 
 ### 步骤 4：在新文件内按阶段重排
 
@@ -186,6 +186,14 @@ export interface ToolHook<Run> {
 把 `execute` 的函数体切成具名函数：`authorize`、`assertPolicySupport`、`prepareEffect`、`buildIntent`、`perform`、`classifyError`、`settle`。回执路径和无回执路径各自保留一个顶层函数，按上表顺序调用这些具名函数；两条路径不合并。
 
 这一步每次只切一个函数，切完就跑等价脚本。检查同步骤 3，另加 `test:context-window`。
+
+**本机执行与验收记录（2026-11-12）。** 产品结构改动限于 `execution-tools.ts` 与新增的 `tool-pipeline.ts`。`authorize` 原本已具名，保留原检查；其余执行逻辑切为 `assertPolicySupport`、`prepareEffect`、`buildIntent`、`perform`、`classifyError`、`settle`，业务依赖及每次调用状态留在原文件内。`tool-pipeline.ts` 只含类型化阶段接口与legacy/回执两个独立运行器，不依赖 `EngineeringStore` 或 `service.ts`，两条路径不合并。原同步阶段、异常边界、权限复核、命令证据及落盘顺序保持；没有提前登记内部hook。上方类型片段为建议形态，实际采用本步需要的阶段接口，未增加尚未使用的hook接口。
+
+按policy、prepare、intent、perform、classify、settle、legacy runner、receipt runner依次切分，8次等价检查各50/50、0 differences；独立最终等价也50/50无差异，原基准未改。最终类型检查通过，完整context-runtime **19/19**、context-window **7/7**、verification **11/11**、五项补充 **5/5**，共 **42/42** 个不同脚本，含 **11个 Electron 脚本**；A0 **8/8**、固定计数 **40／29／59**，recovery **38/38**。分步验证、构建、定向case及中间运行不重复计入分母。
+
+首次recovery失败的HTTP请求数为0而非预期的1；受控实验查实180ms额度可能早于请求登记耗尽，但首次无trace现场的具体慢点仍未知。用户另行授权测试修复并单独提交 `1671757`。正常service起点与真实HTTP ready后的预算取消分层验证，额度、信号链路和原3秒界限保留，断信号负对照准确检出问题。verification两次Electron启动失败另查明为本轮ignored运行器用.NET写入null留下空 `ELECTRON_RUN_AS_NODE`，被既有launcher重新传入子进程；受控空值红、删除变量绿的对照已验证，只修ignored运行器，未改tracked launcher。原失败与中间结果均保留，不覆写为通过；结构拆分本身未修改测试、基准、A0、共享持久类型或依赖。
+
+最终成功结果在 `.runtime/harness-refactor/split-4/validation-evidence/results.json`，实际来源为 `validation-final` 的前三条成功命令与 `validation-clean` 的六条成功命令；独立等价在 `standalone-equivalence/`。详细原因、证据边界与本地提交见 [步骤4本机回报](../.scratch/harness-refactor/codex-report-split-4.md)、[recovery诊断](../.scratch/harness-refactor/split-4-recovery-diagnosis.md) 和 [步骤4审阅](../.scratch/harness-refactor/split-4-review.md)。本步实现及验收完成，未push、未改写已有提交；步骤5内部hook登记及其他后续工作未开始。
 
 ### 步骤 5：把内联规则登记成内部 hook
 

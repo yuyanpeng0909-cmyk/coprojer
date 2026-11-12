@@ -31,7 +31,7 @@ Coprojer 是 Windows x64 桌面「AI 工程工作台」（Electron 44 + React 19
 
 ```text
 src/main/index.ts            Electron 主进程、IPC（engineering:invoke 白名单分发）
-src/main/engineering/        harness 与工程流程，含 execution-tools.ts 工具端口
+src/main/engineering/        harness 与工程流程，含 execution-tools.ts 工具端口、tool-pipeline.ts 阶段运行器
 src/shared/                  主进程与界面共享类型（engineering.ts、model-profile.ts 等）
 src/preload/                 Electron 桥接
 src/renderer/src/            工作台界面（engineering/ 下是各业务面板）
@@ -51,7 +51,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 **四个入口，三种接法**（这是当前最大的不一致）：
 
-- 工程执行：`service.ts` 的 `EngineeringService.agentLoop` 直接调 `runRuntime`；共享状态保存在同文件的 `ExecutionRun`，包括已有项目、功能和有效智能体引用。工具端口由 `execution-tools.ts` 的 `executionTools(run, host)` 构造，通过窄宿主接口访问存储、源码指纹和技能读取；其余 ports、system prompt、角色工具裁剪、报告契约和检查点保存仍在 `agentLoop` 内。初始化及工具执行顺序保持原样，developer / reviewer / diagnoser / preparer 四个执行角色共用它。
+- 工程执行：`service.ts` 的 `EngineeringService.agentLoop` 直接调 `runRuntime`；共享状态保存在同文件的 `ExecutionRun`，包括已有项目、功能和有效智能体引用。工具端口由 `execution-tools.ts` 的 `executionTools(run, host)` 构造，通过窄宿主接口访问存储、源码指纹和技能读取。工具调用在该文件内拆为 `authorize`、`assertPolicySupport`、`prepareEffect`、`buildIntent`、`perform`、`classifyError`、`settle` 等具名阶段，`tool-pipeline.ts` 只以回调分别编排无回执与回执两条路径，不依赖存储或服务实现；内部规则仍保留在业务阶段中，尚未登记成 hook。其余 ports、system prompt、角色工具裁剪、报告契约和检查点保存仍在 `agentLoop` 内。初始化及工具执行顺序保持原样，developer / reviewer / diagnoser / preparer 四个执行角色共用它。
 - 方案规划 `planning.ts`、通用助手 `general-assistant.ts`：经 `context-session.ts` 的 `contextSession().run` 调 `runRuntime`。
 - 需求讨论与圆桌 `requirements.ts`：自己手写循环，直接调 `requestWithContext`，不经过 `runRuntime`。
 
@@ -107,7 +107,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 ## 参考资料
 
-- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，拆分已推进至步骤3）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。当前工具端口已搬至 `execution-tools.ts`，内部仍保持原结构；按阶段重排及内部 hook 尚未实施，规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
+- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，步骤4阶段拆分及验收已完成，记录见 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。当前工具端口在 `execution-tools.ts` 内按具名阶段组织，`tool-pipeline.ts` 分别编排无回执与回执路径；步骤5的内部 hook 登记尚未实施，规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
 - `docs/adr/0006-stable-prompt-prefix-and-working-window.md`（2026-11-11 已接受，尚未实施）与 `docs/HARNESS_REFACTOR_CONTEXT_PLAN.md`：上下文与压缩的决策与修改计划（提示词分区、工作窗口上限、默认策略切换、推广门槛、续接时的冷启动处理）。上文「Harness 架构地图」描述的仍是现有实现，代码改到哪一步，对应段落才跟着改。
 - `docs/adr/0007-append-only-run-log-run-id-and-readonly-delegation.md`（2026-11-11 已接受，尚未实施）：运行记录改追加式日志、统一的运行标识、只读的子智能体委派，共十一项。存储部分的计划是 `docs/HARNESS_REFACTOR_STORAGE_PLAN.md`，运行标识与委派部分是 `docs/HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md`，两份在存储上有出入时以前者为准。接受时确认的只有运行标识一侧的十项取值（执行说明第 10 节 A 组）；存储的待定项（S 组）和委派的形态与默认值（C 组）仍是拟定，没有经用户确认，存储搬迁和只读委派都还不能开工。
 - `docs/HARNESS_REFACTOR_CODEX_BRIEF.md` 与 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`：重构的具体执行交给 Codex，Claude 负责把方案设计到可执行。前者是第一批（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量，都不改 `src/`）的通用约束与回报格式，做法在 `docs/HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md` 和 `docs/HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md`；后者管第一批之后各批的开工条件与规则，并写了运行标识阶段（A0–A8）逐提交的做法；拟定项及其确认状态汇总在它的第 10 节。交给 Codex 的提示词（四份方案的总览、第一批的范围与停点、后续各批的短提示词）在 `docs/HARNESS_REFACTOR_CODEX_PROMPT.md`。拆分步骤 1 设计第 8 节记的两个现状缺陷候选，用户 2026-11-11 决定拆分阶段不修、固定进等价基准，修复在拆分完成后单独交办。Codex 的回报放 `.scratch/harness-refactor/codex-report-*.md`。

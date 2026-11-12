@@ -4,7 +4,7 @@ import type { AgentConfig, AgentRole, Project, toolLabels } from '../../shared/e
 import type { skillReader } from './skills'
 import { now, uid, type EngineeringStore } from './store'
 import { planReadGroup, checkReadGroup } from './read-groups'
-import { receiptIntentHash, sealReceipt, type ToolReceipt } from './receipt-ledger'
+import { receiptIntentHash, sealReceipt, type ReceiptResult, type ToolReceipt } from './receipt-ledger'
 import { applyReceiptProjection, reconcileFileReceipt, assertFileReceipt } from './execution-recovery'
 import { prepareFileEffect, preparePatchEffect, applyFileEffect, fileEffectOutput, type FileEffect } from './file-effects'
 import { prepareCommandEffect, executeCommandEffect, reconcileCommandReceipt, assertCommandReceipt, type CommandEffect } from './command-effects'
@@ -14,6 +14,9 @@ import { TaskRevisionChanged } from './task-projection'
 import { commandEvidenceKinds } from './execution'
 import { commandFailure, verificationContract, runtimeMeasurements } from './verification'
 import { toolContractVersion } from './tool-contract'
+import { runLegacyToolPipeline, runReceiptToolPipeline } from './tool-pipeline'
+
+type ToolIdentity = NonNullable<Parameters<RuntimePorts['tools']['execute']>[4]>
 
 interface ExecutionToolsHost {
   store: EngineeringStore
@@ -50,7 +53,61 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
             const live = host.store.data.agents.find(a => a.id === agent.id && a.role === agent.role && (!a.ownerProjectId || a.ownerProjectId === p.id))
             if (!run.offered.some(t => t.name === call.name) || !live?.tools.includes(call.name as keyof typeof toolLabels)) throw new Error('当前角色不可使用此工具。')
           }
-          const work = async () => {
+          const assertPolicySupport = () => {
+          if (!identity) throw new ReliabilityFailure('缺少已保存的逻辑调用身份。')
+          const supported = ['read_skill', 'read_context', 'read_file', 'read_file_lines', 'search_files', 'list_files', ...(f.runtimePolicy === 'receipts-effects-v1' ? ['write_file', 'patch_file', 'run_command'] : [])]
+          if (!supported.includes(call.name)) throw new RecoveryRequired('此运行版本尚未启用该副作用工具的恢复策略：' + call.name)
+          return identity
+          }
+          const prepareEffect = (identity: ToolIdentity) => {
+          if (['write_file', 'patch_file'].includes(call.name)) {
+            authorize()
+            if (host.store.redact(JSON.stringify(args)) !== JSON.stringify(args)) throw new Error('工具内容包含受保护连接密钥，不能写入或保存该意图。')
+            const prior = run.ledger.get(identity.logicalId)
+            if (prior) { assertFileReceipt(prior); fileEffect = prior.file }
+            else {
+              fileEffect = call.name === 'patch_file' ? preparePatchEffect(p, f.id, run.role, args) : prepareFileEffect(p, f.id, run.role, args as { path: string; content: string })
+              if (call.name === 'patch_file' && (host.store.redact(fileEffect.before!) !== fileEffect.before || host.store.redact(fileEffect.after) !== fileEffect.after))
+                throw new Error('补丁原文包含受保护连接密钥，无法可靠保存完整意图；未修改文件。')
+              fileEffect.before = fileEffect.before === null ? null : host.store.redact(fileEffect.before)
+            }
+          }
+          if (call.name === 'run_command') {
+            authorize()
+            if (host.store.redact(JSON.stringify(args)) !== JSON.stringify(args)) throw new Error('命令参数含受保护密钥，不能保存或执行。')
+            const prior = run.ledger.get(identity.logicalId)
+            if (prior) { assertCommandReceipt(p, prior); commandEffect = prior.command }
+            else commandEffect = prepareCommandEffect(host.store, p, f, run.role, args, { id: 'check-' + (run.commands.length + 1), taskRevision: run.taskRevision, contractFingerprint: run.contractFingerprint, environmentFingerprint: run.environmentFingerprint,
+              executionRunId: run.executionRunId, stepId: String(step), logicalCallId: identity.logicalId, providerCallId: call.id, sourceFingerprint: host.sourceFingerprint(p) })
+          }
+          }
+          const buildIntent = (identity: ToolIdentity) => {
+          const intent: ToolReceipt = { version: 1, logicalId: identity.logicalId, providerCallId: call.id, groupId: identity.groupId, manifestId: run.manifest.id,
+            projectId: p.id, scopeId: f.id, agentId: agent.id, role: run.role, schemaVersion: run.ledger.get(identity.logicalId)?.schemaVersion ?? toolContractVersion, permissions: [...agent.tools],
+            args: JSON.parse(host.store.redact(JSON.stringify(args))), taskRevision: run.taskRevision, resourceVersion: host.sourceFingerprint(p), strategy: commandEffect ? 'command-v1' : fileEffect ? 'file-v1' : 'readonly-v1', file: fileEffect, command: commandEffect, tool: call.name,
+            preparationAttemptId: run.role === 'preparer' ? f.verificationPreparation?.attempts.at(-1)?.id : undefined,
+            status: 'prepared', at: now(), updatedAt: now(), attempts: 0, effects: [], applied: false, intentHash: '' }
+          intent.intentHash = receiptIntentHash(intent)
+          if (commandEffect) commandIntent = intent
+          return intent
+          }
+          const classifyError = (error: unknown) => {
+            if (error instanceof PreparationBoundaryError || error instanceof TaskRevisionChanged || error instanceof ReliabilityFailure || error instanceof EffectUncertain) throw error
+            if (toolSignal.aborted && ['read_file', 'read_file_lines', 'search_files'].includes(call.name)) return { output: '读取已取消；已保存调用状态，未完成内容不作为当前依据。', status: 'cancelled' as const }
+            if (run.reliable) throw new Error(host.store.redact(error instanceof Error ? error.message : String(error)))
+            return '工具错误：' + (error instanceof Error ? error.message : String(error))
+          }
+          const settle = (result: ReceiptResult, identity: ToolIdentity) => {
+          if (fileEffect || commandEffect) applyReceiptProjection(host.store, p, f, run.ledger, run.ledger.get(identity.logicalId)!)
+          if (result.command && !run.commands.some(c => c.logicalCallId === identity.logicalId)) run.commands.push(result.command.evidence)
+          if (result.command?.boundaryError) throw new PreparationBoundaryError(result.command.boundaryError)
+          if (run.prototype && call.name === 'read_context' && args.id === 'prototype:' + run.prototype.id && !result.output.startsWith('工具错误：')) {
+            const page = JSON.parse(result.output)
+            if (page.offset <= run.prototypeReadUntil) run.prototypeReadUntil = Math.max(run.prototypeReadUntil, page.offset + page.content.length)
+          }
+          return { ...result, ...(result.command && result.status === 'cancelled' ? { stopGroup: '命令已停止，已保留输出和文件变化；本组排队动作未启动，显式继续将开始新的模型回合。' } : {}) }
+          }
+          const perform = async () => {
           const beforeWrite = ['write_file', 'patch_file'].includes(call.name) ? host.sourceFingerprint(p) : ''
           let output = '', progressSource = ''
           try {
@@ -102,55 +159,17 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
               output = JSON.stringify({ ...result, evidenceId, evidenceKinds, measurements: run.commands.at(-1)?.measurements, sourceFingerprint: commandFingerprint, durationMs: Date.now() - started })
             }
           } catch (error) {
-            if (error instanceof PreparationBoundaryError || error instanceof TaskRevisionChanged || error instanceof ReliabilityFailure || error instanceof EffectUncertain) throw error
-            if (toolSignal.aborted && ['read_file', 'read_file_lines', 'search_files'].includes(call.name)) return { output: '读取已取消；已保存调用状态，未完成内容不作为当前依据。', status: 'cancelled' as const }
-            if (run.reliable) throw new Error(host.store.redact(error instanceof Error ? error.message : String(error)))
-            output = '工具错误：' + (error instanceof Error ? error.message : String(error))
+            const classified = classifyError(error)
+            if (typeof classified !== 'string') return classified
+            output = classified
           }
           return { output, sourceVersion: progressSource, changed: ['write_file', 'patch_file'].includes(call.name) && beforeWrite !== host.sourceFingerprint(p),
             ...(fileEffect ? { effects: ['已写入 ' + fileEffect.path + '，版本 ' + fileEffect.expectedVersion] } : {}) }
           }
-          if (!run.reliable) { authorize(); run.budgetLease?.reserve('tools'); return work() }
-          if (!identity) throw new ReliabilityFailure('缺少已保存的逻辑调用身份。')
-          const supported = ['read_skill', 'read_context', 'read_file', 'read_file_lines', 'search_files', 'list_files', ...(f.runtimePolicy === 'receipts-effects-v1' ? ['write_file', 'patch_file', 'run_command'] : [])]
-          if (!supported.includes(call.name)) throw new RecoveryRequired('此运行版本尚未启用该副作用工具的恢复策略：' + call.name)
-          if (['write_file', 'patch_file'].includes(call.name)) {
-            authorize()
-            if (host.store.redact(JSON.stringify(args)) !== JSON.stringify(args)) throw new Error('工具内容包含受保护连接密钥，不能写入或保存该意图。')
-            const prior = run.ledger.get(identity.logicalId)
-            if (prior) { assertFileReceipt(prior); fileEffect = prior.file }
-            else {
-              fileEffect = call.name === 'patch_file' ? preparePatchEffect(p, f.id, run.role, args) : prepareFileEffect(p, f.id, run.role, args as { path: string; content: string })
-              if (call.name === 'patch_file' && (host.store.redact(fileEffect.before!) !== fileEffect.before || host.store.redact(fileEffect.after) !== fileEffect.after))
-                throw new Error('补丁原文包含受保护连接密钥，无法可靠保存完整意图；未修改文件。')
-              fileEffect.before = fileEffect.before === null ? null : host.store.redact(fileEffect.before)
-            }
-          }
-          if (call.name === 'run_command') {
-            authorize()
-            if (host.store.redact(JSON.stringify(args)) !== JSON.stringify(args)) throw new Error('命令参数含受保护密钥，不能保存或执行。')
-            const prior = run.ledger.get(identity.logicalId)
-            if (prior) { assertCommandReceipt(p, prior); commandEffect = prior.command }
-            else commandEffect = prepareCommandEffect(host.store, p, f, run.role, args, { id: 'check-' + (run.commands.length + 1), taskRevision: run.taskRevision, contractFingerprint: run.contractFingerprint, environmentFingerprint: run.environmentFingerprint,
-              executionRunId: run.executionRunId, stepId: String(step), logicalCallId: identity.logicalId, providerCallId: call.id, sourceFingerprint: host.sourceFingerprint(p) })
-          }
-          const intent: ToolReceipt = { version: 1, logicalId: identity.logicalId, providerCallId: call.id, groupId: identity.groupId, manifestId: run.manifest.id,
-            projectId: p.id, scopeId: f.id, agentId: agent.id, role: run.role, schemaVersion: run.ledger.get(identity.logicalId)?.schemaVersion ?? toolContractVersion, permissions: [...agent.tools],
-            args: JSON.parse(host.store.redact(JSON.stringify(args))), taskRevision: run.taskRevision, resourceVersion: host.sourceFingerprint(p), strategy: commandEffect ? 'command-v1' : fileEffect ? 'file-v1' : 'readonly-v1', file: fileEffect, command: commandEffect, tool: call.name,
-            preparationAttemptId: run.role === 'preparer' ? f.verificationPreparation?.attempts.at(-1)?.id : undefined,
-            status: 'prepared', at: now(), updatedAt: now(), attempts: 0, effects: [], applied: false, intentHash: '' }
-          intent.intentHash = receiptIntentHash(intent)
-          if (commandEffect) commandIntent = intent
-          const result = await run.ledger.execute(intent, () => { authorize(); run.budgetLease?.reserve('tools') }, async () => { const result = await work(); return { ...result, output: host.store.redact(result.output) } },
-            async receipt => receipt.command ? reconcileCommandReceipt(host.store, p, f, receipt) : reconcileFileReceipt(p, receipt))
-          if (fileEffect || commandEffect) applyReceiptProjection(host.store, p, f, run.ledger, run.ledger.get(identity.logicalId)!)
-          if (result.command && !run.commands.some(c => c.logicalCallId === identity.logicalId)) run.commands.push(result.command.evidence)
-          if (result.command?.boundaryError) throw new PreparationBoundaryError(result.command.boundaryError)
-          if (run.prototype && call.name === 'read_context' && args.id === 'prototype:' + run.prototype.id && !result.output.startsWith('工具错误：')) {
-            const page = JSON.parse(result.output)
-            if (page.offset <= run.prototypeReadUntil) run.prototypeReadUntil = Math.max(run.prototypeReadUntil, page.offset + page.content.length)
-          }
-          return { ...result, ...(result.command && result.status === 'cancelled' ? { stopGroup: '命令已停止，已保留输出和文件变化；本组排队动作未启动，显式继续将开始新的模型回合。' } : {}) }
+          if (!run.reliable) return runLegacyToolPipeline({ authorize, reserve: () => { run.budgetLease?.reserve('tools') }, perform })
+          return runReceiptToolPipeline({ assertPolicySupport, prepareEffect, buildIntent,
+            executeIntent: intent => run.ledger.execute(intent, () => { authorize(); run.budgetLease?.reserve('tools') }, async () => { const result = await perform(); return { ...result, output: host.store.redact(result.output) } },
+              async receipt => receipt.command ? reconcileCommandReceipt(host.store, p, f, receipt) : reconcileFileReceipt(p, receipt)), settle })
         },
         skip: (call, reason, identity) => {
           const previous = run.ledger.get(identity.logicalId)
