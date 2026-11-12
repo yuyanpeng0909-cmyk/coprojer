@@ -31,7 +31,7 @@ Coprojer 是 Windows x64 桌面「AI 工程工作台」（Electron 44 + React 19
 
 ```text
 src/main/index.ts            Electron 主进程、IPC（engineering:invoke 白名单分发）
-src/main/engineering/        harness 与工程流程，53 个文件约 1 万行
+src/main/engineering/        harness 与工程流程，含 execution-tools.ts 工具端口
 src/shared/                  主进程与界面共享类型（engineering.ts、model-profile.ts 等）
 src/preload/                 Electron 桥接
 src/renderer/src/            工作台界面（engineering/ 下是各业务面板）
@@ -51,7 +51,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 **四个入口，三种接法**（这是当前最大的不一致）：
 
-- 工程执行：`service.ts` 的 `EngineeringService.agentLoop` 直接调 `runRuntime`；共享状态已收进同文件的 `ExecutionRun`，各闭包通过 `run` 访问角色、连接、回执、命令证据及原型读取进度。初始化仍按原顺序执行，全部 ports、system prompt、角色工具裁剪、报告契约、检查点保存和工具执行仍在该方法内。developer / reviewer / diagnoser / preparer 四个执行角色共用它。
+- 工程执行：`service.ts` 的 `EngineeringService.agentLoop` 直接调 `runRuntime`；共享状态保存在同文件的 `ExecutionRun`，包括已有项目、功能和有效智能体引用。工具端口由 `execution-tools.ts` 的 `executionTools(run, host)` 构造，通过窄宿主接口访问存储、源码指纹和技能读取；其余 ports、system prompt、角色工具裁剪、报告契约和检查点保存仍在 `agentLoop` 内。初始化及工具执行顺序保持原样，developer / reviewer / diagnoser / preparer 四个执行角色共用它。
 - 方案规划 `planning.ts`、通用助手 `general-assistant.ts`：经 `context-session.ts` 的 `contextSession().run` 调 `runRuntime`。
 - 需求讨论与圆桌 `requirements.ts`：自己手写循环，直接调 `requestWithContext`，不经过 `runRuntime`。
 
@@ -69,7 +69,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 **权限**。全部硬编码，没有声明式规则、逐调用审批或 hook：
 
-- 角色裁剪：`agent.tools` 与角色过滤得到 `offered`，执行前再用 live agent 配置复核一次（`agentLoop` 内的 `authorize`）。reviewer 不能写文件，diagnoser 只读。
+- 角色裁剪：`agent.tools` 与角色过滤得到 `offered`，执行前再用 live agent 配置复核（`execution-tools.ts` 内的 `authorize` 及原有工具执行检查）。reviewer 不能写文件，diagnoser 只读。
 - 命令：`run_command` 只接受 `npm` / `node` 加参数数组，不经 shell；`files.ts` 的 `authorizeCommand` 与 `preparationCommand` 按角色再收窄。环境变量按白名单透传。
 - 路径：`safePath` 拒绝越界、符号链接以及 `.git`、`.coprojer`、`node_modules`；写入前 `assertExclusiveWriteTarget` 拒绝有硬链接的目标。
 - 业务前置：写文件和跑命令前必须读完已验收原型。
@@ -107,7 +107,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 ## 参考资料
 
-- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，拆分已推进至步骤2）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。当前工具端口仍在 `service.ts`，规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
+- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，拆分已推进至步骤3）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。当前工具端口已搬至 `execution-tools.ts`，内部仍保持原结构；按阶段重排及内部 hook 尚未实施，规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
 - `docs/adr/0006-stable-prompt-prefix-and-working-window.md`（2026-11-11 已接受，尚未实施）与 `docs/HARNESS_REFACTOR_CONTEXT_PLAN.md`：上下文与压缩的决策与修改计划（提示词分区、工作窗口上限、默认策略切换、推广门槛、续接时的冷启动处理）。上文「Harness 架构地图」描述的仍是现有实现，代码改到哪一步，对应段落才跟着改。
 - `docs/adr/0007-append-only-run-log-run-id-and-readonly-delegation.md`（2026-11-11 已接受，尚未实施）：运行记录改追加式日志、统一的运行标识、只读的子智能体委派，共十一项。存储部分的计划是 `docs/HARNESS_REFACTOR_STORAGE_PLAN.md`，运行标识与委派部分是 `docs/HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md`，两份在存储上有出入时以前者为准。接受时确认的只有运行标识一侧的十项取值（执行说明第 10 节 A 组）；存储的待定项（S 组）和委派的形态与默认值（C 组）仍是拟定，没有经用户确认，存储搬迁和只读委派都还不能开工。
 - `docs/HARNESS_REFACTOR_CODEX_BRIEF.md` 与 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`：重构的具体执行交给 Codex，Claude 负责把方案设计到可执行。前者是第一批（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量，都不改 `src/`）的通用约束与回报格式，做法在 `docs/HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md` 和 `docs/HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md`；后者管第一批之后各批的开工条件与规则，并写了运行标识阶段（A0–A8）逐提交的做法；拟定项及其确认状态汇总在它的第 10 节。交给 Codex 的提示词（四份方案的总览、第一批的范围与停点、后续各批的短提示词）在 `docs/HARNESS_REFACTOR_CODEX_PROMPT.md`。拆分步骤 1 设计第 8 节记的两个现状缺陷候选，用户 2026-11-11 决定拆分阶段不修、固定进等价基准，修复在拆分完成后单独交办。Codex 的回报放 `.scratch/harness-refactor/codex-report-*.md`。

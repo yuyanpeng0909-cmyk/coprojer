@@ -1,6 +1,6 @@
 # Harness 重构 · 交给 Codex 的执行说明
 
-2026-11-11 · 第一批基准与测量、运行标识 A0 特征测试已完成，产品结构拆分已推进至步骤2。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
+2026-11-12 · 第一批基准与测量、运行标识 A0 特征测试已完成，产品结构拆分步骤3已实现，验证尚未全通过，失败及旧版对照见本步执行记录。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
 
 第一批任务（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量）已经有单独的任务书：[第一批执行任务书](HARNESS_REFACTOR_CODEX_BRIEF.md)，做法在它指向的两份设计文档里（[拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)、[存储搬迁步骤 0 设计](HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md)）。那两件事照任务书和设计文档做，本文不重复；本文管的是第一批之后的各批。
 
@@ -24,7 +24,8 @@
 | 拆分步骤 0（基线） | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已完成。本机 43 项过 42，结果在 `.runtime/harness-refactor/baseline/windows/` | — |
 | 第一批：拆分步骤 1、存储步骤 0 | 第一批执行任务书和两份设计文档 | 已完成：任务 A `999565d`，任务 B `9784c20`（2026-11-11，本地提交，未 push） | 两个任务均未改 `src/`；回报见下文 |
 | 拆分步骤 2 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已完成（2026-11-11，本地提交，未 push） | 同文件 `ExecutionRun` 收拢20项现有状态，等价与完整回归通过；回报见下文 |
-| 拆分步骤 3–5，步骤 6 可选 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 未开工 | 步骤2已完成；用户交办时点名后续步骤号 |
+| 拆分步骤 3 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 代码已实现，验证未全绿（2026-11-12） | 工具端口已整体搬出；4个脚本失败，旧版对照及证据边界详见本步回报，不将失败项记为通过 |
+| 拆分步骤 4–5，步骤 6 可选 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 未开工 | 先处理步骤3回报中的失败与验收结论；用户交办时点名后续步骤号 |
 | 运行标识 A0（只加特征测试） | 本文 6.2 | 已完成（2026-11-11，本地提交，未 push） | R1–R8 全部通过，已接入 `test:context-runtime`；未改 `src/`，回报见下文 |
 | 运行标识 A1–A8 | [ADR 0007](adr/0007-append-only-run-log-run-id-and-readonly-delegation.md) 第五、六项，[运行标识计划](HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md) A 部分，本文第 6 节 | 未开工 | ADR 0007 已接受、第 10 节 A 组已确认（2026-11-11）。还差：拆分步骤 2–5 完成；用户点名 |
 | 上下文与压缩步骤 1–7 | [ADR 0006](adr/0006-stable-prompt-prefix-and-working-window.md)（已接受）、[上下文计划](HARNESS_REFACTOR_CONTEXT_PLAN.md) | 未开工 | 拆分步骤 2–5 完成；用户点名。与运行标识的先后见第 7 节 |
@@ -39,7 +40,11 @@ ADR 0007 已于 2026-11-11 被接受。ADR 已接受不等于可以动手：上�
 
 **A0 执行记录。** 按后续提示词 3.1 完成 R1–R8 特征测试。正式独立运行两次均 8/8 通过；`npm run typecheck` 通过，完整 `npm run test:context-runtime` 首次运行的19个脚本全部通过，其中50个等价场景差异为0，5个 Electron 冒烟脚本通过。R1 的计数为40次，R2 首段29次、两段累计59次；已排除活动时间预占和 `output` 事件保存，计数固化在脚本中。真实 HTTP/SSE 链路验证了流量记录器 `start` 抛错不影响推理；运行标识仍保持当前行为，未提前实现 A1–A8。详情见 [A0 本机回报](../.scratch/harness-refactor/codex-report-A0.md)，原始产物和日志在 `.runtime/harness-refactor/run-identity/`。A0 当批未改产品源码。
 
-**拆分步骤2执行记录。** 在 `service.ts` 内新增 `ExecutionRun`，收纳20项已有状态，195处绑定引用改为 `run` 字段访问；初始化先后、命令数组及 manifest 共享引用、保存与回执顺序保持。类型检查通过，独立等价脚本50个场景差异为0；完整 `test:context-runtime` 首次运行的构建及19个脚本全部通过，套件内等价复验仍为0差异，A0 为8/8且计数仍为40／29／59，5个 Electron 冒烟脚本通过。两份独立静态审查无剩余发现。详情见 [拆分步骤2本机回报](../.scratch/harness-refactor/codex-report-split-2.md)，日志在 `.runtime/harness-refactor/split-2/`。工具端口仍在原方法内，步骤3及后续工作包尚未开始。
+**拆分步骤2执行记录。** 在 `service.ts` 内新增 `ExecutionRun`，收纳20项已有状态，195处绑定引用改为 `run` 字段访问；初始化先后、命令数组及 manifest 共享引用、保存与回执顺序保持。类型检查通过，独立等价脚本50个场景差异为0；完整 `test:context-runtime` 首次运行的构建及19个脚本全部通过，套件内等价复验仍为0差异，A0 为8/8且计数仍为40／29／59，5个 Electron 冒烟脚本通过。两份独立静态审查无剩余发现。详情见 [拆分步骤2本机回报](../.scratch/harness-refactor/codex-report-split-2.md)，日志在 `.runtime/harness-refactor/split-2/`。步骤2当批没有搬出工具端口或开展后续工作包。
+
+**拆分步骤3执行记录（2026-11-12）。** 工具端口及 `agentToolMessage` 已整体搬至 `execution-tools.ts`，`agentLoop` 通过窄 host 接口调用工厂；原执行结构、权限复核和落盘顺序保持。类型检查与两次构建通过，50场景等价验证两次均0差异，A0 为8/8且计数仍为40／29／59。规定的35个原脚本均已执行：context-runtime 18/19、verification 8/11、long-task-context及四项补充5/5，共31通过、4失败；其中10个 Electron 冒烟全部通过。两个完整 npm 命令都因失败退出1，受中断影响的后续原脚本另行串行运行，没有把续跑结果冒充完整命令通过。
+
+失败脚本为 `context-runtime-commands`（2.5秒活动时限场景缺少预期输出）、`execution-budget`（15秒等待结束断言）、`execution-convergence`（18秒等待结束断言）、`verification-preparation-stalls`（客户端已按时超时，额外等30毫秒后仍未观察到服务器连接关闭）。用拆分前 `5538403` 的原 service 源码作同机对照，四个脚本也均失败；收敛脚本当前10/11、旧版7/11，失败集合及超时阶段不同，不能宣称一一等价或共同根因。实现已落地，验收未全通过；未改测试、预算或等价基准，未推进步骤4。完整证据和诊断见 [拆分步骤3本机回报](../.scratch/harness-refactor/codex-report-split-3.md)，日志及35项汇总在 `.runtime/harness-refactor/split-3/`。
 
 ## 3　每个提交都要守的规则
 
