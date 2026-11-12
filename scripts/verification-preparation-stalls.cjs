@@ -50,20 +50,35 @@ async function main() {
     assert.deepEqual(feature.verificationPreparation.attempts[0].actions, actions)
   })
   await test('stage-specific timeout aborts a live SSE response without waiting for ten minutes', async () => {
-    let disconnected = false, calls = 0
+    let calls = 0, warmups = 0, resolveClosed
+    const deltas = [], closed = new Promise(resolve => { resolveClosed = resolve })
     const server = http.createServer((req, res) => {
+      if (req.url === '/fixture-ready') { warmups++; req.resume(); res.writeHead(204); res.end(); return }
+      res.once('close', () => resolveClosed())
       calls++; req.resume(); res.writeHead(200, { 'content-type': 'text/event-stream' })
       res.write('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: 'still thinking' } }] }) + '\n\n')
-      res.on('close', () => { disconnected = true })
     })
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
     const controller = new AbortController(), guard = setTimeout(() => controller.abort(new Error('REGRESSION_GUARD')), 2500)
+    let closeGuard
     try {
+      const origin = `http://127.0.0.1:${server.address().port}`
+      // Initialize the real fetch transport before measuring a live stream: a cold
+      // first fetch can exhaust 100 ms before the fixture receives any request.
+      const ready = await fetch(origin + '/fixture-ready', { signal: controller.signal })
+      await ready.arrayBuffer(); assert.equal(ready.status, 204); assert.equal(warmups, 1)
       const start = Date.now()
-      await assert.rejects(actualComplete({ name: 'fixture', protocol: 'chat', model: 'fixture', baseUrl: `http://127.0.0.1:${server.address().port}/v1`, apiKey: '', requestTimeoutMs: 100 }, '', [], [], controller.signal, () => {}), /模型响应超时/)
+      await assert.rejects(actualComplete({ name: 'fixture', protocol: 'chat', model: 'fixture', baseUrl: origin + '/v1', apiKey: '', requestTimeoutMs: 100 }, '', [], [], controller.signal, delta => deltas.push(delta)), /模型响应超时/)
       assert.ok(Date.now() - start < 2000)
-      await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(disconnected, true); assert.equal(calls, 1)
-    } finally { clearTimeout(guard); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
+      assert.equal(calls, 1, 'the short timeout must exercise an established SSE response')
+      assert.deepEqual(deltas, [{ kind: 'reasoning', text: 'still thinking' }])
+      // Observe the actual close event within the original total request bound;
+      // a fixed sleep is not a synchronization barrier for socket callbacks.
+      await Promise.race([closed, new Promise((_, reject) => {
+        closeGuard = setTimeout(() => reject(new Error('SSE response did not close within the 2 s request bound')), 2000 - (Date.now() - start))
+      })])
+      assert.ok(Date.now() - start < 2000)
+    } finally { clearTimeout(closeGuard); clearTimeout(guard); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
   })
   await test('timeout preserves a completed write and resumes without executing a streamed unfinished call', async () => {
     const { service, project, feature, root } = fixture()
