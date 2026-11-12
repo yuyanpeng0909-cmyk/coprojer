@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const ts = require('typescript')
+const { runService } = require('./fixtures/service-task.cjs')
 
 // Exercise the actual service, persisted store and file/command tools. Only the
 // Electron host and model reply are replaced; no user's profile/model is used.
@@ -66,10 +67,7 @@ function provider({ finishAtLimit = false, test = true } = {}) {
   return seen
 }
 async function run(service) {
-  service.runFeature('p', 'f')
-  const deadline = Date.now() + 15000
-  while (service.store.project('p').activity && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5))
-  assert.equal(service.store.project('p').activity, null, 'service must settle')
+  await runService(service)
 }
 async function main() {
   // A real profile save can itself exceed the one-second reservation. It must
@@ -229,4 +227,5 @@ async function main() {
   assert.ok(!discovered.some(p => p.startsWith('.runtime/')))
   console.log('PASS: runtime cache does not consume the source discovery budget')
 }
-main().catch(error => { console.error(error); process.exitCode = 1 }).finally(() => fs.rmSync(sandbox, { recursive: true, force: true }))
+main().catch(error => { console.error(error); process.exitCode = 1; if (error.serviceCleanupFailed) throw error })
+  .finally(() => { if (!process.exitCode) fs.rmSync(sandbox, { recursive: true, force: true }) })

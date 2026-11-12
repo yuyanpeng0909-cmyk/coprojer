@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
 const ts = require('typescript')
+const { runService } = require('./fixtures/service-task.cjs')
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'coprojer-convergence-'))
 let profile, serial = 0
 const cache = new Map()
@@ -40,12 +41,7 @@ function review(messages) {
   if (!messages.some(m => m.role === 'tool')) return call('run_command', { program: 'node', args: ['tests/behavior.cjs'] }, 'review-test')
   return { text: JSON.stringify({ summary: '实际检查通过', results: [{ criterion: '相加正确', passed: true, evidence: 'tests/behavior.cjs 断言通过', commandIds: ['check-1'] }] }), calls: [] }
 }
-async function run(service) {
-  service.runFeature('p', 'f')
-  const until = Date.now() + 18000
-  while (service.store.project('p').activity && Date.now() < until) await new Promise(r => setTimeout(r, 5))
-  assert.equal(service.store.project('p').activity, null, 'execution must settle')
-}
+const run = (service, options) => runService(service, options)
 const saved = service => service.store.data.executionCheckpoints?.['["p","f"]']
 function paused(ctx) {
   assert.equal(ctx.feature.stage, 'blocked')
@@ -55,6 +51,54 @@ function paused(ctx) {
   assertCompleteToolRounds(saved(ctx.service).messages)
 }
 const cases = []
+cases.push(['timed-out service jobs finish cancellation before the next model stub is installed', async () => {
+  const ctx = fixture(), begin = ctx.service.beginResult
+  let releaseCleanup, sawAbort, sawModel, watchdog, cleanupGuard, actualTask, finished = false, callsA = 0, callsB = 0
+  const deadline = new AbortController()
+  const cleanup = new Promise(resolve => { releaseCleanup = resolve })
+  const aborted = new Promise(resolve => { sawAbort = resolve })
+  const entered = new Promise(resolve => { sawModel = resolve })
+  ctx.service.beginResult = function (project, activity, work, feature) {
+    actualTask = begin.call(this, project, activity, async signal => {
+      signal.addEventListener('abort', sawAbort, { once: true })
+      try { return await work(signal) } finally { if (signal.aborted) await cleanup }
+    }, feature)
+    actualTask.catch(() => {})
+    return actualTask
+  }
+  model.complete = async (_connection, _system, _messages, _tools, signal) => {
+    callsA++; sawModel(); signal.throwIfAborted()
+    return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+  }
+  const pending = run(ctx.service, { timeoutMs: 5000, cleanupTimeoutMs: 5000, watchdogSignal: deadline.signal }).then(
+    () => { finished = true; return undefined }, error => { finished = true; return error })
+  try {
+    const guard = new Promise((_, reject) => { watchdog = setTimeout(() => reject(new Error('fixture did not observe model entry/cancellation')), 5000) })
+    await Promise.race([entered, guard]); assert.equal(callsA, 1)
+    deadline.abort(); await Promise.race([aborted, guard])
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(finished, false, 'watchdog must await cancellation cleanup, not just send abort')
+    assert.equal(ctx.service.jobs.has('p'), true)
+    releaseCleanup()
+    const error = await pending
+    assert.equal(error?.code, 'SERVICE_TASK_TIMEOUT'); assert.equal(error.serviceCleanupFailed, false)
+    assert.equal(ctx.project.activity, null); assert.equal(ctx.service.jobs.has('p'), false)
+    const priorCalls = callsA, priorEvents = ctx.project.events.length
+    model.complete = async () => { callsB++; return incomplete }
+    const next = fixture(); await run(next.service)
+    assert.equal(callsB, 1); assert.equal(next.feature.stage, 'blocked')
+    assert.equal(callsA, priorCalls); assert.equal(ctx.project.events.length, priorEvents)
+  } finally {
+    clearTimeout(watchdog); releaseCleanup(); ctx.service.stop('p')
+    try {
+      const joined = await Promise.race([actualTask?.then(() => true, () => true), new Promise(resolve => { cleanupGuard = setTimeout(() => resolve(false), 5000) })])
+      const error = await pending
+      if (!joined || error?.serviceCleanupFailed) {
+        const failure = new Error('lifecycle regression did not finish its owned job'); failure.serviceCleanupFailed = true; throw failure
+      }
+    } finally { clearTimeout(cleanupGuard); ctx.service.beginResult = begin }
+  }
+}])
 cases.push(['budget summary cannot submit incomplete development; resume keeps progress', async () => {
   let ctx = fixture(), requests = 0, resume = false, resumedHistory
   model.complete = async (connection, system, messages, tools) => {
@@ -193,9 +237,10 @@ async function main() {
   let failed = 0
   for (const [name, test] of cases) {
     try { await test(); console.log('PASS:', name) }
-    catch (error) { failed++; console.error('FAIL:', name, '\n' + error.stack) }
+    catch (error) { failed++; console.error('FAIL:', name, '\n' + error.stack); if (error.serviceCleanupFailed) throw error }
   }
   console.log(JSON.stringify({ total: cases.length, failed }))
   if (failed) process.exitCode = 1
 }
-main().catch(error => { console.error(error); process.exitCode = 1 }).finally(() => fs.rmSync(sandbox, { recursive: true, force: true }))
+main().catch(error => { console.error(error); process.exitCode = 1; if (error.serviceCleanupFailed) throw error })
+  .finally(() => { if (!process.exitCode) fs.rmSync(sandbox, { recursive: true, force: true }) })
