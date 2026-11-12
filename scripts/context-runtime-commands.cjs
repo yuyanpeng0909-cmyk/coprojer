@@ -1,6 +1,10 @@
 const r = require('./fixtures/verification-runtime.cjs')
-const { fs, path, assert, sandbox, fixture, load, model, answer, call, run, EngineeringService } = r
+const { fs, path, assert, sandbox, fixture, load, model, answer, call, EngineeringService } = r
 const { provider } = require('./fixtures/context-runtime-provider.cjs')
+const { runService } = require('./fixtures/service-task.cjs')
+const { RuntimeBudgetLease, CumulativeBudgetPause } = load('src/main/engineering/runtime-budget.ts')
+const { performance } = require('node:perf_hooks')
+const run=(service,reviewOnly=false)=>runService(service,{reviewOnly})
 const output = path.resolve('.runtime/context-runtime/m4-commands'); fs.mkdirSync(output, {recursive:true})
 const actualComplete = model.complete, tests = [], results = [], test=(name,fn)=>tests.push({name,fn})
 const receipts=s=>Object.values(s.store.data.receiptJournals?.[JSON.stringify(['p','f'])]?.receipts??{})
@@ -34,8 +38,8 @@ for (const boundary of ['none','result','projection']) test('command '+boundary+
   fs.writeFileSync(path.join(output,boundary+'.json'),JSON.stringify({record,checkpoint,requests:server.requests},null,2))
  }finally{fs.writeFileSync=write;await server.close()}
 })
-for(const mode of ['cancel','timeout','active-time']) test('actual command '+mode+' stops owned child tree and queued write, retaining output and file effects',async()=>{
- const ctx=setup();if(mode==='active-time')ctx.feature.runtimeBudget.limits.activeMs=2500
+for(const mode of ['cancel','timeout']) test('actual command '+mode+' stops owned child tree and queued write, retaining output and file effects',async()=>{
+ const ctx=setup()
  fs.writeFileSync(path.join(ctx.root,'tests/child.cjs'),"require('node:fs').writeFileSync('.runtime/child.json',JSON.stringify({pid:process.pid}));setInterval(()=>{},1000)")
  fs.writeFileSync(path.join(ctx.root,'tests/check.cjs'),"const fs=require('node:fs');require('node:child_process').spawn(process.execPath,['tests/child.cjs'],{stdio:'inherit',windowsHide:true});fs.writeFileSync('partial.txt','effect before stop');console.log('PARTIAL_OUTPUT');setInterval(()=>console.log('alive'),200)")
  const server=await provider((_req,n)=>n===1?({text:'',calls:[call('run_command',command).calls[0],call('write_file',{path:'queued.txt',content:'must not run'}).calls[0]]}):answer({status:'incomplete',summary:'取消组已核对',nextStep:'人工检查'}));let timer
@@ -45,7 +49,7 @@ for(const mode of ['cancel','timeout','active-time']) test('actual command '+mod
  const record=receipts(ctx.service).find(r=>r.tool==='run_command');assert.equal(record.status,'cancelled',JSON.stringify(record));assert.ok(record.result.command.stoppedConfirmed)
  assert.match(record.result.output,/PARTIAL_OUTPUT/);assert.equal(fs.existsSync(path.join(ctx.root,'queued.txt')),false);assert.equal(server.requests.length,1)
  const pid=JSON.parse(fs.readFileSync(path.join(ctx.root,'.runtime/child.json'))).pid;assert.throws(()=>process.kill(pid,0));assert.ok(ctx.project.changes.some(c=>c.path==='partial.txt'&&c.after==='effect before stop'))
- if(mode!=='active-time') {
+ {
    const restored=new EngineeringService(); restored.reconcileRuntime('p','f'); await run(restored)
    assert.equal(server.requests.length,2,restored.store.project('p').features[0].contextRuntime.reason)
    assert.equal(fs.existsSync(path.join(ctx.root,'queued.txt')),false)
@@ -55,6 +59,87 @@ for(const mode of ['cancel','timeout','active-time']) test('actual command '+mod
  fs.writeFileSync(path.join(output,mode+'.json'),JSON.stringify({record,budget:ctx.feature.runtimeBudget,changes:ctx.project.changes},null,2))
  }finally{clearInterval(timer);await server.close()}
 })
+test('service active-time budget expires before command dispatch without inventing output or effects',async()=>{
+ const ctx=setup();ctx.feature.runtimeBudget.limits.activeMs=2500
+ fs.writeFileSync(path.join(ctx.root,'tests/check.cjs'),"require('node:fs').writeFileSync('partial.txt','must not run');console.log('PARTIAL_OUTPUT')")
+ let release,guard,guardFired=false
+ // Keep the real HTTP request pending until the service's original cumulative
+ // budget expires. Startup cancellation does not promise any command output.
+ const server=await provider(()=>new Promise(resolve=>{release=()=>resolve({text:'',calls:[call('run_command',command).calls[0],call('write_file',{path:'queued.txt',content:'must not run'}).calls[0]]})}))
+ try {
+  model.complete=actualComplete;ctx.service.store.data.models[0].baseUrl=server.url
+  guard=setTimeout(()=>{guardFired=true;ctx.service.stop('p')},10000)
+  await run(ctx.service)
+  assert.equal(guardFired,false,'the service budget must expire before the cleanup guard')
+  assert.equal(ctx.feature.stage,'blocked');assert.equal(ctx.feature.contextRuntime.status,'paused')
+  assert.match(ctx.feature.contextRuntime.reason,/累计活动时间|活动时间预占/)
+  assert.ok(ctx.feature.runtimeBudget.used.activeMs>=2500);assert.equal(ctx.feature.runtimeBudget.activeLease,undefined)
+  assert.ok(server.requests.length<=1);assert.equal(receipts(ctx.service).length,0)
+  assert.equal(fs.existsSync(path.join(ctx.root,'partial.txt')),false);assert.equal(fs.existsSync(path.join(ctx.root,'queued.txt')),false)
+  assert.equal(ctx.project.events.some(event=>event.kind==='output'&&event.message.includes('PARTIAL_OUTPUT')),false)
+  assert.equal(ctx.project.changes.length,0)
+  fs.writeFileSync(path.join(output,'active-time-startup.json'),JSON.stringify({budget:ctx.feature.runtimeBudget,context:ctx.feature.contextRuntime,requests:server.requests.length,receipts:receipts(ctx.service)},null,2))
+ } finally {clearTimeout(guard);release?.();await server.close()}
+})
+
+test('live command budget signal stops a ready child tree and queued write, retaining output and file effects',async()=>{
+ const ctx=setup(),files=load('src/main/engineering/files.ts'),originalRunCommand=files.runCommand,originalStart=RuntimeBudgetLease.prototype.start
+ ctx.feature.runtimeBudget.limits.activeMs=2500
+ fs.writeFileSync(path.join(ctx.root,'tests/child.cjs'),"const fs=require('node:fs');fs.writeFileSync('.runtime/child.json.tmp',JSON.stringify({pid:process.pid}));fs.renameSync('.runtime/child.json.tmp','.runtime/child.json');setInterval(()=>{},1000)")
+ fs.writeFileSync(path.join(ctx.root,'tests/check.cjs'),"const fs=require('node:fs');require('node:child_process').spawn(process.execPath,['tests/child.cjs'],{stdio:'inherit',windowsHide:true});fs.writeFileSync('partial.txt','effect before stop');console.log('PARTIAL_OUTPUT');setInterval(()=>console.log('alive'),200)")
+ let lease,commandSignal,ready=false,observedOutput=false,outputTail='',readyPid,readyAt,abortedAt,abortTick,commandSignalAbortedAt,commandReturnedAt,commandReturnTick,readinessError,poll,guard
+ // The independent 30-second tool guard cannot win the 2.5-second budget race
+ // after bounded readiness; the assertions below require the budget's reason.
+ const server=await provider((_req,n)=>n===1?{text:'',calls:[call('run_command',{...command,timeoutSeconds:30}).calls[0],call('write_file',{path:'queued.txt',content:'must not run'}).calls[0]]}:answer({status:'incomplete',summary:'取消组已核对',nextStep:'人工检查'}))
+ // Defer only this service lease's time origin. Its host, reservations, signal
+ // propagation and final durable settlement remain the production paths. The
+ // preceding case covers the ordinary service-start accounting origin.
+ RuntimeBudgetLease.prototype.start=function(...args){
+  if(this.host.read()!==ctx.feature.runtimeBudget)return originalStart.apply(this,args)
+  assert.equal(lease,undefined,'one fixture run must own one service budget lease')
+  lease=this
+  lease.signal.addEventListener('abort',()=>{abortedAt=Date.now();abortTick=performance.now()},{once:true})
+ }
+ files.runCommand=async(...args)=>{
+  if(args[0]!==ctx.root)return originalRunCommand(...args)
+  assert.ok(lease,'the actual service lease must exist before command dispatch')
+  assert.equal(commandSignal,undefined,'the actual command must start once')
+  commandSignal=args[4]
+  const onAbort=()=>{commandSignalAbortedAt=Date.now()}
+  commandSignal.addEventListener('abort',onAbort,{once:true})
+  const progress=args[5]
+  const readyCheck=()=>{
+   if(ready||readinessError||!observedOutput||!fs.existsSync(path.join(ctx.root,'.runtime/child.json')))return
+   try {
+    readyPid=JSON.parse(fs.readFileSync(path.join(ctx.root,'.runtime/child.json'),'utf8')).pid;process.kill(readyPid,0)
+    readyAt=Date.now();ready=true;clearInterval(poll);clearTimeout(guard);originalStart.call(lease)
+   } catch(error){readinessError=error;ctx.service.stop('p')}
+  }
+  args[5]=text=>{progress(text);outputTail+=text;observedOutput ||= outputTail.includes('PARTIAL_OUTPUT');outputTail=outputTail.slice(-64);readyCheck()}
+  poll=setInterval(readyCheck,20)
+  guard=setTimeout(()=>{readinessError=new Error('command readiness was not observed within 10 seconds');ctx.service.stop('p')},10000)
+  try{return await originalRunCommand(...args)}finally{commandReturnedAt=Date.now();commandReturnTick=performance.now();clearInterval(poll);clearTimeout(guard);commandSignal.removeEventListener('abort',onAbort)}
+ }
+ try {
+  model.complete=actualComplete;ctx.service.store.data.models[0].baseUrl=server.url;await run(ctx.service)
+  const record=receipts(ctx.service).find(row=>row.tool==='run_command'),queued=receipts(ctx.service).find(row=>row.tool==='write_file')
+  const returnAfterAbortMs=abortTick===undefined||commandReturnTick===undefined?null:commandReturnTick-abortTick
+  fs.writeFileSync(path.join(output,'active-time-live.json'),JSON.stringify({record,queued,budget:ctx.feature.runtimeBudget,readyAt,abortedAt,commandSignalAbortedAt,commandReturnedAt,returnAfterAbortMs,
+   commandSignalAborted:commandSignal?.aborted,commandSignalReason:String(commandSignal?.reason),changes:ctx.project.changes},null,2))
+  assert.equal(readinessError,undefined);assert.ok(ready&&observedOutput,'live budget starts after actual output and child readiness')
+  assert.equal(lease.signal.aborted,true);assert.ok(lease.signal.reason instanceof CumulativeBudgetPause)
+  assert.ok(commandSignal.aborted&&commandSignal.reason instanceof CumulativeBudgetPause,'runCommand must receive the real service budget abort')
+  assert.ok(returnAfterAbortMs!==null&&returnAfterAbortMs>=0&&returnAfterAbortMs<12000,'command must return within the 12-second tree-stop bound after budget abort: '+returnAfterAbortMs)
+  assert.ok(ctx.feature.runtimeBudget.used.activeMs>=2500);assert.equal(ctx.feature.runtimeBudget.activeLease,undefined)
+  assert.equal(ctx.feature.contextRuntime.status,'paused');assert.match(ctx.feature.contextRuntime.reason,/累计活动时间|活动时间预占/)
+  assert.equal(record.status,'cancelled',JSON.stringify(record));assert.ok(record.result.command.stoppedConfirmed)
+  assert.equal(record.attempts,1);assert.match(record.result.output,/PARTIAL_OUTPUT/)
+  assert.equal(fs.existsSync(path.join(ctx.root,'queued.txt')),false);assert.equal(server.requests.length,1)
+  assert.throws(()=>process.kill(readyPid,0));assert.ok(ctx.project.changes.some(change=>change.path==='partial.txt'&&change.after==='effect before stop'))
+  if(queued){assert.equal(queued.status,'cancelled');assert.equal(queued.attempts,0)}
+ } finally {clearInterval(poll);clearTimeout(guard);files.runCommand=originalRunCommand;RuntimeBudgetLease.prototype.start=originalStart;await server.close()}
+})
+
 test('normal parent exit drains detached ignored-stdio descendants before returning success',async()=>{
  const ctx=setup();fs.writeFileSync(path.join(ctx.root,'tests/child.cjs'),"const fs=require('node:fs');fs.writeFileSync('.runtime/orphan.json',JSON.stringify({pid:process.pid}));setInterval(()=>fs.appendFileSync('.runtime/ticks.txt','x'),25)")
  fs.writeFileSync(path.join(ctx.root,'tests/check.cjs'),"const fs=require('node:fs');require('node:child_process').spawn(process.execPath,['tests/child.cjs'],{detached:true,stdio:'ignore',windowsHide:true}).unref();const timer=setInterval(()=>{if(fs.existsSync('.runtime/orphan.json')){clearInterval(timer);console.log('PARENT_DONE')}},10)")
@@ -139,5 +224,5 @@ test('isolated command lease save failure starts no actual process',async()=>{
  try{model.complete=actualComplete;ctx.service.store.data.models[0].baseUrl=server.url;await run(ctx.service,true);assert.ok(injected);assert.equal(server.requests.length,1);assert.equal(fs.existsSync(path.join(ctx.root,'must-not-exist.txt')),false)}
  finally{fs.writeFileSync=write;await server.close()}
 })
-async function main(){for(const {name,fn} of tests)try{await fn();results.push({name,status:'passed'});console.log('PASS:',name)}catch(error){results.push({name,status:'failed',error:error.stack});console.error('FAIL:',name,error.stack)}fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(results,null,2));assert.ok(results.every(r=>r.status==='passed'))}
-main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{model.complete=actualComplete;fs.rmSync(sandbox,{recursive:true,force:true,maxRetries:3})})
+async function main(){for(const {name,fn} of tests)try{await fn();results.push({name,status:'passed'});console.log('PASS:',name)}catch(error){results.push({name,status:'failed',error:error.stack});console.error('FAIL:',name,error.stack);if(error.serviceCleanupFailed)throw error}fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(results,null,2));assert.ok(results.every(r=>r.status==='passed'))}
+main().catch(e=>{console.error(e);process.exitCode=1;if(e.serviceCleanupFailed)throw e}).finally(()=>{model.complete=actualComplete;if(!process.exitCode)fs.rmSync(sandbox,{recursive:true,force:true,maxRetries:3})})
