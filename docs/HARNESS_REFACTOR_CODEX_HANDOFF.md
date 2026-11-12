@@ -1,6 +1,6 @@
 # Harness 重构 · 交给 Codex 的执行说明
 
-2026-11-12 · 第一批基准与测量、运行标识 A0 特征测试已完成，产品结构拆分步骤3已实现，验证尚未全通过，失败及旧版对照见本步执行记录。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
+2026-11-12 · 第一批基准与测量、运行标识 A0 特征测试已完成；产品结构拆分步骤3及四项验证修复已完成验收，规定35个脚本全部通过，步骤4及之后未开始。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
 
 第一批任务（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量）已经有单独的任务书：[第一批执行任务书](HARNESS_REFACTOR_CODEX_BRIEF.md)，做法在它指向的两份设计文档里（[拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)、[存储搬迁步骤 0 设计](HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md)）。那两件事照任务书和设计文档做，本文不重复；本文管的是第一批之后的各批。
 
@@ -24,8 +24,8 @@
 | 拆分步骤 0（基线） | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已完成。本机 43 项过 42，结果在 `.runtime/harness-refactor/baseline/windows/` | — |
 | 第一批：拆分步骤 1、存储步骤 0 | 第一批执行任务书和两份设计文档 | 已完成：任务 A `999565d`，任务 B `9784c20`（2026-11-11，本地提交，未 push） | 两个任务均未改 `src/`；回报见下文 |
 | 拆分步骤 2 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已完成（2026-11-11，本地提交，未 push） | 同文件 `ExecutionRun` 收拢20项现有状态，等价与完整回归通过；回报见下文 |
-| 拆分步骤 3 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 代码已实现，验证未全绿（2026-11-12） | 工具端口已整体搬出；4个脚本失败，旧版对照及证据边界详见本步回报，不将失败项记为通过 |
-| 拆分步骤 4–5，步骤 6 可选 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 未开工 | 先处理步骤3回报中的失败与验收结论；用户交办时点名后续步骤号 |
+| 拆分步骤 3 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已实现并完成验收（2026-11-12，本地提交，未 push） | 四项测试问题已修复；完整检查35/35，等价50/50无差异，A0计数40／29／59 |
+| 拆分步骤 4–5，步骤 6 可选 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 未开工 | 步骤3验收已完成；本轮到此停止，用户后续交办时点名步骤号 |
 | 运行标识 A0（只加特征测试） | 本文 6.2 | 已完成（2026-11-11，本地提交，未 push） | R1–R8 全部通过，已接入 `test:context-runtime`；未改 `src/`，回报见下文 |
 | 运行标识 A1–A8 | [ADR 0007](adr/0007-append-only-run-log-run-id-and-readonly-delegation.md) 第五、六项，[运行标识计划](HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md) A 部分，本文第 6 节 | 未开工 | ADR 0007 已接受、第 10 节 A 组已确认（2026-11-11）。还差：拆分步骤 2–5 完成；用户点名 |
 | 上下文与压缩步骤 1–7 | [ADR 0006](adr/0006-stable-prompt-prefix-and-working-window.md)（已接受）、[上下文计划](HARNESS_REFACTOR_CONTEXT_PLAN.md) | 未开工 | 拆分步骤 2–5 完成；用户点名。与运行标识的先后见第 7 节 |
@@ -42,9 +42,18 @@ ADR 0007 已于 2026-11-11 被接受。ADR 已接受不等于可以动手：上�
 
 **拆分步骤2执行记录。** 在 `service.ts` 内新增 `ExecutionRun`，收纳20项已有状态，195处绑定引用改为 `run` 字段访问；初始化先后、命令数组及 manifest 共享引用、保存与回执顺序保持。类型检查通过，独立等价脚本50个场景差异为0；完整 `test:context-runtime` 首次运行的构建及19个脚本全部通过，套件内等价复验仍为0差异，A0 为8/8且计数仍为40／29／59，5个 Electron 冒烟脚本通过。两份独立静态审查无剩余发现。详情见 [拆分步骤2本机回报](../.scratch/harness-refactor/codex-report-split-2.md)，日志在 `.runtime/harness-refactor/split-2/`。步骤2当批没有搬出工具端口或开展后续工作包。
 
-**拆分步骤3执行记录（2026-11-12）。** 工具端口及 `agentToolMessage` 已整体搬至 `execution-tools.ts`，`agentLoop` 通过窄 host 接口调用工厂；原执行结构、权限复核和落盘顺序保持。类型检查与两次构建通过，50场景等价验证两次均0差异，A0 为8/8且计数仍为40／29／59。规定的35个原脚本均已执行：context-runtime 18/19、verification 8/11、long-task-context及四项补充5/5，共31通过、4失败；其中10个 Electron 冒烟全部通过。两个完整 npm 命令都因失败退出1，受中断影响的后续原脚本另行串行运行，没有把续跑结果冒充完整命令通过。
+**拆分步骤3执行与验收记录（2026-11-12）。** 原机械提交 `0af4bc4` 将工具端口及 `agentToolMessage` 整体搬至 `execution-tools.ts`；原执行结构、权限复核和落盘顺序保持。该批最初为31/35，两条完整 npm 命令均退出1；原报告及 `.runtime/harness-refactor/split-3/` 日志保留为历史，不能改记通过。拆分前 `5538403` 对照也失败，但 convergence 当前10/11、旧版7/11且超时阶段不同，不据此豁免验收或认定共同根因。
 
-失败脚本为 `context-runtime-commands`（2.5秒活动时限场景缺少预期输出）、`execution-budget`（15秒等待结束断言）、`execution-convergence`（18秒等待结束断言）、`verification-preparation-stalls`（客户端已按时超时，额外等30毫秒后仍未观察到服务器连接关闭）。用拆分前 `5538403` 的原 service 源码作同机对照，四个脚本也均失败；收敛脚本当前10/11、旧版7/11，失败集合及超时阶段不同，不能宣称一一等价或共同根因。实现已落地，验收未全通过；未改测试、预算或等价基准，未推进步骤4。完整证据和诊断见 [拆分步骤3本机回报](../.scratch/harness-refactor/codex-report-split-3.md)，日志及35项汇总在 `.runtime/harness-refactor/split-3/`。
+用户随后授权单独解决四项验证失败。修复均限于测试，产品源码与等价基准不动，分别本地提交为 `335df8c`（任务生命周期）、`9d802a7`（活动预算阶段）、`e33e77c`（SSE同步）：
+
+- `context-runtime-commands`：2500 ms预算可能在首次输出前耗尽，受控启动延迟已复现。拆成正常service起点的启动期取消、真实service lease在命令ready后起计的运行中取消；额度不变，保留输出、文件效果、进程树及排队未执行断言。新增原命令signal原因和12秒收尾界限，fresh-signal断线变异被准确检出。
+- `execution-budget`：受控保存延迟下，正确36步场景超过15秒但自然完成，原等待界限不对应产品SLA；改为等待真实job及最终保存，保留步数、恢复和实际证据断言。
+- `execution-convergence`：同样查实18秒等待可早于正确完成；另直接复现旧helper超时未取消job、旧任务消耗下一模型桩。共享helper用90秒watchdog并在超时后stop/join，45秒清理仍未收敛则停止后续case、保留现场。新增取消finally未结束时禁止进入下一桩的回归。
+- `verification-preparation-stalls`：旧夹具未证明SSE已建立，首次fetch受控延迟可导致零请求却检查close。预热真实传输、确认首delta，再在原2秒总界限内等待自然close事件；正式请求仍100 ms，强制清理不能制造通过。
+
+最终 `npm run typecheck`、原50场景等价检查（0 differences）、完整 `test:context-runtime`（19/19）、完整 `test:verification`（11/11）、long-task-context及四项补充（5/5）全部退出0；35/35含10个 Electron 脚本，A0为8/8且计数保持40／29／59。最终context套件内等价复验仍50/50无差异。首轮完整context通过后曾补强活动预算信号覆盖，因此只为该实际改动再执行最终套件；不以重复重跑碰绿。
+
+这是测试前置、同步与生命周期修复；历史无trace运行的具体慢点、convergence每个额外失败的直接归属仍不能还原，也不宣称完成live-provider业务验收。详细原因、验证及限制见 [步骤3本机回报](../.scratch/harness-refactor/codex-report-split-3.md)，最终日志、23份归档JSON及显示器核对在 `.runtime/harness-refactor/split-3-fixes/validation/`；新对话先读 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)。本轮不 push，不改写原提交，不开始步骤4。
 
 ## 3　每个提交都要守的规则
 

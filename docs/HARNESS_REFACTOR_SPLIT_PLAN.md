@@ -1,6 +1,6 @@
 # Harness 重构 · 拆分阶段实施计划
 
-2026-11-12 · 步骤0基线、步骤1等价脚本及步骤2的 `ExecutionRun` 状态收拢已完成；步骤3工具端口已搬出，验证尚未全通过，失败及旧版对照见本步执行记录；步骤4及之后未开始。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于2026-11-11被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
+2026-11-12 · 步骤0基线、步骤1等价脚本及步骤2的 `ExecutionRun` 状态收拢已完成；步骤3工具端口搬出及四项验证修复已完成验收，规定35个脚本全部通过；步骤4及之后未开始。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于2026-11-11被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
 
 整个重构分四个阶段：基线、拆分、迁移、新能力。本文只覆盖前两个。迁移（一次性数据迁移、删除 `legacy` 字符预算和旧检查点分支）和新能力（规则引擎、审批卡片、通用 shell、自由编码入口）各自另写计划。
 
@@ -149,9 +149,17 @@
 
 **本机执行记录（2026-11-12）。** 工具端口已整体迁入 `execution-tools.ts`；`agentToolMessage` 同步迁入。原工具对象仅将30处 `this` 接收者改为 `host`，语句、格式、文案、权限复核和落盘顺序保持。`ExecutionRun` 补入原闭包的 `p/f/agent` 引用，新模块对 `service.ts` 仅作类型导入；两个服务方法仍为 private，通过箭头函数在调用时取方法。类型检查、两次50场景等价验证及 A0 的8项检查通过，计数保持40／29／59；独立结构审计与手审未发现剩余问题。
 
-规定的35个原脚本均已执行：context-runtime 18/19、verification 8/11、long-task-context及四项补充5/5，共31通过、4失败；两次构建及10个 Electron 冒烟通过。两个完整 npm 命令均退出1，受中断影响的后续原脚本另行串行执行，不能算完整命令通过。
+原机械提交 `0af4bc4` 的首次验收为31/35：context-runtime 18/19、verification 8/11、补充5/5，两条完整 npm 命令均退出1。原日志保留在 `.runtime/harness-refactor/split-3/`，不改记通过；旧 service `5538403` 也失败不构成豁免，convergence两版失败集合和超时阶段不同。
 
-本步**实现已落地，验收尚未全通过**。`context-runtime-commands` 的2.5秒活动时限场景未取得预期输出，`execution-budget` 的15秒等待和 `execution-convergence` 的18秒等待均出现超时断言；`verification-preparation-stalls` 已按预期返回模型超时，但额外等30毫秒后仍未观察到服务器连接关闭。以拆分前 `5538403` 的完整 service 源码作同机对照，四个脚本也均失败；收敛脚本当前10/11、旧版7/11，失败集合及超时阶段不同，不能据此认定共同根因。未改断言、预算或等价基准，未推进步骤4。完整命令结果、续跑清单、对照方法与证据边界见 [拆分步骤3本机回报](../.scratch/harness-refactor/codex-report-split-3.md)；日志在 `.runtime/harness-refactor/split-3/`。
+**四项修复及最终验收（2026-11-12）。** 用户另行授权测试生命周期与同步修复；本轮没有改产品源码、等价基准或此前留待后续的缺陷候选：
+
+- commands：受控延迟证明2500 ms可在首次输出前正确耗尽；拆分启动期与ready后真实service lease取消场景，额度不变。原signal原因、输出、文件效果、树停止和排队未执行均有断言，断线变异准确失败。提交 `9d802a7`。
+- budget：受控保存延迟证明正确36步执行可超过15秒；等待真实job及最终保存，保留业务断言。convergence：18秒也可早于正确完成，且直接查实超时残留job消耗下一模型桩；统一90秒watchdog、stop/join及45秒有界清理，未清理就停止后续case，新增生命周期回归。提交 `335df8c`。
+- preparation-stalls：首次fetch可能在请求建立前已超时，原30 ms sleep也不是关闭事件屏障。预热真实HTTP、证明首SSE delta、等待自然close；正式100 ms请求超时及原2秒总界限保留。提交 `e33e77c`。
+
+最终类型检查与独立50场景等价检查通过（0 differences），完整 `test:context-runtime` **19/19**、完整 `test:verification` **11/11**、long-task-context及四项补充 **5/5**，所有命令实际退出0，共 **35/35**。context套件内等价复验仍无差异，A0为8/8、固定计数 **40／29／59**，10个 Electron 冒烟全部通过。仅因活动预算测试后来补强真实信号覆盖，才在首轮context通过后执行最终完整套件。
+
+本步**实现及验收完成**，机械重构与测试修复分开提交，未push、未改写原提交，步骤4未开始。历史具体慢点及convergence额外失败归属仍不能从旧日志确定；不把受控实验写成旧现场完整重建。原因、阶段测时、验证及限制见 [步骤3回报](../.scratch/harness-refactor/codex-report-split-3.md) 和 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)，最终日志与证据归档在 `.runtime/harness-refactor/split-3-fixes/validation/`。
 
 ### 步骤 4：在新文件内按阶段重排
 
