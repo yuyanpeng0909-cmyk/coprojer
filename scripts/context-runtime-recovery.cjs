@@ -1,6 +1,9 @@
 const r = require('./fixtures/verification-runtime.cjs')
 const { fs, path, assert, sandbox, fixture, model, answer, call, run, load, EngineeringService } = r
 const { provider } = require('./fixtures/context-runtime-provider.cjs')
+const { runService } = require('./fixtures/service-task.cjs')
+const { RuntimeBudgetLease, CumulativeBudgetPause } = load('src/main/engineering/runtime-budget.ts')
+const { performance } = require('node:perf_hooks')
 const files = load('src/main/engineering/files.ts'), actualTool = files.executeTool, actualComplete = model.complete
 const output = path.resolve('.runtime/context-runtime/m4-recovery'); fs.mkdirSync(output, { recursive: true })
 const tests = [], results = [], test = (name, fn) => tests.push({ name, fn })
@@ -145,13 +148,94 @@ test('budget reservation write failure starts no HTTP request', async () => {
     assert.ok(injected); assert.equal(server.requests.length, 0); assert.equal(ctx.feature.runtimeBudget.used.requests, 0); assert.match(ctx.feature.contextRuntime.reason, /累计额度保存失败/)
   } finally { fs.writeFileSync = write; await server.close() }
 })
-test('cumulative activity timeout cancels an actual HTTP request and prevents any tool queue', async () => {
-  const ctx = reliable(); ctx.feature.runtimeBudget.limits.activeMs = 180; let release
-  const server = await provider(async () => { await new Promise(r => { release = r }); return call('list_files', {}) })
-  try { model.complete = actualComplete; ctx.service.store.data.models[0].baseUrl = server.url; const start = Date.now(); await run(ctx.service)
-    assert.equal(server.requests.length, 1); assert.equal(receipts(ctx.service).length, 0); assert.equal(ctx.feature.runtimeBudget.used.requests, 1)
-    assert.ok(ctx.feature.runtimeBudget.used.activeMs >= 180); assert.match(ctx.feature.contextRuntime.reason, /活动时间/); assert.ok(Date.now() - start < 3000)
-  } finally { release?.(); await server.close() }
+test('startup activity budget expires without requiring HTTP readiness or dispatching tools', async () => {
+  const ctx = reliable(); ctx.feature.runtimeBudget.limits.activeMs = 180
+  let release, guard, guardFired = false, started, returned, failure
+  const server = await provider(() => new Promise(resolve => {
+    release = () => resolve(call('list_files', {})); if (guardFired) release()
+  }))
+  try {
+    model.complete = actualComplete; ctx.service.store.data.models[0].baseUrl = server.url; started = performance.now()
+    guard = setTimeout(() => { guardFired = true; ctx.service.stop('p'); release?.() }, 3000)
+    // The normal service origin includes preparation and durable saves. It
+    // must cancel within its budget even if HTTP has not become ready yet.
+    await runService(ctx.service, { timeoutMs: 5000, cleanupTimeoutMs: 5000 }); returned = performance.now()
+    assert.equal(guardFired, false); assert.ok(returned - started < 3000)
+    assert.ok(server.requests.length <= 1); assert.ok(ctx.feature.runtimeBudget.used.requests <= 1)
+    assert.ok(ctx.feature.runtimeBudget.used.requests >= server.requests.length)
+    assert.equal(receipts(ctx.service).length, 0); assert.equal(ctx.feature.runtimeBudget.used.tools, 0)
+    assert.equal(ctx.project.events.some(event => event.kind === 'tool'), false)
+    assert.ok(ctx.feature.runtimeBudget.used.activeMs >= 180); assert.equal(ctx.feature.runtimeBudget.activeLease, undefined)
+    assert.equal(ctx.feature.contextRuntime.status, 'paused'); assert.match(ctx.feature.contextRuntime.reason, /活动时间/)
+  } catch (error) { failure = error }
+  finally {
+    try { fs.writeFileSync(path.join(output, 'activity-startup.json'), JSON.stringify({ budget: ctx.feature.runtimeBudget, context: ctx.feature.contextRuntime,
+      requests: server.requests.length, receipts: receipts(ctx.service), guardFired, elapsedMs: returned === undefined ? null : returned - started }, null, 2)) }
+    catch (error) { failure ??= error }
+    clearTimeout(guard); release?.()
+    try { await server.close() } catch (error) { failure ??= error }
+  }
+  if (failure) throw failure
+})
+test('live HTTP activity budget cancels the original request signal and prevents any tool queue', async () => {
+  const ctx = reliable(), originalStart = RuntimeBudgetLease.prototype.start, originalFetch = global.fetch
+  ctx.feature.runtimeBudget.limits.activeMs = 180
+  let lease, requestSignal, release, guard, guardFired = false, released = false, readyAt, budgetAbortAt, fetchAbortAt, started, returned, failure
+  const onBudgetAbort = () => { budgetAbortAt = Date.now() }, onFetchAbort = () => { fetchAbortAt = Date.now() }
+  const server = await provider(() => new Promise(resolve => {
+    release = () => { released = true; resolve(call('list_files', {})) }
+    if (guardFired) { release(); return }
+    assert.ok(lease, 'the real service lease must exist before HTTP readiness')
+    assert.equal(readyAt, undefined, 'one fixture must establish only one model request')
+    readyAt = Date.now(); originalStart.call(lease)
+  }))
+  // Only defer this service lease's time origin until the provider has read
+  // the real request. Its host, reservations, signal and finish remain intact.
+  // The preceding case covers accounting from the normal service origin.
+  RuntimeBudgetLease.prototype.start = function (...args) {
+    if (this.host.read() !== ctx.feature.runtimeBudget) return originalStart.apply(this, args)
+    assert.equal(lease, undefined, 'one fixture run must own one service budget lease')
+    lease = this; lease.signal.addEventListener('abort', onBudgetAbort, { once: true })
+  }
+  global.fetch = (...args) => {
+    if (String(args[0]).startsWith(server.url + '/')) {
+      assert.equal(requestSignal, undefined, 'one model HTTP request must be sent')
+      requestSignal = args[1].signal; requestSignal.addEventListener('abort', onFetchAbort, { once: true })
+    }
+    return originalFetch(...args)
+  }
+  try {
+    model.complete = actualComplete; ctx.service.store.data.models[0].baseUrl = server.url; started = performance.now()
+    guard = setTimeout(() => { guardFired = true; ctx.service.stop('p'); release?.() }, 3000)
+    await runService(ctx.service, { timeoutMs: 5000, cleanupTimeoutMs: 5000 }); returned = performance.now()
+    assert.equal(server.requests.length, 1); assert.ok(readyAt !== undefined)
+    assert.ok(lease.signal.aborted && lease.signal.reason instanceof CumulativeBudgetPause)
+    assert.ok(requestSignal?.aborted && requestSignal.reason === lease.signal.reason, 'fetch must receive the real service budget abort')
+    assert.ok(fetchAbortAt !== undefined && budgetAbortAt !== undefined && fetchAbortAt >= budgetAbortAt)
+    const incoming = server.transport.find(event => event.kind === 'request')
+    const closed = () => server.transport.find(event => event.kind === 'close' && event.socket === incoming?.socket)
+    // Observe the actual socket, not req.close (which can mean body consumed).
+    // The pending provider response is released only by failing cleanup/finally.
+    while (!closed() && performance.now() - started < 3000) await new Promise(resolve => setTimeout(resolve, 5))
+    assert.equal(guardFired, false); assert.equal(released, false)
+    assert.ok(incoming && closed() && closed().at >= budgetAbortAt, 'the pending HTTP connection must close naturally after the budget abort')
+    assert.ok(performance.now() - started < 3000); assert.ok(returned - started < 3000)
+    assert.equal(receipts(ctx.service).length, 0); assert.equal(ctx.feature.runtimeBudget.used.requests, 1)
+    assert.equal(ctx.feature.runtimeBudget.used.tools, 0); assert.equal(ctx.project.events.some(event => event.kind === 'tool'), false)
+    assert.ok(ctx.feature.runtimeBudget.used.activeMs >= 180); assert.equal(ctx.feature.runtimeBudget.activeLease, undefined)
+    assert.equal(ctx.feature.contextRuntime.status, 'paused'); assert.match(ctx.feature.contextRuntime.reason, /活动时间/)
+  } catch (error) { failure = error }
+  finally {
+    try { fs.writeFileSync(path.join(output, 'activity-live.json'), JSON.stringify({ budget: ctx.feature.runtimeBudget, context: ctx.feature.contextRuntime,
+      requests: server.requests.length, receipts: receipts(ctx.service), transport: server.transport, readyAt, budgetAbortAt, fetchAbortAt,
+      requestSignalAborted: requestSignal?.aborted, requestSignalReason: String(requestSignal?.reason), sameBudgetReason: requestSignal?.reason === lease?.signal.reason,
+      guardFired, released, elapsedMs: returned === undefined ? null : returned - started }, null, 2)) }
+    catch (error) { failure ??= error }
+    clearTimeout(guard); RuntimeBudgetLease.prototype.start = originalStart; global.fetch = originalFetch
+    lease?.signal.removeEventListener('abort', onBudgetAbort); requestSignal?.removeEventListener('abort', onFetchAbort)
+    release?.(); try { await server.close() } catch (error) { failure ??= error }
+  }
+  if (failure) throw failure
 })
 test('report repair counts every actual model request independently', async () => {
   const ctx = reliable(); ctx.feature.runtimeBudget.limits.requests = 1
@@ -332,7 +416,8 @@ test('actual storage failure in tool event is fatal before reads; ordinary read 
 })
 async function main() {
   for (const { name, fn } of tests) try { await fn(); results.push({ name, status: 'passed' }); console.log('PASS:', name) }
-  catch (error) { results.push({ name, status: 'failed', error: error.stack }); console.error('FAIL:', name, error.stack) }
+  catch (error) { results.push({ name, status: 'failed', error: error.stack }); console.error('FAIL:', name, error.stack)
+    if (error.serviceCleanupFailed) { fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(results, null, 2)); throw error } }
   fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(results, null, 2)); assert.ok(results.every(r => r.status === 'passed'))
 }
-main().catch(e => { console.error(e); process.exitCode = 1 }).finally(() => { model.complete = actualComplete; files.executeTool = actualTool; fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 3 }) })
+main().catch(e => { console.error(e); process.exitCode = 1; if (e.serviceCleanupFailed) throw e }).finally(() => { model.complete = actualComplete; files.executeTool = actualTool; if (!process.exitCode) fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 3 }) })
