@@ -2,6 +2,7 @@ const { _electron: electron } = require('playwright')
 const assert = require('node:assert/strict')
 const fs = require('node:fs/promises')
 const { join, resolve } = require('node:path')
+const { createHash } = require('node:crypto')
 const { startProvider } = require('./fixtures/engineering-provider.cjs')
 
 async function main() {
@@ -173,9 +174,22 @@ async function main() {
     assert.equal(provider.control.developments, 2)
     await invoke('acceptAndContinue', pid, second)
     assert.equal((await project()).executionPlan.status, 'completed')
-    const runs = (await project()).agentRuns
+    const executedState = await state(), executedProject = executedState.projects.find(p => p.id === pid)
+    const runs = executedProject.agentRuns
     for (const role of ['planner', 'designer', 'developer', 'reviewer']) assert.ok(runs.some(r => r.role === role && r.skills.length && r.contextCharacters > 0))
-    assert.ok(runs.some(r => r.role === 'reviewer' && r.skills.some(s => s.id === 'reviewer::local-verification' && s.version === '1.0.0' && s.hash.length === 64)))
+    for (const featureId of [first, second]) {
+      const reviewerId = executedProject.features.find(f => f.id === featureId).reviewerId
+      const reviewer = executedState.agents.find(a => a.id === reviewerId)
+      assert.equal(reviewer.role, 'reviewer')
+      assert.equal(reviewer.ownerProjectId, pid)
+      assert.ok(executedProject.teamAgentIds.includes(reviewerId))
+      const skill = executedState.skills.find(s => s.ownerAgentId === reviewerId && s.sourceId === 'local-verification')
+      assert.ok(skill && reviewer.skillIds.includes(skill.id))
+      assert.equal(skill.version, '1.0.0')
+      const expectedHash = createHash('sha256').update(skill.content).digest('hex')
+      assert.ok(runs.some(r => r.role === 'reviewer' && r.agentId === reviewerId && r.featureId === featureId &&
+        r.skills.some(s => s.id === skill.id && s.version === '1.0.0' && /^[a-f0-9]{64}$/.test(s.hash) && s.hash === expectedHash)))
+    }
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: '工作台', exact: true }).click()
     for (const [width, height] of [[1280, 840], [860, 600]]) {
@@ -220,11 +234,15 @@ async function main() {
     interrupted.prd.status = 'generating'
     disk.projects.push(interrupted)
     disk.agents = disk.agents.filter(a => ['developer', 'reviewer'].includes(a.role))
+    const privateMembers = agents => agents.filter(a => a.ownerProjectId).map(({ id, role, ownerProjectId }) => ({ id, role, ownerProjectId })).sort((a, b) => a.id.localeCompare(b.id))
+    const retainedPrivateMembers = privateMembers(disk.agents)
     disk.agents[0].instructions = 'USER_CUSTOMIZATION_MARKER'
     for (const a of disk.agents) delete a.skillIds
     await fs.writeFile(diskPath, JSON.stringify(disk))
     await launch()
-    assert.equal((await state()).agents.length, 4)
+    const migratedAgents = (await state()).agents
+    assert.deepEqual(migratedAgents.filter(a => !a.ownerProjectId).map(a => a.role).sort(), ['designer', 'developer', 'planner', 'reviewer'])
+    assert.deepEqual(privateMembers(migratedAgents), retainedPrivateMembers)
     assert.ok((await state()).agents.some(a => a.instructions === 'USER_CUSTOMIZATION_MARKER'))
     assert.equal((await project()).executionPlan.status, 'completed')
     assert.ok((await project()).features.every(f => f.stage === 'done'))
