@@ -38,9 +38,11 @@ async function startResearchProvider() {
             : input.flatMap((m) =>
                 Array.isArray(m.content) ? m.content.filter((c) => c.type === 'tool_result') : [],
               )
-      const lastUser = input.filter((m) => m.role === 'user').at(-1)?.content || ''
-      const long = typeof lastUser === 'string' && lastUser.includes('测试中断')
-      const short = typeof lastUser === 'string' && lastUser.startsWith('补充历史')
+      // The runtime appends a turn reminder after the actual user contribution.
+      const lastUser = input.filter((m) => m.role === 'user' && typeof m.content === 'string' &&
+        !m.content.startsWith('[当前讨论发言 ')).at(-1)?.content || ''
+      const long = !isDesign && lastUser.includes('测试中断')
+      const short = !isDesign && lastUser.startsWith('补充历史')
       const prd = prdReply(body, control)
       const calls = prd?.calls ?? (
         !isDesign && !prior.length && !long && !short
