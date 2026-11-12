@@ -2,7 +2,7 @@ import type { RuntimePorts } from './runtime'
 import type { ExecutionRun } from './service'
 import type { AgentConfig, AgentRole, Project, toolLabels } from '../../shared/engineering'
 import type { skillReader } from './skills'
-import { now, uid, type EngineeringStore } from './store'
+import { now, type EngineeringStore } from './store'
 import { planReadGroup, checkReadGroup } from './read-groups'
 import { receiptIntentHash, sealReceipt, type ReceiptResult, type ToolReceipt } from './receipt-ledger'
 import { applyReceiptProjection, reconcileFileReceipt, assertFileReceipt } from './execution-recovery'
@@ -11,10 +11,10 @@ import { prepareCommandEffect, executeCommandEffect, reconcileCommandReceipt, as
 import { ReliabilityFailure, RecoveryRequired, EffectUncertain } from './reliability'
 import { executeTool, PreparationBoundaryError } from './files'
 import { TaskRevisionChanged } from './task-projection'
-import { commandEvidenceKinds } from './execution'
-import { commandFailure, verificationContract, runtimeMeasurements } from './verification'
+import { verificationContract } from './verification'
 import { toolContractVersion } from './tool-contract'
-import { runLegacyToolPipeline, runReceiptToolPipeline } from './tool-pipeline'
+import { runLegacyToolPipeline, runReceiptToolPipeline, runBeforeIntentHooks, runBeforeExecuteHooks, runAfterExecuteHooks, runAfterSettleHooks } from './tool-pipeline'
+import { createExecutionHooks, type ExecutionHookInvocation } from './execution-hooks'
 
 type ToolIdentity = NonNullable<Parameters<RuntimePorts['tools']['execute']>[4]>
 
@@ -34,6 +34,10 @@ function agentToolMessage(name: string, output: string): string {
 
 export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): RuntimePorts['tools'] {
   const { p, f, agent } = run
+  const internal = createExecutionHooks(host)
+  // Filtering by attachment point preserves each point's original statement order.
+  const hooks = [internal.parameterSecrets, internal.liveAgent, internal.requiredPrototype, internal.activity, internal.budget,
+    internal.receiptProjection, internal.prototypeProgress, internal.legacyCommandEvidence, internal.commandStopGroup]
   return {
         planGroup: async (calls, toolSignal) => {
           if (!run.reliable || !calls.every(call => run.offered.some(t => t.name === call.name))) return undefined
@@ -46,6 +50,7 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
         redact: value => host.store.redact(value),
         visible: agentToolMessage,
         execute: async (call, args, step, toolSignal, identity) => {
+          const invocation: ExecutionHookInvocation = { call, args, step, identity, started: 0, commandFingerprint: '', progressSource: '', hasEffect: false }
           let fileEffect: FileEffect | undefined
           let commandEffect: CommandEffect | undefined, commandIntent: ToolReceipt | undefined
           const authorize = () => {
@@ -62,7 +67,7 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
           const prepareEffect = (identity: ToolIdentity) => {
           if (['write_file', 'patch_file'].includes(call.name)) {
             authorize()
-            if (host.store.redact(JSON.stringify(args)) !== JSON.stringify(args)) throw new Error('工具内容包含受保护连接密钥，不能写入或保存该意图。')
+            runBeforeIntentHooks(hooks, run, invocation)
             const prior = run.ledger.get(identity.logicalId)
             if (prior) { assertFileReceipt(prior); fileEffect = prior.file }
             else {
@@ -74,7 +79,7 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
           }
           if (call.name === 'run_command') {
             authorize()
-            if (host.store.redact(JSON.stringify(args)) !== JSON.stringify(args)) throw new Error('命令参数含受保护密钥，不能保存或执行。')
+            runBeforeIntentHooks(hooks, run, invocation)
             const prior = run.ledger.get(identity.logicalId)
             if (prior) { assertCommandReceipt(p, prior); commandEffect = prior.command }
             else commandEffect = prepareCommandEffect(host.store, p, f, run.role, args, { id: 'check-' + (run.commands.length + 1), taskRevision: run.taskRevision, contractFingerprint: run.contractFingerprint, environmentFingerprint: run.environmentFingerprint,
@@ -98,72 +103,25 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
             return '工具错误：' + (error instanceof Error ? error.message : String(error))
           }
           const settle = (result: ReceiptResult, identity: ToolIdentity) => {
-          if (fileEffect || commandEffect) applyReceiptProjection(host.store, p, f, run.ledger, run.ledger.get(identity.logicalId)!)
-          if (result.command && !run.commands.some(c => c.logicalCallId === identity.logicalId)) run.commands.push(result.command.evidence)
-          if (result.command?.boundaryError) throw new PreparationBoundaryError(result.command.boundaryError)
-          if (run.prototype && call.name === 'read_context' && args.id === 'prototype:' + run.prototype.id && !result.output.startsWith('工具错误：')) {
-            const page = JSON.parse(result.output)
-            if (page.offset <= run.prototypeReadUntil) run.prototypeReadUntil = Math.max(run.prototypeReadUntil, page.offset + page.content.length)
-          }
-          return { ...result, ...(result.command && result.status === 'cancelled' ? { stopGroup: '命令已停止，已保留输出和文件变化；本组排队动作未启动，显式继续将开始新的模型回合。' } : {}) }
+          invocation.identity = identity
+          invocation.hasEffect = !!(fileEffect || commandEffect)
+          return runAfterSettleHooks(hooks, run, invocation, result)
           }
           const perform = async () => {
           const beforeWrite = ['write_file', 'patch_file'].includes(call.name) ? host.sourceFingerprint(p) : ''
-          let output = '', progressSource = ''
+          let output = ''
           try {
-            const liveAgent = host.store.data.agents.find(a => a.id === agent.id && a.role === agent.role && (!a.ownerProjectId || a.ownerProjectId === p.id))
-            if (!run.offered.some((t) => t.name === call.name) || !liveAgent?.tools.includes(call.name as keyof typeof toolLabels))
-              throw new Error('当前角色不可使用此工具。')
-            if (['write_file', 'patch_file', 'run_command'].includes(call.name) && run.prototypeReadUntil < run.prototypeLength)
-              throw new Error('请先完整分页读取已验收原型 prototype:' + run.prototype!.id + '；当前已连续读取到 ' + run.prototypeReadUntil + ' 字符。')
-            if (run.preparing) {
-              p.activity = run.phaseLabel + (call.name === 'run_command' ? ' · 正在执行检查：' : ' · 执行工具：') + call.name + '「' + f.title + '」'
-              host.store.save()
-            }
-            host.store.event(
-              p,
-              'tool',
-              `${call.name} ${['write_file', 'patch_file', 'read_file', 'read_file_lines'].includes(call.name) ? args.path : call.name === 'search_files' ? args.scope : call.name === 'run_command' ? `${args.program} ${(args.args ?? []).join(' ')}` : ''}`,
-              f.id,
-            )
-            const started = Date.now()
-            const commandFingerprint = call.name === 'run_command' ? host.sourceFingerprint(p) : ''
-            progressSource = commandFingerprint
-            run.budgetLease?.check()
+            runBeforeExecuteHooks(hooks, run, invocation)
             if (commandIntent) return executeCommandEffect(host.store, p, f, commandIntent, toolSignal)
             if (fileEffect) { applyFileEffect(p.root, fileEffect, toolSignal); output = fileEffectOutput(fileEffect, call.name === 'patch_file') }
-            else output = call.name === 'read_skill' ? host.agentSkillReader(p, agent.role, liveAgent)(args) : await executeTool(host.store, p, f.id, run.role, call.name, args, toolSignal)
-            if (run.prototype && call.name === 'read_context' && args.id === 'prototype:' + run.prototype.id) {
-              const page = JSON.parse(output)
-              if (page.offset <= run.prototypeReadUntil) run.prototypeReadUntil = Math.max(run.prototypeReadUntil, page.offset + page.content.length)
-            }
-            if (call.name === 'run_command') {
-              const result = JSON.parse(output)
-              result.output = host.store.redact(result.output)
-              const evidenceId = 'check-' + (run.commands.length + 1)
-              const evidenceKinds = commandEvidenceKinds(args)
-              run.commands.push({
-                taskRevision: run.taskRevision, contractFingerprint: run.contractFingerprint, environmentFingerprint: run.environmentFingerprint, executionRunId: run.executionRunId, stepId: String(step), logicalCallId: uid(), providerCallId: call.id,
-                ...result, id: evidenceId, at: now(), sourceFingerprint: commandFingerprint, durationMs: Date.now() - started,
-                evidenceKind: evidenceKinds[0], evidenceKinds,
-                failureKind: commandFailure(result.output, result.code),
-                measurements: runtimeMeasurements(result.output),
-                command: `${args.program} ${args.args.join(' ')}`,
-                isTest:
-                  args.program === 'npm'
-                    ? args.args[0] === 'test' ||
-                      (args.args[0] === 'run' && /^test(?::|$)/.test(args.args[1] ?? ''))
-                    : /(^|[/.\\_-])tests?([/.\\_-]|$)/i.test(args.args[0] ?? ''),
-              })
-              if (args.program === 'node' && /(^|[./_-])(smoke|check|verify|verification)([./_-]|$)/i.test(args.args[0] ?? '')) run.commands[run.commands.length - 1].isTest = true
-              output = JSON.stringify({ ...result, evidenceId, evidenceKinds, measurements: run.commands.at(-1)?.measurements, sourceFingerprint: commandFingerprint, durationMs: Date.now() - started })
-            }
+            else output = call.name === 'read_skill' ? host.agentSkillReader(p, agent.role, invocation.liveAgent)(args) : await executeTool(host.store, p, f.id, run.role, call.name, args, toolSignal)
+            output = runAfterExecuteHooks(hooks, run, invocation, output)
           } catch (error) {
             const classified = classifyError(error)
             if (typeof classified !== 'string') return classified
             output = classified
           }
-          return { output, sourceVersion: progressSource, changed: ['write_file', 'patch_file'].includes(call.name) && beforeWrite !== host.sourceFingerprint(p),
+          return { output, sourceVersion: invocation.progressSource, changed: ['write_file', 'patch_file'].includes(call.name) && beforeWrite !== host.sourceFingerprint(p),
             ...(fileEffect ? { effects: ['已写入 ' + fileEffect.path + '，版本 ' + fileEffect.expectedVersion] } : {}) }
           }
           if (!run.reliable) return runLegacyToolPipeline({ authorize, reserve: () => { run.budgetLease?.reserve('tools') }, perform })

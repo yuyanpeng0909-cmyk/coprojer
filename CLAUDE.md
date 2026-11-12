@@ -4,6 +4,8 @@ Coprojer 是 Windows x64 桌面「AI 工程工作台」（Electron 44 + React 19
 
 本文件面向在此仓库工作的 Claude。项目原由 Codex 开发，`AGENTS.md` 中的约定继续有效，已并入下文。交流与文档使用中文。
 
+当前 harness 进度（2026-11-12）：拆分步骤 5 的内部 hook 登记及最终验收已完成，步骤 2–5 的结构前置条件已满足。可选步骤 6、运行标识 A1–A8、上下文及其他后续阶段均未开始，仍须用户点名对应工作包；已接受 ADR 不代表自动开工。
+
 ## 常用命令
 
 | 命令 | 用途 |
@@ -11,7 +13,7 @@ Coprojer 是 Windows x64 桌面「AI 工程工作台」（Electron 44 + React 19
 | `npm ci` / `npm run dev` | 安装依赖 / 开发与热更新（`start-dev.cmd` 同效） |
 | `npm run typecheck` | 仅 TypeScript 检查 |
 | `npm run build` | typecheck + electron-vite 生产构建 |
-| `npm test` | build 后串行跑 51 个 `scripts/*.cjs`，是冒烟入口，耗时长 |
+| `npm test` | build 后串行跑 52 个 `scripts/*.cjs`，是冒烟入口，耗时长 |
 | `npm run test:context-runtime` | runtime 契约、容量、恢复、崩溃注入、只读并行 |
 | `npm run test:context-window` | 上下文策略、原生压缩、续接、重放 |
 | `npm run test:verification` | 验证证据、步数预算、收敛保护、验证准备 |
@@ -31,7 +33,7 @@ Coprojer 是 Windows x64 桌面「AI 工程工作台」（Electron 44 + React 19
 
 ```text
 src/main/index.ts            Electron 主进程、IPC（engineering:invoke 白名单分发）
-src/main/engineering/        harness 与工程流程，含 execution-tools.ts 工具端口、tool-pipeline.ts 阶段运行器
+src/main/engineering/        harness 与工程流程，含 execution-tools.ts 工具端口、execution-hooks.ts 内部规则与 tool-pipeline.ts 阶段运行器
 src/shared/                  主进程与界面共享类型（engineering.ts、model-profile.ts 等）
 src/preload/                 Electron 桥接
 src/renderer/src/            工作台界面（engineering/ 下是各业务面板）
@@ -51,7 +53,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 **四个入口，三种接法**（这是当前最大的不一致）：
 
-- 工程执行：`service.ts` 的 `EngineeringService.agentLoop` 直接调 `runRuntime`；共享状态保存在同文件的 `ExecutionRun`，包括已有项目、功能和有效智能体引用。工具端口由 `execution-tools.ts` 的 `executionTools(run, host)` 构造，通过窄宿主接口访问存储、源码指纹和技能读取。工具调用在该文件内拆为 `authorize`、`assertPolicySupport`、`prepareEffect`、`buildIntent`、`perform`、`classifyError`、`settle` 等具名阶段，`tool-pipeline.ts` 只以回调分别编排无回执与回执两条路径，不依赖存储或服务实现；内部规则仍保留在业务阶段中，尚未登记成 hook。其余 ports、system prompt、角色工具裁剪、报告契约和检查点保存仍在 `agentLoop` 内。初始化及工具执行顺序保持原样，developer / reviewer / diagnoser / preparer 四个执行角色共用它。
+- 工程执行：`service.ts` 的 `EngineeringService.agentLoop` 直接调 `runRuntime`；共享状态保存在同文件的 `ExecutionRun`，包括已有项目、功能和有效智能体引用。工具端口由 `execution-tools.ts` 的 `executionTools(run, host)` 构造，通过窄宿主接口访问存储、源码指纹和技能读取。工具调用在该文件内按 `authorize`、`assertPolicySupport`、`prepareEffect`、`buildIntent`、`perform`、`classifyError`、`settle` 等具名阶段组织；`tool-pipeline.ts` 以回调分别编排无回执与回执两条路径，并同步运行内部 hook，不依赖存储或服务实现。现有前后置规则由 `execution-hooks.ts` 承载，工具端口按固定顺序注册；固定权限判定与副作用准备继续留在原阶段。其余 ports、system prompt、角色工具裁剪、报告契约和检查点保存仍在 `agentLoop` 内。初始化及工具执行顺序保持原样，developer / reviewer / diagnoser / preparer 四个执行角色共用它。
 - 方案规划 `planning.ts`、通用助手 `general-assistant.ts`：经 `context-session.ts` 的 `contextSession().run` 调 `runRuntime`。
 - 需求讨论与圆桌 `requirements.ts`：自己手写循环，直接调 `requestWithContext`，不经过 `runRuntime`。
 
@@ -65,15 +67,15 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 **模型层**。`model.ts` + `stream.ts` 支持 Chat Completions、Responses、Anthropic Messages 三种协议。没有显式的 prompt cache 控制（不发 `cache_control`，只在 `shared/model-traffic.ts` 读取缓存命中用量）；Anthropic 的 `max_tokens` 默认 8192，模型配置声明了 `maxOutputTokens` 时以声明为准。传输错误仅在 `retryable` 时重试 2 次（1s、2s）。
 
-**工具**。`files.ts` 的 `engineeringTools` 固定 9 个：`read_skill`、`read_context`、`list_files`、`read_file`、`search_files`、`read_file_lines`、`patch_file`、`write_file`、`run_command`。参数由 `tool-contract.ts` 的精简 JSON Schema 校验器检查。没有工具 registry、MCP、通用 shell 或子智能体委派。只读调用可成组并行（`read-groups.ts`，并发 1/2/4）。
+**工具**。`files.ts` 的 `engineeringTools` 固定 9 个：`read_skill`、`read_context`、`list_files`、`read_file`、`search_files`、`read_file_lines`、`patch_file`、`write_file`、`run_command`。参数由 `tool-contract.ts` 的精简 JSON Schema 校验器检查。没有工具 registry、MCP、通用 shell 或子智能体委派。只读调用可成组并行（`read-groups.ts`，并发 1/2/4）。`execution-hooks.ts` 的9个内部 TypeScript hook 承载现有前后置规则，挂在同步的 `beforeIntent`、`beforeExecute`、`afterExecute`、`afterSettle` 四个位置；按固定注册顺序执行，不读取用户或项目的 hook 配置，也不执行外部脚本。
 
-**权限**。全部硬编码，没有声明式规则、逐调用审批或 hook：
+**权限**。固定权限判定仍由代码执行；部分现有前后置规则已登记为内部 hook，顺序固定，没有声明式权限规则、逐调用审批或可配置 hook 入口：
 
-- 角色裁剪：`agent.tools` 与角色过滤得到 `offered`，执行前再用 live agent 配置复核（`execution-tools.ts` 内的 `authorize` 及原有工具执行检查）。reviewer 不能写文件，diagnoser 只读。
+- 角色裁剪：`agent.tools` 与角色过滤得到 `offered`，执行前通过 `execution-tools.ts` 的固定 `authorize` 与 `execution-hooks.ts` 的 `live-agent` 内部规则复核。reviewer 不能写文件，diagnoser 只读。
 - 命令：`run_command` 只接受 `npm` / `node` 加参数数组，不经 shell；`files.ts` 的 `authorizeCommand` 与 `preparationCommand` 按角色再收窄。环境变量按白名单透传。
 - 路径：`safePath` 拒绝越界、符号链接以及 `.git`、`.coprojer`、`node_modules`；写入前 `assertExclusiveWriteTarget` 拒绝有硬链接的目标。
-- 业务前置：写文件和跑命令前必须读完已验收原型。
-- 进程：Windows 上用 Job Object 约束进程树（`windows-command-guard.ts`、`command-supervisor.ts`）。
+- 业务前置：写文件和跑命令前必须读完已验收原型，由固定注册的 `required-prototype` 内部 hook 检查。
+- 进程：Windows 上用 Job Object 约束受控命令进程树（`windows-command-guard.ts`、`command-supervisor.ts`）。另行修复的 `preview-process.ts` 复用 native guard 管理长驻预览，手动停止须确认整树停止后才清状态，owner 退出也结束其后代；预览不接入工具回执管线。`preview-lifecycle.cjs` 的六项生命周期回归仅在 Windows 执行，其他平台明确 SKIP。
 
 **恢复与可靠性**。`runtimePolicy` 取 `legacy | receipts-readonly-v1 | receipts-effects-v1`。receipts 模式下每个工具调用在 `receipt-ledger.ts` 记 intent 与结果，文件和命令副作用分别由 `file-effects.ts`、`command-effects.ts` 处理，崩溃后由 `execution-recovery.ts` 对账；结果不确定时停下而不是重放。任务修订号、源码指纹任一变化都会使检查点失效。
 
@@ -107,7 +109,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 ## 参考资料
 
-- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，步骤4阶段拆分及验收已完成，记录见 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。当前工具端口在 `execution-tools.ts` 内按具名阶段组织，`tool-pipeline.ts` 分别编排无回执与回执路径；步骤5的内部 hook 登记尚未实施，规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
+- `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，步骤5内部 hook 登记及验收已完成；逐批记录见 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。工具端口、两条路径的阶段编排与9个内部 hook 分布于 `execution-tools.ts`、`tool-pipeline.ts`、`execution-hooks.ts`；最终规定检查去重83个不同脚本通过（含完整 `npm test` 52个），另有定向 `preview-forwarding` 通过，共84个不同脚本；等价50场景无差异，A0 8/8且计数40／29／59。最终汇总证据见 `.runtime/harness-refactor/split-5-final-run/final-validation/results.json` 与 `evidence-audit.json`，预览及三项测试修复的独立提交和历史失败见交接记录。可选步骤6尚未开始，规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
 - `docs/adr/0006-stable-prompt-prefix-and-working-window.md`（2026-11-11 已接受，尚未实施）与 `docs/HARNESS_REFACTOR_CONTEXT_PLAN.md`：上下文与压缩的决策与修改计划（提示词分区、工作窗口上限、默认策略切换、推广门槛、续接时的冷启动处理）。上文「Harness 架构地图」描述的仍是现有实现，代码改到哪一步，对应段落才跟着改。
 - `docs/adr/0007-append-only-run-log-run-id-and-readonly-delegation.md`（2026-11-11 已接受，尚未实施）：运行记录改追加式日志、统一的运行标识、只读的子智能体委派，共十一项。存储部分的计划是 `docs/HARNESS_REFACTOR_STORAGE_PLAN.md`，运行标识与委派部分是 `docs/HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md`，两份在存储上有出入时以前者为准。接受时确认的只有运行标识一侧的十项取值（执行说明第 10 节 A 组）；存储的待定项（S 组）和委派的形态与默认值（C 组）仍是拟定，没有经用户确认，存储搬迁和只读委派都还不能开工。
 - `docs/HARNESS_REFACTOR_CODEX_BRIEF.md` 与 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`：重构的具体执行交给 Codex，Claude 负责把方案设计到可执行。前者是第一批（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量，都不改 `src/`）的通用约束与回报格式，做法在 `docs/HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md` 和 `docs/HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md`；后者管第一批之后各批的开工条件与规则，并写了运行标识阶段（A0–A8）逐提交的做法；拟定项及其确认状态汇总在它的第 10 节。交给 Codex 的提示词（四份方案的总览、第一批的范围与停点、后续各批的短提示词）在 `docs/HARNESS_REFACTOR_CODEX_PROMPT.md`。拆分步骤 1 设计第 8 节记的两个现状缺陷候选，用户 2026-11-11 决定拆分阶段不修、固定进等价基准，修复在拆分完成后单独交办。Codex 的回报放 `.scratch/harness-refactor/codex-report-*.md`。
