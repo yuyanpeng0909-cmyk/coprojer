@@ -16,7 +16,7 @@ http.createServer((req, res) => res.end('forwarded preview')).listen(Number(args
       const url = await service.startPreview(project.id, 'dev')
       assert.equal(await (await fetch(url)).text(), 'forwarded preview')
       console.log('PASS:', script, 'receives exact host/port and serves the selected origin')
-    } finally { service.stopPreview(project.id); service.dispose() }
+    } finally { try { await service.stopPreview(project.id) } finally { service.dispose() } }
   }
 }
 main().catch(error => { console.error(error); process.exitCode = 1 }).finally(() => fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 3 }))

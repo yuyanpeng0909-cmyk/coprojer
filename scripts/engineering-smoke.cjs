@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs/promises')
 const { join, resolve } = require('node:path')
 const { startProvider } = require('./fixtures/engineering-provider.cjs')
+const { bounded, closeOwnedElectron } = require('./fixtures/engineering-cleanup.cjs')
 
 async function main() {
   const output = resolve('output/playwright')
@@ -13,7 +14,21 @@ async function main() {
   const env = { ...process.env, COPROJER_USER_DATA: profile }
   delete env.ELECTRON_RUN_AS_NODE
   const errors = []
-  let desktop, page
+  let desktop, desktopProcess, page, failure
+  const cleanupErrors = []
+  const recordCleanup = async (label, operation) => {
+    try {
+      await bounded(label, operation)
+    } catch (error) {
+      cleanupErrors.push({ label, error })
+    }
+  }
+  const closeDesktop = async () => {
+    if (!desktop) return
+    const app = desktop, child = desktopProcess
+    desktop = desktopProcess = null
+    await closeOwnedElectron(app, child)
+  }
   const invoke = (method, ...args) =>
     page.evaluate(({ method, args }) => window.desktop.engineering[method](...args), {
       method,
@@ -32,6 +47,7 @@ async function main() {
   const idle = async (id, timeout) => waitFor(async () => !(await project(id)).activity, 'project idle', timeout)
   async function launch() {
     desktop = await electron.launch({ args: ['.'], env, timeout: 30000 })
+    desktopProcess = desktop.process()
     page = await desktop.firstWindow()
     await page.emulateMedia({ reducedMotion: 'reduce' })
     page.on('pageerror', (e) => errors.push(e.message))
@@ -394,20 +410,20 @@ async function main() {
     const failure = await prepare(pid, '失败修复边界')
     const beforeGuard = await project(pid)
     // Replay a persisted ready feature moved out of scope; only the isolated fixture is edited.
-    await desktop.close()
+    await closeDesktop()
     let fixture = JSON.parse(await fs.readFile(join(profile, 'engineering-v1.json'), 'utf8'))
     fixture.projects.find(p => p.id === pid).features.find(f => f.id === failure).scope = 'later'
     await fs.writeFile(join(profile, 'engineering-v1.json'), JSON.stringify(fixture))
     await launch()
     await assert.rejects(invoke('runFeature', pid, failure), /只有本期功能/)
-    await desktop.close()
+    await closeDesktop()
     fixture = JSON.parse(await fs.readFile(join(profile, 'engineering-v1.json'), 'utf8'))
     fixture.projects.find(p => p.id === pid).features.find(f => f.id === failure).scope = 'current'
     fixture.projects.find(p => p.id === pid).features.find(f => f.id === failure).title = `旧功能（历史记录，已合并至 ${second}）`
     await fs.writeFile(join(profile, 'engineering-v1.json'), JSON.stringify(fixture))
     await launch()
     await assert.rejects(invoke('runFeature', pid, failure), /已合并的历史记录/)
-    await desktop.close()
+    await closeDesktop()
     fixture = JSON.parse(await fs.readFile(join(profile, 'engineering-v1.json'), 'utf8'))
     fixture.projects.find(p => p.id === pid).features.find(f => f.id === failure).title = '失败修复边界'
     await fs.writeFile(join(profile, 'engineering-v1.json'), JSON.stringify(fixture))
@@ -482,8 +498,7 @@ async function main() {
     const a = await invoke('saveFeature', pid, null, featureInput('依赖 A'))
     const b = await invoke('saveFeature', pid, null, featureInput('依赖 B', [a]))
     await assert.rejects(invoke('saveFeature', pid, a, featureInput('依赖 A', [b])), /循环/)
-    await desktop.close()
-    desktop = null
+    await closeDesktop()
     const diskPath = join(profile, 'engineering-v1.json')
     const disk = JSON.parse(await fs.readFile(diskPath, 'utf8'))
     disk.projects[0].activity = '上次执行'
@@ -506,24 +521,38 @@ async function main() {
     )
     console.log('Engineering artifacts: ' + output)
   } catch (error) {
+    failure = error
     if (page) {
-      try {
-        await page.screenshot({
+      await recordCleanup('failure screenshot', () =>
+        page.screenshot({
           animations: 'disabled',
           scale: 'css',
           path: join(output, 'engineering-failure.png'),
-        })
+        }),
+      )
+      await recordCleanup('failure state', async () => {
         await fs.writeFile(
           join(output, 'engineering-failure-state.json'),
           JSON.stringify(await state(), null, 2),
         )
-      } catch {}
+      })
     }
-    throw error
   } finally {
-    provider.release()
-    if (desktop) await desktop.close()
-    await provider.close()
+    await recordCleanup('provider.release', () => provider.release())
+    try {
+      await closeDesktop()
+    } catch (error) {
+      cleanupErrors.push({ label: 'desktop.close', error })
+    } finally {
+      await recordCleanup('provider.close', () => provider.close())
+    }
+    for (const { label, error } of cleanupErrors) {
+      console.error(`ENGINEERING_CLEANUP_ERROR (${label}):`, error)
+    }
+  }
+  if (failure) throw failure
+  if (cleanupErrors.length) {
+    throw new AggregateError(cleanupErrors.map(({ error }) => error), 'Engineering test cleanup failed')
   }
 }
 main().catch((error) => {

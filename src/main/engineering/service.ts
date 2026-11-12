@@ -9,13 +9,14 @@ import { mergeTargets } from './targets'
 import type { DecisionAnswer, ProjectTarget, RoundtableConfig } from '../../shared/engineering'
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { createHash } from 'node:crypto'
 import { ExecutionBudgetPause, executionKey, executionStepLimit, diagnosisStepLimit, preparationStepLimit, preparationRoundLimit, verificationStatus, commandEvidenceKinds, type ExecutionRole, type CommandEvidence, type ExecutionCheckpoint } from './execution'
 import { ExecutionProgressPause } from './execution-progress'
 import { runRuntime, type RuntimeSnapshot, type PendingToolGroup } from './runtime'
 import { executionTools } from './execution-tools'
+import { startPreviewProcess, type PreviewProcess } from './preview-process'
 import { featureReceiptLedger, reconcileFeatureReceipts, assertPendingSources, pendingSources } from './execution-recovery'
 import { sourceVersions } from './files'
 import { ReliabilityFailure, RecoveryRequired } from './reliability'
@@ -74,7 +75,6 @@ import {
 import {
   commandEnvironment,
   engineeringTools,
-  killTree,
   listFiles,
   nodeCommand,
   safePath,
@@ -547,8 +547,8 @@ export class EngineeringService {
     this.save(p)
   }
   private jobs = new Map<string, AbortController>()
-  private previews = new Map<string, ChildProcess>()
-  private previewStarting = new Set<string>()
+  private previews = new Map<string, PreviewProcess>()
+  private previewStarting = new Map<string, AbortController>()
   private batchPlanProgress: Record<string, { completed: number; total: number; failed: number }> = {}
   state = () => ({ ...this.store.snapshot(), skillSearchActivity: structuredClone(this.configuration.searchActivity), batchPlanProgress: structuredClone(this.batchPlanProgress) })
   prepareRuntimeHandoff = (projectId: string, featureId: string, input: { action: 'migrate' | 'switch' | 'legacy'; modelId?: string; executionModels?: Partial<Record<ExecutionRole, string>> }) => {
@@ -2353,14 +2353,18 @@ export class EngineeringService {
   }
   startPreview = async (projectId: string, script: string): Promise<string> => {
     if (this.previewStarting.has(projectId)) throw new Error('项目预览正在启动，请稍候。')
-    this.previewStarting.add(projectId)
+    const existing = this.previews.get(projectId)
+    if (existing?.failure) throw existing.failure
+    if (existing?.stopping) throw new Error('项目预览正在停止，请稍候。')
+    const controller = new AbortController()
+    this.previewStarting.set(projectId, controller)
     try {
-      return await this.launchPreview(projectId, script)
+      return await this.launchPreview(projectId, script, controller.signal)
     } finally {
       this.previewStarting.delete(projectId)
     }
   }
-  private launchPreview = async (projectId: string, script: string): Promise<string> => {
+  private launchPreview = async (projectId: string, script: string, signal: AbortSignal): Promise<string> => {
     const p = this.store.project(projectId)
     this.idle(p)
     if (this.previews.has(projectId) && p.previewUrl) return p.previewUrl
@@ -2398,46 +2402,46 @@ export class EngineeringService {
       '--port',
       String(port),
     ])
-    const child = spawn(command.executable, command.args, {
-      cwd: p.root,
-      windowsHide: true,
-      env: commandEnvironment(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: process.platform !== 'win32',
-    })
-    this.previews.set(projectId, child)
+    const preview = await startPreviewProcess(p.root, command, commandEnvironment(), signal)
+    const child = preview.child
+    this.previews.set(projectId, preview)
     child.stdout?.on('data', (chunk) => this.store.event(p, 'preview', chunk.toString()))
     child.stderr?.on('data', (chunk) => this.store.event(p, 'preview', chunk.toString()))
     child.on('error', (error) => this.store.event(p, 'error', error.message))
-    child.on('close', () => {
-      if (this.previews.get(projectId) === child) {
+    void preview.stopped.then(() => {
+      if (!preview.stopping && this.previews.get(projectId) === preview) {
         this.previews.delete(projectId)
         p.previewUrl = null
         this.store.save()
       }
-    })
+    }, error => this.store.event(p, 'error', error instanceof Error ? error.message : String(error)))
     const url = `http://127.0.0.1:${port}`
     for (let retry = 0; retry < 60; retry++) {
+      signal.throwIfAborted()
+      if (preview.failure) throw preview.failure
       if (!this.previews.has(projectId)) throw new Error('启动脚本已退出，请检查活动记录。')
       try {
         const response = await fetch(url, { signal: AbortSignal.timeout(500) })
+        signal.throwIfAborted()
         if (response.ok) {
           p.previewUrl = url
           this.store.save()
           return url
         }
       } catch {
+        signal.throwIfAborted()
         /* Server is starting. */
       }
       await new Promise((resolveWait) => setTimeout(resolveWait, 500))
     }
-    this.stopPreview(projectId)
+    await this.stopPreview(projectId)
     throw new Error('未检测到本地页面，请检查启动脚本是否支持 --host 和 --port。')
   }
-  stopPreview = (projectId: string) => {
-    const child = this.previews.get(projectId)
-    if (child?.pid) killTree(child.pid)
-    this.previews.delete(projectId)
+  stopPreview = async (projectId: string): Promise<void> => {
+    this.previewStarting.get(projectId)?.abort()
+    const preview = this.previews.get(projectId)
+    if (preview) await preview.stop()
+    if (this.previews.get(projectId) === preview) this.previews.delete(projectId)
     const p = this.store.project(projectId)
     p.previewUrl = null
     this.store.save()
@@ -2451,7 +2455,8 @@ export class EngineeringService {
     this.aliyun.dispose()
     this.research.dispose()
     for (const controller of this.jobs.values()) controller.abort()
-    for (const child of this.previews.values()) if (child.pid) killTree(child.pid)
+    for (const controller of this.previewStarting.values()) controller.abort()
+    for (const preview of this.previews.values()) preview.dispose()
   }
   setProjectModel = (projectId: string, modelId: string) => {
     const p = this.store.project(projectId)

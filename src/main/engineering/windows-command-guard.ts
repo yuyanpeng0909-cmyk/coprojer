@@ -71,7 +71,7 @@ public static class CoprojerJob {
       if(lease.IsCompleted) throw new IOException("Owner closed before launch");
       Check(CreateProcess(executable,command,IntPtr.Zero,IntPtr.Zero,true,0x08080000,IntPtr.Zero,root,ref si,out pi));
       var clock=System.Diagnostics.Stopwatch.StartNew();
-      while(WaitForSingleObject(pi.process,25)==258) { if(lease.IsCompleted || clock.ElapsedMilliseconds>=timeout) { cancelled=true; break; } }
+      while(WaitForSingleObject(pi.process,25)==258) { if(lease.IsCompleted || (timeout>0 && clock.ElapsedMilliseconds>=timeout)) { cancelled=true; break; } }
       Check(GetExitCodeProcess(pi.process,out code));
       // Parent completion is not tree completion. Terminate even on exit 0, then query active=0.
       Check(TerminateJobObject(job,125));

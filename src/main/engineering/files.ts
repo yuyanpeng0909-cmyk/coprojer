@@ -286,7 +286,7 @@ function preparationCommand(project: Project, args: any): void {
   if (args.program === 'node' && argv.length === 1 && testPath(argv[0].replace(/\\/g, '/'))) { safePath(project.root, argv[0]); return }
   throw new Error('准备阶段只能执行项目检查/构建脚本或安装缺失的开发依赖；不允许内联代码、系统安装、常驻进程或外部命令。')
 }
-async function commandGuard(directory: string): Promise<string> {
+export async function commandGuard(directory: string): Promise<string> {
   const source = windowsCommandGuard(), version = createHash('sha256').update(source).digest('hex')
   const folder = join(dirname(dirname(directory)), 'native-guard', version)
   const executable = join(folder, 'guard.exe'), digest = executable + '.sha256'
