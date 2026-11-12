@@ -1,6 +1,6 @@
 # Harness 重构 · 拆分阶段实施计划
 
-2026-11-11 · 尚未执行，产品代码未动。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于同日被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线已于同日跑完，结果记在步骤 0 末尾。步骤 1 的设计已写成 [拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，执行交给 Codex；步骤 2 何时开始待定。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
+2026-11-11 · 步骤0基线、步骤1等价脚本及步骤2的 `ExecutionRun` 状态收拢已完成，步骤3及之后尚未开始。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于同日被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
 
 整个重构分四个阶段：基线、拆分、迁移、新能力。本文只覆盖前两个。迁移（一次性数据迁移、删除 `legacy` 字符预算和旧检查点分支）和新能力（规则引擎、审批卡片、通用 shell、自由编码入口）各自另写计划。
 
@@ -134,6 +134,8 @@
 在 `service.ts` 内（暂不新建文件）定义 `ExecutionRun`，收纳第 1520–1603 行准备出来的值：`role`、`preparing`、`phaseLabel`、`connection`、`taskRevision`、`contractFingerprint`、`reliable`、`budgetLease`、`executionRunId`、`environmentFingerprint`、`manifest`、`ledger`、`artifacts`、`prototype` 及其长度与版本、`offered`、`assertRevision`，以及可变的 `prototypeReadUntil` 和 `commands`。各闭包改成读写 `run.xxx`。
 
 这一步是纯机械替换，语句顺序和数量都不变。检查：`npm run typecheck`、步骤 1 的等价脚本、`test:context-runtime`。
+
+**本机执行结果（2026-11-11）。** 已在同文件定义20字段的 `ExecutionRun`；保留原初始化顺序，在 `offered` 建立后一次收纳已有值，闭包改为访问 `run`。命令数组和 manifest 仍保留续接对象的原引用。类型检查通过，独立等价脚本50个场景差异为0；完整 `test:context-runtime` 的构建及19个脚本首次运行全部通过，其中 A0 为8/8、落盘计数仍为40／29／59，5个 Electron 冒烟脚本通过。源码结构比对确认原控制流、调用顺序、文案及落盘位置不变。详见 [拆分步骤2本机回报](../.scratch/harness-refactor/codex-report-split-2.md)。本步没有搬出工具端口、增加 hook 或改变运行标识语义。
 
 ### 步骤 3：整体搬出工具端口
 

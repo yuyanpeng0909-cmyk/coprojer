@@ -1,6 +1,6 @@
 # Harness 重构 · 交给 Codex 的执行说明
 
-2026-11-11 · 产品源码未动，第一批基准与测量、运行标识 A0 特征测试已完成。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
+2026-11-11 · 第一批基准与测量、运行标识 A0 特征测试已完成，产品结构拆分已推进至步骤2。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
 
 第一批任务（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量）已经有单独的任务书：[第一批执行任务书](HARNESS_REFACTOR_CODEX_BRIEF.md)，做法在它指向的两份设计文档里（[拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)、[存储搬迁步骤 0 设计](HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md)）。那两件事照任务书和设计文档做，本文不重复；本文管的是第一批之后的各批。
 
@@ -23,7 +23,8 @@
 | --- | --- | --- | --- |
 | 拆分步骤 0（基线） | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已完成。本机 43 项过 42，结果在 `.runtime/harness-refactor/baseline/windows/` | — |
 | 第一批：拆分步骤 1、存储步骤 0 | 第一批执行任务书和两份设计文档 | 已完成：任务 A `999565d`，任务 B `9784c20`（2026-11-11，本地提交，未 push） | 两个任务均未改 `src/`；回报见下文 |
-| 拆分步骤 2–5，步骤 6 可选 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 未开工 | 第一批任务 A 的基准已经提交，回报经用户看过；用户交办时点名步骤号 |
+| 拆分步骤 2 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已完成（2026-11-11，本地提交，未 push） | 同文件 `ExecutionRun` 收拢20项现有状态，等价与完整回归通过；回报见下文 |
+| 拆分步骤 3–5，步骤 6 可选 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 未开工 | 步骤2已完成；用户交办时点名后续步骤号 |
 | 运行标识 A0（只加特征测试） | 本文 6.2 | 已完成（2026-11-11，本地提交，未 push） | R1–R8 全部通过，已接入 `test:context-runtime`；未改 `src/`，回报见下文 |
 | 运行标识 A1–A8 | [ADR 0007](adr/0007-append-only-run-log-run-id-and-readonly-delegation.md) 第五、六项，[运行标识计划](HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md) A 部分，本文第 6 节 | 未开工 | ADR 0007 已接受、第 10 节 A 组已确认（2026-11-11）。还差：拆分步骤 2–5 完成；用户点名 |
 | 上下文与压缩步骤 1–7 | [ADR 0006](adr/0006-stable-prompt-prefix-and-working-window.md)（已接受）、[上下文计划](HARNESS_REFACTOR_CONTEXT_PLAN.md) | 未开工 | 拆分步骤 2–5 完成；用户点名。与运行标识的先后见第 7 节 |
@@ -36,7 +37,9 @@ ADR 0007 已于 2026-11-11 被接受。ADR 已接受不等于可以动手：上�
 
 **第一批执行记录。** 任务 A 的50个等价场景连续三次通过，连续两次生成基准相同，14项临时变异均被检测；源码按原字节恢复。类型检查通过，第二次完整 `npm run test:context-runtime` 的18个脚本全部通过；首轮 `reload-smoke` 导航超时、与现场吻合的既有脚本竞态及单独复跑结果保留在 [任务 A 本机回报](../.scratch/harness-refactor/codex-report-A.md)。任务 B 完成8组双遍测量和62处事件调用点清单，数字已写回存储计划，详见 [任务 B 本机回报](../.scratch/harness-refactor/codex-report-B.md)。默认 legacy 的两种短负载均触发压缩，故 W1/W2 仅在隔离夹具显式采用已有 adaptive 256K 配置来单列压缩成本；产品默认与存储待定项未改。原始探针和正式数据均留在 `.runtime/harness-refactor/storage-baseline/`。后续进度见上表及 A0 执行记录。
 
-**A0 执行记录。** 按后续提示词 3.1 完成 R1–R8 特征测试。正式独立运行两次均 8/8 通过；`npm run typecheck` 通过，完整 `npm run test:context-runtime` 首次运行的19个脚本全部通过，其中50个等价场景差异为0，5个 Electron 冒烟脚本通过。R1 的计数为40次，R2 首段29次、两段累计59次；已排除活动时间预占和 `output` 事件保存，计数固化在脚本中。真实 HTTP/SSE 链路验证了流量记录器 `start` 抛错不影响推理；运行标识仍保持当前行为，未提前实现 A1–A8。详情见 [A0 本机回报](../.scratch/harness-refactor/codex-report-A0.md)，原始产物和日志在 `.runtime/harness-refactor/run-identity/`。拆分步骤2及后续实现尚未开始。
+**A0 执行记录。** 按后续提示词 3.1 完成 R1–R8 特征测试。正式独立运行两次均 8/8 通过；`npm run typecheck` 通过，完整 `npm run test:context-runtime` 首次运行的19个脚本全部通过，其中50个等价场景差异为0，5个 Electron 冒烟脚本通过。R1 的计数为40次，R2 首段29次、两段累计59次；已排除活动时间预占和 `output` 事件保存，计数固化在脚本中。真实 HTTP/SSE 链路验证了流量记录器 `start` 抛错不影响推理；运行标识仍保持当前行为，未提前实现 A1–A8。详情见 [A0 本机回报](../.scratch/harness-refactor/codex-report-A0.md)，原始产物和日志在 `.runtime/harness-refactor/run-identity/`。A0 当批未改产品源码。
+
+**拆分步骤2执行记录。** 在 `service.ts` 内新增 `ExecutionRun`，收纳20项已有状态，195处绑定引用改为 `run` 字段访问；初始化先后、命令数组及 manifest 共享引用、保存与回执顺序保持。类型检查通过，独立等价脚本50个场景差异为0；完整 `test:context-runtime` 首次运行的构建及19个脚本全部通过，套件内等价复验仍为0差异，A0 为8/8且计数仍为40／29／59，5个 Electron 冒烟脚本通过。两份独立静态审查无剩余发现。详情见 [拆分步骤2本机回报](../.scratch/harness-refactor/codex-report-split-2.md)，日志在 `.runtime/harness-refactor/split-2/`。工具端口仍在原方法内，步骤3及后续工作包尚未开始。
 
 ## 3　每个提交都要守的规则
 
