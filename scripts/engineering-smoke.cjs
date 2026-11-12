@@ -36,7 +36,7 @@ async function main() {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     page.on('pageerror', (e) => errors.push(e.message))
     await page.getByRole('heading', { name: '项目管理', exact: true }).waitFor()
-    await waitFor(async () => (await state()).agents.length === 4, 'main service')
+    await waitFor(async () => (await state()).agents.filter(agent => !agent.ownerProjectId).length === 4, 'main service')
   }
   const featureInput = (title, dependencies = []) => ({
     title,
