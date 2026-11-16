@@ -1555,7 +1555,7 @@ export class EngineeringService {
     if (reliable && !f.runtimeBudget) { f.runtimeBudget = newRuntimeBudget(executionKey(p.id, f.id), { kind: 'unknown' }); this.store.save() }
     const budgetLease = f.runtimeBudget ? new RuntimeBudgetLease(budgetHost(f, () => this.store.save()), signal) : undefined
     const runFingerprint = this.executionFingerprint(p, f)
-    const executionRunId = p.agentRuns?.at(-1)?.id ?? uid()
+    const executionRunId = progress?.resume?.executionRunId ?? uid()
     const environmentFingerprint = digest({ platform: process.platform, arch: process.arch, node: process.version, root: p.root })
     const manifest: ExecutionManifest = progress?.resume?.manifest ?? {
       version: 1, id: uid(), at: now(), taskRevision, credentialRef: connection.id,
@@ -1582,7 +1582,10 @@ export class EngineeringService {
     const assertRevision = () => {
       if (f.revision !== run.taskRevision || verificationContract(p, f) !== run.contractFingerprint) throw new TaskRevisionChanged()
     }
-    if (p.agentRuns?.length) p.agentRuns[p.agentRuns.length - 1].executionPhase = role
+    if (p.agentRuns?.length) {
+      p.agentRuns[p.agentRuns.length - 1].executionPhase = role
+      p.agentRuns[p.agentRuns.length - 1].executionRunId = executionRunId
+    }
     const artifacts = new ExecutionArtifacts(this.store.artifactHost(), p.id, f.id)
     const prototype = pinnedPrototype(p, f)
     const prototypeLength = prototype ? JSON.stringify(prototype).length : 0
@@ -1652,7 +1655,7 @@ export class EngineeringService {
         }
         run.manifest.versions.context = 'prepared-request-v2'
       }
-      checkpoints[key] = { role: run.role, version: run.reliable ? snapshot.continuity ? 4 : 3 : 2, continuity: snapshot.continuity ? JSON.parse(this.store.redact(JSON.stringify(snapshot.continuity))) : undefined, manifest: run.manifest, pending: pending ? JSON.parse(this.store.redact(JSON.stringify(pending))) : undefined, lastSequence: snapshot.lastSequence,
+      checkpoints[key] = { executionRunId: run.executionRunId, role: run.role, version: run.reliable ? snapshot.continuity ? 4 : 3 : 2, continuity: snapshot.continuity ? JSON.parse(this.store.redact(JSON.stringify(snapshot.continuity))) : undefined, manifest: run.manifest, pending: pending ? JSON.parse(this.store.redact(JSON.stringify(pending))) : undefined, lastSequence: snapshot.lastSequence,
         pendingSources: pending ? pendingSources(p.root, pending) : undefined,
         fingerprint: runFingerprint, sourceFingerprint: run.role === 'reviewer' ? progress?.sourceFingerprint ?? this.sourceFingerprint(p) : this.sourceFingerprint(p), round: f.repairRound,
         development: progress?.development ?? '', messages: JSON.parse(this.store.redact(JSON.stringify(snapshot.messages))),

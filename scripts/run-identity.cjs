@@ -78,9 +78,9 @@ test('R1', 'uninterrupted developer loop keeps command step and projection ident
   saveArtifact('R1', { entry: 'agentLoop', requests, commands: result.commands, projection: ctx.feature.evidenceProjection, saves: counters.R1 })
 })
 
-test('R2', 'pause and resume retains both commands and current segment identities', async () => {
+test('R2', 'pause and resume retains both commands and one execution identity', async () => {
   const ctx = setup(), meter = measured(ctx), requests = [], emitted = []
-  let first, firstSaves
+  let first, firstSaves, firstRunId, firstAgent
   try {
     await scripted(async (_connection, system) => {
       const number = requests.length + 1, current = snapshot(ctx)
@@ -90,6 +90,9 @@ test('R2', 'pause and resume retains both commands and current segment identitie
     }, async () => {
       await run(ctx.service); first = structuredClone(commands(ctx)); firstSaves = { ...meter.counts }
       assert.equal(ctx.feature.contextRuntime.status, 'paused'); assert.equal(first.length, 1)
+      firstRunId = snapshot(ctx).executionRunId; firstAgent = structuredClone(ctx.project.agentRuns.at(-1))
+      assert.match(firstRunId, /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i)
+      assert.notEqual(firstRunId, firstAgent.id, 'a new run has its own identity, separate from the agent snapshot')
       await run(ctx.service)
     })
   } finally { meter.restore() }
@@ -99,11 +102,16 @@ test('R2', 'pause and resume retains both commands and current segment identitie
   assert.deepEqual(records[0], first[0], 'resume does not rewrite old evidence')
   for (const evidence of records) assert.equal(evidence.stepId, emitted.find(call => call.callId === evidence.providerCallId).step)
   assertProjection(requests[1].projection, first); assertProjection(requests[2].projection, first); assertProjection(requests[3].projection, records)
-  // A2 changes this characterization to one executionRunId shared with the checkpoint.
-  assert.notEqual(records[0].executionRunId, records[1].executionRunId, 'current behavior assigns a new id on resume')
+  assert.equal(snapshot(ctx).executionRunId, firstRunId)
+  for (const evidence of records) assert.equal(evidence.executionRunId, firstRunId)
+  for (const request of requests) assert.equal(request.projection.executionRunId, firstRunId)
+  const lastAgent = ctx.project.agentRuns.at(-1)
+  assert.notEqual(lastAgent.id, firstAgent.id, 'resume still creates an independent agent snapshot')
+  assert.deepEqual(ctx.project.agentRuns.find(agent => agent.id === firstAgent.id), firstAgent)
+  assert.equal(firstAgent.executionRunId, firstRunId); assert.equal(lastAgent.executionRunId, firstRunId)
   assert.equal(ctx.feature.evidenceProjection.executionRunId, records[1].executionRunId)
   counters.R2 = { first: firstSaves, total: { ...meter.counts } }
-  saveArtifact('R2', { entry: 'runFeature', requests, commands: records, checkpoint: snapshot(ctx), saves: counters.R2 })
+  saveArtifact('R2', { entry: 'runFeature', requests, commands: records, checkpoint: snapshot(ctx), agentRuns: [firstAgent, lastAgent], saves: counters.R2 })
 })
 
 test('R3', 'failed verification repairs once and archives an existing check only once', async () => {
@@ -145,6 +153,7 @@ test('R4', 'same-connection handoff renews manifest while retaining fingerprint 
   ctx.service.prepareRuntimeHandoff('p', 'f', { action: 'migrate' })
   const handoff = structuredClone(snapshot(ctx))
   assert.notEqual(handoff.manifest.id, before.manifest.id); assert.equal(handoff.fingerprint, before.fingerprint)
+  assert.equal(typeof before.executionRunId, 'string'); assert.equal(handoff.executionRunId, before.executionRunId)
   assert.equal(ctx.service.executionFingerprint(ctx.project, ctx.feature), fingerprint)
   const previousRequests = ctx.feature.contextRuntime.requests.length
   let requests = 0
@@ -159,7 +168,8 @@ test('R4', 'same-connection handoff renews manifest while retaining fingerprint 
   assert.equal(ctx.feature.contextRuntime.status, 'paused'); assert.equal(resumed.manifest.id, handoff.manifest.id)
   assert.equal(resumed.fingerprint, before.fingerprint); assert.equal(ctx.service.executionFingerprint(ctx.project, ctx.feature), fingerprint)
   assert.deepEqual(resumed.commands, before.commands)
-  // A2 additionally requires the checkpoint executionRunId to survive the handoff.
+  assert.equal(resumed.executionRunId, before.executionRunId)
+  assert.equal(ctx.project.agentRuns.at(-1).executionRunId, before.executionRunId)
   saveArtifact('R4', { before, handoff, resumed, fingerprint })
 })
 
@@ -173,22 +183,37 @@ test('R5', 'legacy checkpoint without run identity resumes without rewriting old
   const restored = new EngineeringService()
   ctx.service = restored; ctx.project = restored.store.project('p'); ctx.feature = ctx.project.features[0]
   assert.equal(Object.hasOwn(snapshot(ctx), 'executionRunId'), false)
-  let requests = 0
-  await scripted(async (_connection, system, messages) => {
-    if (++requests === 1) {
-      assertProjection(projection(system), prior)
-      assert.ok(messages.some(message => message.role === 'tool' && message.content.includes('IDENTITY_COMMAND')), 'old tool result survives disk resume')
-      return command('r5-second')
-    }
-    return pause()
-  }, () => run(ctx.service))
+  const legacyCheckpoint = snapshot(ctx), save = restored.store.save
+  let requests = 0, firstSaved
+  restored.store.save = function (...args) {
+    const result = save.apply(this, args)
+    if (!firstSaved && this.data.executionCheckpoints[key] !== legacyCheckpoint)
+      firstSaved = JSON.parse(fs.readFileSync(this.path, 'utf8')).executionCheckpoints[key]
+    return result
+  }
+  try {
+    await scripted(async (_connection, system, messages) => {
+      if (++requests === 1) {
+        assert.ok(firstSaved, 'the first replacement checkpoint is already durable before inference')
+        assert.equal(typeof firstSaved.executionRunId, 'string')
+        assertProjection(projection(system), prior)
+        assert.ok(messages.some(message => message.role === 'tool' && message.content.includes('IDENTITY_COMMAND')), 'old tool result survives disk resume')
+        return command('r5-second')
+      }
+      return pause()
+    }, () => run(ctx.service))
+  } finally { restored.store.save = save }
   const after = snapshot(ctx)
   assert.equal(requests, 2); assert.equal(after.fingerprint, before.fingerprint)
   assert.deepEqual(after.commands.map(command => command.id), ['check-1', 'check-2'])
   assert.deepEqual(after.commands[0], prior[0], 'all prior command identity fields remain unchanged')
   assert.equal(new Set(after.commands.map(evidenceKey)).size, after.commands.length)
-  // A2 additionally requires the first new save to populate executionRunId.
-  saveArtifact('R5', { before, after, restoredFromDisk: true })
+  assert.match(firstSaved.executionRunId, /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i)
+  assert.notEqual(firstSaved.executionRunId, before.executionRunId, 'a legacy checkpoint gets a fresh run identity')
+  assert.equal(firstSaved.fingerprint, before.fingerprint); assert.equal(after.executionRunId, firstSaved.executionRunId)
+  assert.equal(after.commands[1].executionRunId, after.executionRunId)
+  assert.equal(ctx.project.agentRuns.at(-1).executionRunId, after.executionRunId)
+  saveArtifact('R5', { before, firstSaved, after, restoredFromDisk: true })
 })
 
 test('R6', 'planning, assistant and discussion currently omit run identity from requests and events', async () => {
