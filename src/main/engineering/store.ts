@@ -30,7 +30,7 @@ interface DiskState {
   skills?: SkillDefinition[]
   projects: Project[]
   executionCheckpoints?: Record<string, ExecutionCheckpoint>
-  contextSnapshots?: Record<string, import('./runtime').RuntimeSnapshot>
+  contextSnapshots?: Record<string, import('./runtime').RuntimeSnapshot & { executionRunId?: string }>
   receiptJournals?: Record<string, import('./receipt-ledger').ReceiptJournal>
   runtimeOriginals?: Record<string, { projectId: string; featureId: string; at: string; checkpoint?: ExecutionCheckpoint; journal?: import('./receipt-ledger').ReceiptJournal; context?: Project['features'][number]['contextRuntime']; policy?: Project['features'][number]['runtimePolicy']; models?: Project['features'][number]['executionModels'] }>
 }

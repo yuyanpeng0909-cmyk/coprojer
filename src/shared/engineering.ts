@@ -121,6 +121,7 @@ export interface AgentModelPlan {
   caveat: string
 }
 export interface AgentRunSnapshot {
+  executionRunId?: string
   reasoning?: AgentReasoning
   modelDisplayName?: string
   executionPhase?: 'developer' | 'reviewer' | 'diagnoser' | 'preparer'
@@ -322,6 +323,8 @@ export interface ContextEntry {
 export interface ExecutionEvent {
   id: string
   featureId?: string
+  executionRunId?: string
+  stepId?: string
   kind: string
   message: string
   at: string

@@ -29,11 +29,13 @@ export interface ContextDecision {
   observedGrowth?: number
 }
 export interface ContextCompactionRecord {
+  executionRunId?: string; stepId?: string
   at: string; reason: string; epoch?: number; before?: number; after?: number
   decision?: ContextDecision; method?: string; archiveId?: string
   manifestId?: string; role?: string; model?: string; unit?: 'characters' | 'tokens'
 }
 export interface ContextOperation {
+  executionRunId?: string; stepId?: string
   id: string; kind: 'count' | 'compaction'; parentHash: string; wireHash: string; at: string
   status: 'prepared' | 'completed' | 'failed'; usage?: TokenUsage; error?: string
 }
@@ -108,7 +110,7 @@ export interface ContextRuntimeState {
   compactions?: ContextCompactionRecord[]
   operations?: ContextOperation[]
   receipts?: import('./runtime-receipt').ToolReceiptView[]
-  requests: { id: string; manifestId: string; hash: string; at: string; status: 'prepared' | 'completed' | 'failed'; budget: RequestBudget; usage?: TokenUsage; responseId?: string }[]
+  requests: { id: string; manifestId: string; hash: string; at: string; status: 'prepared' | 'completed' | 'failed'; budget: RequestBudget; usage?: TokenUsage; responseId?: string; executionRunId?: string; stepId?: string }[]
 }
 export interface RuntimeArtifactQuery {
   projectId?: string

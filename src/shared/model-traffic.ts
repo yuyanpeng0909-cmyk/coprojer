@@ -23,8 +23,22 @@ export function tokenUsage(protocol: Protocol, usage: any): TokenUsage {
   const reasoningTokens = count(protocol === 'chat' ? usage.completion_tokens_details?.reasoning_tokens : usage.output_tokens_details?.reasoning_tokens)
   return { inputTokens, outputTokens, totalTokens, cachedInputTokens, reasoningTokens }
 }
+export interface TrafficRef {
+  projectId?: string
+  scopeId?: string
+  executionRunId?: string
+  stepId?: string
+  requestId?: string
+  operationId?: string
+}
 export interface TrafficRequest extends TokenUsage {
   id: string
+  projectId?: string
+  scopeId?: string
+  executionRunId?: string
+  stepId?: string
+  requestId?: string
+  operationId?: string
   connectionId: string
   model: string
   protocol: Protocol

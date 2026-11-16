@@ -56,6 +56,7 @@ export interface CommandEvidence {
 // Main-process state only. Saved at a completed tool-round boundary, never
 // halfway through side effects. It is not part of the renderer's project model.
 export interface ExecutionCheckpoint {
+  executionRunId?: string
   version?: 2 | 3 | 4
   continuity?: import('./context-continuity').ContextContinuity
   pending?: import('./runtime').PendingToolGroup

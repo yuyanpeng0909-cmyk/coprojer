@@ -1,6 +1,6 @@
 # Harness 重构 · 交给 Codex 的执行说明
 
-2026-11-16 · 第一批基准与测量、运行标识 A0 及拆分步骤2–5均已完成验收；步骤5固定登记9个内部 hook，最终规定检查去重83个不同脚本全部通过（含完整 npm test 52个），另有定向 preview-forwarding 通过。预览生命周期经用户另行明确授权修复；工程就绪、研究桩与新手断言按当前 AGENTS 同目标常规本地修复推进，四项均已独立提交。可选步骤6两项已于2026-11-16完成，分别验证、本地提交，最终完整 npm test 52/52；A1–A8及其他后续工作包未开始，仍待用户点名。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
+2026-11-16 · 第一批基准与测量、运行标识 A0 及拆分步骤2–5均已完成验收；步骤5固定登记9个内部 hook，最终规定检查去重83个不同脚本全部通过（含完整 npm test 52个），另有定向 preview-forwarding 通过。预览生命周期经用户另行明确授权修复；工程就绪、研究桩与新手断言按当前 AGENTS 同目标常规本地修复推进，四项均已独立提交。可选步骤6两项已于2026-11-16完成，分别验证、本地提交，最终完整 npm test 52/52。运行标识 A1 类型扩展也已完成，三项规定检查通过，运行时行为保持不变；A2–A8及其他后续工作包未开始，仍待用户点名。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
 
 第一批任务（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量）已经有单独的任务书：[第一批执行任务书](HARNESS_REFACTOR_CODEX_BRIEF.md)，做法在它指向的两份设计文档里（[拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)、[存储搬迁步骤 0 设计](HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md)）。那两件事照任务书和设计文档做，本文不重复；本文管的是第一批之后的各批。
 
@@ -29,7 +29,8 @@
 | 拆分步骤 5 | ADR 0005、拆分计划 | 已实现并完成验收（2026-11-12；本地提交见步骤5回报，未 push） | 9个内部 hook 固定注册；最终规定检查83/83，等价50/50无差异，A0 8/8且计数40／29／59 |
 | 拆分步骤 6（可选） | ADR 0005、拆分计划 | 已完成（2026-11-16，两项分别本地提交，未 push） | 规划工具复用管线，工程与只读入口复用 records；两项各自规定回归通过，最终完整 npm test 52/52，等价和 A0 不变 |
 | 运行标识 A0（只加特征测试） | 本文 6.2 | 已完成（2026-11-11，本地提交，未 push） | R1–R8 全部通过，已接入 `test:context-runtime`；未改 `src/`，回报见下文 |
-| 运行标识 A1–A8 | [ADR 0007](adr/0007-append-only-run-log-run-id-and-readonly-delegation.md) 第五、六项，[运行标识计划](HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md) A 部分，本文第 6 节 | 未开工 | ADR 0007 已接受、第 10 节 A 组已确认（2026-11-11）；拆分步骤 2–5 已完成。仍待用户点名具体工作包 |
+| 运行标识 A1（类型扩展） | 本文 6.3 | 已完成（2026-11-16） | 仅新增类型和可选字段；typecheck、A0 8/8及原等价50/50零差异通过，计数40／29／59不变 |
+| 运行标识 A2–A8 | [ADR 0007](adr/0007-append-only-run-log-run-id-and-readonly-delegation.md) 第五、六项，[运行标识计划](HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md) A 部分，本文第 6 节 | 未开工 | ADR 0007 已接受、第 10 节 A 组已确认（2026-11-11）；拆分步骤 2–6、A0、A1 已完成。仍待用户点名具体工作包 |
 | 上下文与压缩步骤 1–7 | [ADR 0006](adr/0006-stable-prompt-prefix-and-working-window.md)（已接受）、[上下文计划](HARNESS_REFACTOR_CONTEXT_PLAN.md) | 未开工 | 拆分步骤 2–5 的前置条件已满足；仍待用户点名。已确认运行标识先、上下文后，见第 7 节 |
 | 存储搬迁步骤 1–7 | ADR 0007 第一至四、九至十一项，存储搬迁计划 | 未开工 | ADR 0007 已接受（2026-11-11）。还差：运行标识完成；步骤 0 的数字已写回计划；该计划「仍待处理」里挡路的条目已由用户定下（第 8 节有建议，建议不等于已定） |
 | 缺陷候选的修复 | [拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md) 第 8 节第 1、2 点 | 用户 2026-11-11 决定拆分阶段不修，现状固定进等价基准；没有修复设计 | 当前不可开工。拆分步骤 2–5 的前置条件已满足，但仍待用户另行交办及修复设计；修复须单独提交，并重建等价基准 |
@@ -84,6 +85,10 @@ ADR 0007 已于 2026-11-11 被接受。ADR 已接受不等于可以动手：上�
 两项分别通过 typecheck、独立原等价50/50零差异、完整 context-runtime 19/19、engineering 2/2（含 Windows 预览生命周期六模式）。第二项另通过 context-window 7/7 与阶段结束完整 npm test 52/52，正式检查去重78个不同脚本。两轮 A0 均8/8，计数40／29／59；14个规划适配器对照与18组 records 回调对照零差异，受控探针不冒充真实服务或 live-provider 验收。本轮没有规定回归失败，没有修改现有测试、夹具、基准、A0、依赖或共享持久类型。
 
 日志及逐命令快照位于 `.runtime/harness-refactor/split-6/planning/` 和 `records/`；证据校验分别为 `audit-planning/final.json`、`audit-records/final.json`，均 passed。当前 Windows DISPLAY1 已是主屏，DISPLAY5 非主屏，按 AGENTS 回退主屏并在首次显示前定位，不沿用上轮显示器判断。详细提交和限制见 [步骤6本机回报](../.scratch/harness-refactor/codex-report-split-6.md) 与 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)。本轮完成后停止，未push；A1–A8、上下文、存储、两个缺陷候选与其他阶段均未开始。
+
+**运行标识 A1 执行记录（2026-11-16）。** 按 6.3 新增 `RunRef`、`RunRecordRef`、`TrafficRef`，并在清单中的接口直接增加可选字段；`contextSnapshots` 的值扩为 `RuntimeSnapshot & { executionRunId?: string }`。只改7个类型涉及的源码文件（含新文件），6个现有模块转译出的 JavaScript 与起点 `a36fa43` 完全一致，新 `run-ref.ts` 只有两个接口声明。未改运行时语句、字段写入、`RuntimeSnapshot`、`ToolReceiptView`、指纹输入、意图哈希字段表或保存调用。
+
+`npm run typecheck`、原 `node scripts/run-identity.cjs`、原 `node scripts/tool-pipeline-equivalence.cjs` 均退出0；A0 8/8，计数40／29／59，等价50/50、0 differences。脚本、夹具、基准、依赖及原未跟踪文档保持不变。本轮仅执行 A1 规定的源码类检查，没有运行 UI 或完整 npm test；步骤6的52/52仍是此前验收记录。提交号与范围见 [A1 本机回报](../.scratch/harness-refactor/codex-report-A1.md)，逐命令日志和静态核对在 `.runtime/harness-refactor/A1/`。后续请求、用量、预算及压缩记录写入按当前 `runtime-records.ts` 定位，不能按旧行号恢复重复代码。A1 后停止，未push，未开始A2或其他阶段。
 
 ## 3　每个提交都要守的规则
 

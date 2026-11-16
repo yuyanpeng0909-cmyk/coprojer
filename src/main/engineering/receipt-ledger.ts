@@ -6,6 +6,8 @@ import { assertCommandResult } from './command-effects'
 
 export interface ReceiptResult { output: string; sourceVersion?: string; changed?: boolean; effects?: string[]; status?: 'completed' | 'failed' | 'cancelled'; command?: import('./command-effects').CommandOutcome }
 export interface ToolReceipt extends ToolReceiptView {
+  executionRunId?: string
+  stepId?: string
   version: 1
   providerCallId: string
   groupId: string
