@@ -1,4 +1,4 @@
-import type { Connection, ModelMessage, ModelReply } from './model'
+import type { Connection, ModelMessage, ModelReply, ToolCall } from './model'
 import type { DeltaListener } from './stream'
 import { engineeringTools, executeReadOnly } from './files'
 import { contextHash, readContext } from './context'
@@ -7,6 +7,7 @@ import type { EngineeringStore } from './store'
 import { contextSession } from './context-session'
 import { executeFileRead, fileReadTools } from './efficient-files'
 import { compatibleSnapshot, continuityHash, newContinuity, portableMessages } from './context-continuity'
+import { runAfterExecuteHooks, runLegacyToolPipeline, type ToolHook } from './tool-pipeline'
 
 export interface PlanningHost { store: EngineeringStore; feature?: Feature; role?: 'planner' | 'designer'; agentId: string; operationId?: string }
 export async function completeWithContext(connection: Connection, system: string, messages: ModelMessage[], project: Project, signal: AbortSignal,
@@ -33,6 +34,17 @@ export async function completeWithContext(connection: Connection, system: string
     const saved = continuity.requiredReads?.find(r => r.id === id)
     return [id, { read: saved?.read ?? 0, total: saved?.total ?? Infinity, version: saved?.version ?? '' }]
   }))
+  const hooks: ToolHook<typeof coverage, { call: ToolCall; args: Record<string, any> }, { output: string }>[] = [{
+    name: 'planning-coverage', afterExecute(coverage, { call, args }, output) {
+      const tracked = call.name === 'read_context' ? coverage.get(args.id) : undefined
+      if (tracked) {
+        const page = JSON.parse(output)
+        if (tracked.version && tracked.version !== page.version) tracked.read = 0
+        tracked.version = page.version; tracked.total = page.totalCharacters
+        if (page.offset <= tracked.read) tracked.read = Math.max(tracked.read, page.offset + page.content.length)
+      }
+    },
+  }]
   const records = { ...session.records, save(snapshot: import('./runtime').RuntimeSnapshot) {
     const next = { ...(snapshot.continuity ?? continuity), requiredReads: [...coverage].map(([id, r]) => ({ id, ...r, total: Number.isFinite(r.total) ? r.total : null })) }
     session.records.save({ ...snapshot, continuity: next })
@@ -54,20 +66,19 @@ export async function completeWithContext(connection: Connection, system: string
       provenance: reads => ({ taskRevision: revision, sources: ['project:' + project.id, 'planning:' + initial, ...reads.filter(r => r.active).map(r => r.sourceId + '@' + r.version)] }) },
     tools: { isFatal: () => false, redact: value => host.store.redact(value), visible: (_name, output) => output, received: () => {},
       execute: async (call, args) => {
-        assertCurrent()
-        if (!allowed().includes(call.name as any)) throw new Error('当前角色已无此工具权限。')
-        session.reserveTool()
-        // The portable runtime validates the offered schema before this read-only adapter.
-        const output = call.name === 'read_skill' && readSkill ? readSkill(args) : fileReadTools.includes(call.name) ? await executeFileRead(project.root, call.name, args, signal) : executeReadOnly(project.root, call.name, args,
-          { context: input => readContext(project, input), artifact: input => session.artifacts.read(input) })
-        const tracked = call.name === 'read_context' ? coverage.get(args.id) : undefined
-        if (tracked) {
-          const page = JSON.parse(output)
-          if (tracked.version && tracked.version !== page.version) tracked.read = 0
-          tracked.version = page.version; tracked.total = page.totalCharacters
-          if (page.offset <= tracked.read) tracked.read = Math.max(tracked.read, page.offset + page.content.length)
-        }
-        return { output }
+        return runLegacyToolPipeline({
+          authorize() {
+            assertCurrent()
+            if (!allowed().includes(call.name as any)) throw new Error('当前角色已无此工具权限。')
+          },
+          reserve: () => session.reserveTool(),
+          async perform() {
+            // The portable runtime validates the offered schema before this read-only adapter.
+            const output = call.name === 'read_skill' && readSkill ? readSkill(args) : fileReadTools.includes(call.name) ? await executeFileRead(project.root, call.name, args, signal) : executeReadOnly(project.root, call.name, args,
+              { context: input => readContext(project, input), artifact: input => session.artifacts.read(input) })
+            return { output: runAfterExecuteHooks(hooks, coverage, { call, args }, output) }
+          },
+        })
       } },
   }, signal)
   return session.finish(outcome)
