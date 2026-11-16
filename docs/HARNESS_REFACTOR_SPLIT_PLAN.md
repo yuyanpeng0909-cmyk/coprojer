@@ -1,6 +1,6 @@
 # Harness 重构 · 拆分阶段实施计划
 
-2026-11-12 · 步骤0基线、步骤1等价脚本及步骤2–5结构拆分均已完成验收；步骤5固定登记9个内部 hook，最终规定检查去重83个不同脚本全部通过（含完整 npm test 52个），另有定向 preview-forwarding 通过。预览生命周期经用户另行明确授权修复；工程就绪、研究桩与新手断言按当前 AGENTS 同目标常规本地修复推进，四项均已独立提交。拆分主体完成；可选步骤6及其他阶段未开始，仍待用户点名。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于2026-11-11被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
+2026-11-16 · 步骤0基线、步骤1等价脚本及步骤2–5结构拆分均已完成验收；步骤5固定登记9个内部 hook，最终规定检查去重83个不同脚本全部通过（含完整 npm test 52个），另有定向 preview-forwarding 通过。预览生命周期经用户另行明确授权修复；工程就绪、研究桩与新手断言按当前 AGENTS 同目标常规本地修复推进，四项均已独立提交。拆分主体及可选步骤6均已完成；步骤6两项分别验证、本地提交，最终完整 npm test 52/52。A1–A8及其他阶段未开始，仍待用户点名。[ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md) 已于2026-11-11被接受，本文是它的第一阶段：只做不改变行为的结构拆分。Windows 本机基线结果记在步骤0末尾，步骤1的设计见 [拆分步骤1设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)，当前执行记录见 [Codex 执行说明](HARNESS_REFACTOR_CODEX_HANDOFF.md)。文中行号对应提交 `d59c52d`（2026-10-14）的 `src/main/engineering/service.ts`，动手时以语句为准，不以行号为准。
 
 整个重构分四个阶段：基线、拆分、迁移、新能力。本文只覆盖前两个。迁移（一次性数据迁移、删除 `legacy` 字符预算和旧检查点分支）和新能力（规则引擎、审批卡片、通用 shell、自由编码入口）各自另写计划。
 
@@ -229,11 +229,17 @@ export interface ToolHook<Run> {
 
 ### 步骤 6（可选）：方案规划接入同一管线
 
-当前未开工。步骤5已完成，结构依赖已满足；本批不继续，仍须用户点名步骤6。
+已完成（2026-11-16）。本轮用户明确选择规划接入管线与 records 复用；两项分别验证、分别本地提交，执行记录见下文。
 
 `planning.ts` 第 56–71 行有一份独立的只读执行逻辑（`assertCurrent`、工具许可、`session.reserveTool()`、读取覆盖进度）。它只读、无回执，可以接到 `tool-pipeline.ts` 上，把覆盖进度写成一个 `afterExecute` hook。单独一个提交，检查用 `test:context-runtime`（含 `context-runtime-entries.cjs`）和 `npm run test:engineering`。
 
 `agentLoop` 的 `records` 端口（第 1791 行起）与 `context-session.ts` 第 52 行起的 `records` 大量重复，合并它们也放在这里，同样单独提交、单独回归。这两件事不做也不影响后续阶段，时间紧可以推后。
+
+**拆分步骤6执行与验收记录（2026-11-16）。** 用户本轮明确选择完成可选步骤6的两项工作。规划接入已独立提交为 `88c82b5`：`planning.ts` 复用无回执运行器，按原顺序执行修订/资料复核、实时工具权限、预算预占与只读操作；覆盖进度登记为内部 `afterExecute` hook。第二项将工程执行与 `contextSession` 重复的 compaction、budget、request、usage 回调提取到 `runtime-records.ts`；快照/检查点保存、prepareGroup、失效与事件适配仍留在原入口。内部 execution/readonly 模式保留原有差异：压缩记录的 role、缺失 responseId 的清除/保留，以及未匹配 usage 的保存行为。未增加、移动或减少保存调用，服务方法仍在调用时经实例访问。
+
+两项分别通过 typecheck、独立原等价50/50零差异、完整 context-runtime 19/19、engineering 2/2（含 Windows 预览生命周期六模式）。第二项另通过 context-window 7/7 与阶段结束完整 npm test 52/52，正式检查去重78个不同脚本。两轮 A0 均8/8，计数40／29／59；14个规划适配器对照与18组 records 回调对照零差异，受控探针不冒充真实服务或 live-provider 验收。本轮没有规定回归失败，没有修改现有测试、夹具、基准、A0、依赖或共享持久类型。
+
+日志及逐命令快照位于 `.runtime/harness-refactor/split-6/planning/` 和 `records/`；证据校验分别为 `audit-planning/final.json`、`audit-records/final.json`，均 passed。当前 Windows DISPLAY1 已是主屏，DISPLAY5 非主屏，按 AGENTS 回退主屏并在首次显示前定位，不沿用上轮显示器判断。详细提交和限制见 [步骤6本机回报](../.scratch/harness-refactor/codex-report-split-6.md) 与 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)。本轮完成后停止，未push；A1–A8、上下文、存储、两个缺陷候选与其他阶段均未开始。
 
 ## 完成判据
 

@@ -5,6 +5,7 @@ import { complete, prepareModelRequest, verifyModelRequest, type Connection } fr
 import { ExecutionArtifacts } from './execution-artifacts'
 import { now, uid, type EngineeringStore } from './store'
 import { runRuntime, type RuntimeInput, type RuntimePorts, type RuntimeSnapshot, type RunOutcome } from './runtime'
+import { runtimeRecords } from './runtime-records'
 import { RuntimeBudgetLease, budgetHost, CumulativeBudgetPause } from './runtime-budget'
 import type { DeltaListener } from './stream'
 import { toolContractVersion } from './tool-contract'
@@ -44,11 +45,6 @@ export function contextSession(store: EngineeringStore, original: Connection, ow
     try { budgetLease?.start(); return await work(budgetLease?.signal ?? signal) }
     finally { budgetLease?.finish(); budgetLease = undefined }
   }
-  const mergeUsage = (request: Parameters<NonNullable<RuntimePorts['records']['usage']>>[0], usage: Parameters<NonNullable<RuntimePorts['records']['usage']>>[1]) => {
-    const record = state.requests.at(-1)
-    if (record?.hash === request.hash && record.manifestId === manifest.id)
-      record.usage = { ...record.usage, ...Object.fromEntries(Object.entries(usage).filter(([, value]) => value !== undefined)) }
-  }
   const records: RuntimePorts['records'] = {
     save(snapshot) {
       const snapshots = store.data.contextSnapshots ??= {}, prior = snapshots[key], view = state.view
@@ -67,19 +63,7 @@ export function contextSession(store: EngineeringStore, original: Connection, ow
     event(kind, message) {
       event(kind, message)
     },
-    compaction(record) { state.compactions = [...(state.compactions ?? []), { ...record, manifestId: manifest.id, model: connection.model }].slice(-64); save() },
-    budget(request) { state.latestBudget = request.budget; save() },
-    request(request, status, reply) {
-      state.latestBudget = request.budget
-      if (status === 'prepared') { state.requests.push({ id: uid(), manifestId: manifest.id, hash: request.hash, at: now(), status, budget: request.budget }); state.requests = state.requests.slice(-200) }
-      else {
-        const record = state.requests.at(-1)
-        if (record?.hash === request.hash && record.manifestId === manifest.id) { record.status = status; record.responseId = reply?.responseId }
-        if (reply?.usage) mergeUsage(request, reply.usage)
-      }
-      save()
-    },
-    usage(request, usage) { mergeUsage(request, usage); save() },
+    ...runtimeRecords(state, { mode: 'readonly', manifestId: () => manifest.id, model: () => connection.model, save }),
   }
   const measuredConnection: Connection = { ...connection,
     onRequest: () => { budgetLease?.reserve('requests'); connection.onRequest?.() },

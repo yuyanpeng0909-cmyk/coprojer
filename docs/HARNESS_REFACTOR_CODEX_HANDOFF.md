@@ -1,6 +1,6 @@
 # Harness 重构 · 交给 Codex 的执行说明
 
-2026-11-12 · 第一批基准与测量、运行标识 A0 及拆分步骤2–5均已完成验收；步骤5固定登记9个内部 hook，最终规定检查去重83个不同脚本全部通过（含完整 npm test 52个），另有定向 preview-forwarding 通过。预览生命周期经用户另行明确授权修复；工程就绪、研究桩与新手断言按当前 AGENTS 同目标常规本地修复推进，四项均已独立提交。可选步骤6、A1–A8及其他后续工作包未开始，仍待用户点名。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
+2026-11-16 · 第一批基准与测量、运行标识 A0 及拆分步骤2–5均已完成验收；步骤5固定登记9个内部 hook，最终规定检查去重83个不同脚本全部通过（含完整 npm test 52个），另有定向 preview-forwarding 通过。预览生命周期经用户另行明确授权修复；工程就绪、研究桩与新手断言按当前 AGENTS 同目标常规本地修复推进，四项均已独立提交。可选步骤6两项已于2026-11-16完成，分别验证、本地提交，最终完整 npm test 52/52；A1–A8及其他后续工作包未开始，仍待用户点名。本文把 harness 重构整理成可以逐批交办的工作包，供 Codex 执行。它不新增决定：决定在 ADR 0005、0006、0007 里，各阶段的做法在四份计划里。本文补三样东西：现在哪一步可以开工、哪一步不行；每个提交都要守的规则；运行标识这一阶段逐提交的做法，也就是计划里原先写着「动手时定」「待定」的部分。
 
 第一批任务（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量）已经有单独的任务书：[第一批执行任务书](HARNESS_REFACTOR_CODEX_BRIEF.md)，做法在它指向的两份设计文档里（[拆分步骤 1 设计](HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md)、[存储搬迁步骤 0 设计](HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md)）。那两件事照任务书和设计文档做，本文不重复；本文管的是第一批之后的各批。
 
@@ -27,7 +27,7 @@
 | 拆分步骤 3 | [拆分计划](HARNESS_REFACTOR_SPLIT_PLAN.md) | 已实现并完成验收（2026-11-12，本地提交，未 push） | 四项测试问题已修复；完整检查35/35，等价50/50无差异，A0计数40／29／59 |
 | 拆分步骤 4 | [ADR 0005](adr/0005-tool-pipeline-and-free-coding-entry.md)（已接受）、拆分计划 | 已实现并完成验收（2026-11-12；本地提交见回报，未 push） | 两条独立阶段运行器及具名业务阶段已实现；完整检查42/42，等价50/50无差异，A0计数40／29／59 |
 | 拆分步骤 5 | ADR 0005、拆分计划 | 已实现并完成验收（2026-11-12；本地提交见步骤5回报，未 push） | 9个内部 hook 固定注册；最终规定检查83/83，等价50/50无差异，A0 8/8且计数40／29／59 |
-| 拆分步骤 6（可选） | ADR 0005、拆分计划 | 未开工 | 步骤5已完成，依赖条件已满足；仍须用户点名，不自动继续 |
+| 拆分步骤 6（可选） | ADR 0005、拆分计划 | 已完成（2026-11-16，两项分别本地提交，未 push） | 规划工具复用管线，工程与只读入口复用 records；两项各自规定回归通过，最终完整 npm test 52/52，等价和 A0 不变 |
 | 运行标识 A0（只加特征测试） | 本文 6.2 | 已完成（2026-11-11，本地提交，未 push） | R1–R8 全部通过，已接入 `test:context-runtime`；未改 `src/`，回报见下文 |
 | 运行标识 A1–A8 | [ADR 0007](adr/0007-append-only-run-log-run-id-and-readonly-delegation.md) 第五、六项，[运行标识计划](HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md) A 部分，本文第 6 节 | 未开工 | ADR 0007 已接受、第 10 节 A 组已确认（2026-11-11）；拆分步骤 2–5 已完成。仍待用户点名具体工作包 |
 | 上下文与压缩步骤 1–7 | [ADR 0006](adr/0006-stable-prompt-prefix-and-working-window.md)（已接受）、[上下文计划](HARNESS_REFACTOR_CONTEXT_PLAN.md) | 未开工 | 拆分步骤 2–5 的前置条件已满足；仍待用户点名。已确认运行标识先、上下文后，见第 7 节 |
@@ -78,6 +78,12 @@ ADR 0007 已于 2026-11-11 被接受。ADR 已接受不等于可以动手：上�
 最终类型检查、独立等价及全部规定回归通过：context-runtime 19/19、context-window 7/7、verification 11/11、context-efficiency 1/1、long-task-context及四项补充5/5，完整 npm test 52/52；这两组去重为 **83个正式不同脚本**。定向真实工程另已用318.13秒完整通过（不重复计数），preview-forwarding用21.67秒通过且不在上述集合内，合计 **84个不同脚本**。构建、case数量、中间运行与重复调用不加入脚本分母。最终汇总入口为 `.runtime/harness-refactor/split-5-final-run/final-validation/results.json`，独立汇总审计为同目录 `evidence-audit.json`；成功来源是 `split-5-verified/validation` 的前11条与 `split-5-final-run/full-only` 的新完整52脚本链，保留原文件及逐项来源。前11条复用有源码/依赖闭包证据：之后两项改动只涉及研究 provider 与 novice 测试，不在其闭包内。定向工程/转发见 `split-5-verified/targeted/results.json`，研究与尾部见 `split-5-final-check/targeted/results.json`，修后新手见 `split-5-final-run/targeted/results.json`；失败命令不计入成功分母、不覆写原结果。
 
 依赖、lockfile、共享持久类型、原等价基准及 A0 均未修改。步骤5本地结构提交及详细限制见 [步骤5本机回报](../.scratch/harness-refactor/codex-report-split-5.md)、[hook审阅](../.scratch/harness-refactor/split-5-review.md)、[独立预览审阅](../.scratch/harness-refactor/split-5-preview-review.md)、[研究桩修复](../.scratch/harness-refactor/split-5-research-fixture-fix.md) 与 [新手断言修复](../.scratch/harness-refactor/split-5-novice-fix.md)。本批到此停止，未push、未改写已有提交；步骤6、A1–A8、上下文、存储搬迁及其他阶段均未开始。步骤2–5这一前置条件已满足，不代替后续工作包仍需用户点名的条件。
+
+**拆分步骤6执行与验收记录（2026-11-16）。** 用户本轮明确选择完成可选步骤6的两项工作。规划接入已独立提交为 `88c82b5`：`planning.ts` 复用无回执运行器，按原顺序执行修订/资料复核、实时工具权限、预算预占与只读操作；覆盖进度登记为内部 `afterExecute` hook。第二项将工程执行与 `contextSession` 重复的 compaction、budget、request、usage 回调提取到 `runtime-records.ts`；快照/检查点保存、prepareGroup、失效与事件适配仍留在原入口。内部 execution/readonly 模式保留原有差异：压缩记录的 role、缺失 responseId 的清除/保留，以及未匹配 usage 的保存行为。未增加、移动或减少保存调用，服务方法仍在调用时经实例访问。
+
+两项分别通过 typecheck、独立原等价50/50零差异、完整 context-runtime 19/19、engineering 2/2（含 Windows 预览生命周期六模式）。第二项另通过 context-window 7/7 与阶段结束完整 npm test 52/52，正式检查去重78个不同脚本。两轮 A0 均8/8，计数40／29／59；14个规划适配器对照与18组 records 回调对照零差异，受控探针不冒充真实服务或 live-provider 验收。本轮没有规定回归失败，没有修改现有测试、夹具、基准、A0、依赖或共享持久类型。
+
+日志及逐命令快照位于 `.runtime/harness-refactor/split-6/planning/` 和 `records/`；证据校验分别为 `audit-planning/final.json`、`audit-records/final.json`，均 passed。当前 Windows DISPLAY1 已是主屏，DISPLAY5 非主屏，按 AGENTS 回退主屏并在首次显示前定位，不沿用上轮显示器判断。详细提交和限制见 [步骤6本机回报](../.scratch/harness-refactor/codex-report-split-6.md) 与 [本机交接](../.scratch/harness-refactor/next-chat-handoff.md)。本轮完成后停止，未push；A1–A8、上下文、存储、两个缺陷候选与其他阶段均未开始。
 
 ## 3　每个提交都要守的规则
 

@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto'
 import { ExecutionBudgetPause, executionKey, executionStepLimit, diagnosisStepLimit, preparationStepLimit, preparationRoundLimit, verificationStatus, commandEvidenceKinds, type ExecutionRole, type CommandEvidence, type ExecutionCheckpoint } from './execution'
 import { ExecutionProgressPause } from './execution-progress'
 import { runRuntime, type RuntimeSnapshot, type PendingToolGroup } from './runtime'
+import { runtimeRecords } from './runtime-records'
 import { executionTools } from './execution-tools'
 import { startPreviewProcess, type PreviewProcess } from './preview-process'
 import { featureReceiptLedger, reconcileFeatureReceipts, assertPendingSources, pendingSources } from './execution-recovery'
@@ -1811,33 +1812,8 @@ export class EngineeringService {
         event: (kind, message) => {
           this.store.event(p, kind, message, f.id)
         },
-        compaction: record => { contextState.compactions = [...(contextState.compactions ?? []), { ...record, manifestId: run.manifest.id, role: run.role, model: run.connection.model }].slice(-64); this.store.save() },
-        budget: request => {
-          const state: NonNullable<Feature['contextRuntime']> = contextState
-          state.latestBudget = request.budget
-          this.store.save()
-        },
-        request: (request, status, reply) => {
-          const state: NonNullable<Feature['contextRuntime']> = contextState
-          state.latestBudget = request.budget
-          let record = state.requests.at(-1)
-          if (status === 'prepared') {
-            record = { id: uid(), manifestId: run.manifest.id, hash: request.hash, at: now(), status, budget: request.budget }
-            state.requests.push(record); state.requests = state.requests.slice(-200)
-          } else if (record?.hash === request.hash && record.manifestId === run.manifest.id) {
-            record.status = status
-            if (reply?.usage) record.usage = { ...record.usage, ...Object.fromEntries(Object.entries(reply.usage).filter(([, value]) => value !== undefined)) }
-            if (reply?.responseId) record.responseId = reply.responseId
-          }
-          this.store.save()
-        },
-        usage: (request, usage) => {
-          const record = contextState.requests.at(-1)
-          if (record?.hash === request.hash && record.manifestId === run.manifest.id) {
-            record.usage = { ...record.usage, ...Object.fromEntries(Object.entries(usage).filter(([, value]) => value !== undefined)) }
-            this.store.save()
-          }
-        },
+        ...runtimeRecords(contextState, { mode: 'execution', manifestId: () => run.manifest.id, role: () => run.role,
+          model: () => run.connection.model, save: () => this.store.save() }),
       },
       artifacts: { write: (content, label) => run.artifacts.write(content, label) },
       tools: executionTools(run, { store: this.store, sourceFingerprint: p => this.sourceFingerprint(p), agentSkillReader: (p, role, agent) => this.agentSkillReader(p, role, agent) }),
