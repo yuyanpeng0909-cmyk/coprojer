@@ -9,6 +9,7 @@ import { normalizeContext } from './context'
 import { syncPrototypeBriefs } from '../../shared/prototype-workflow'
 import type { SkillDefinition } from '../../shared/engineering'
 import type { AgentConfig, EngineeringState, ModelConfig, Project } from '../../shared/engineering'
+import type { RunRecordRef } from '../../shared/run-ref'
 import type { ExecutionCheckpoint } from './execution'
 import { executionKey } from './execution'
 import { cleanupVerificationRuns } from './files'
@@ -247,13 +248,15 @@ export class EngineeringStore {
     if (!project) throw new Error('项目不存在。')
     return project
   }
-  event(project: Project, kind: string, message: string, featureId?: string): void {
+  event(project: Project, kind: string, message: string, featureId?: string, ref?: RunRecordRef): void {
     project.events.push({
       id: uid(),
       kind,
       message: this.redact(message).slice(0, 18000),
       featureId,
       at: now(),
+      ...(ref?.executionRunId ? { executionRunId: ref.executionRunId } : {}),
+      ...(ref?.stepId ? { stepId: ref.stepId } : {}),
     })
     if (project.events.length > 1200) project.events.splice(0, project.events.length - 1200)
     this.save()

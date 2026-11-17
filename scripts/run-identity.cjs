@@ -77,6 +77,9 @@ test('R1', 'uninterrupted developer loop keeps command step and projection ident
   const requestRecords = ctx.feature.contextRuntime.requests
   assert.deepEqual(requestRecords.map(record => record.stepId), ['0', '1', '2'])
   for (const record of requestRecords) assert.equal(record.executionRunId, ctx.feature.evidenceProjection.executionRunId)
+  const modelEvents = ctx.project.events.filter(event => event.kind === 'model')
+  assert.deepEqual(modelEvents.map(event => event.stepId), ['0', '1', '2'])
+  for (const event of modelEvents) assert.equal(event.executionRunId, ctx.feature.evidenceProjection.executionRunId)
   counters.R1 = { ...meter.counts }
 
   // Keep the fixed R1 save count scoped to its original three-step run.
@@ -97,7 +100,7 @@ test('R1', 'uninterrupted developer loop keeps command step and projection ident
   assert.deepEqual(conclusionRecords.map(record => record.stepId), Array.from({ length: stepLimit + 1 }, (_, step) => String(step)))
   assert.equal(conclusionRecords.at(-1).stepId, String(stepLimit))
   for (const record of conclusionRecords) assert.equal(record.executionRunId, snapshot(limited).executionRunId)
-  saveArtifact('R1', { entry: 'agentLoop', requests, requestRecords, commands: result.commands, projection: ctx.feature.evidenceProjection,
+  saveArtifact('R1', { entry: 'agentLoop', requests, requestRecords, modelEvents, commands: result.commands, projection: ctx.feature.evidenceProjection,
     saves: counters.R1, conclusion: { stepLimit, requests: conclusionRecords, checkpoint: snapshot(limited) } })
 })
 

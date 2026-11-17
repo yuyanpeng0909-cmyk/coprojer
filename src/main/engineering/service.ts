@@ -1816,7 +1816,7 @@ export class EngineeringService {
         prepareGroup: run.reliable ? (snapshot, group) => saveCheckpoint(snapshot, group) : undefined,
         invalidate: () => { delete this.store.data.executionCheckpoints?.[executionKey(p.id, f.id)]; this.store.save() },
         event: (kind, message) => {
-          this.store.event(p, kind, message, f.id)
+          this.store.event(p, kind, message, f.id, { executionRunId: run.executionRunId, stepId: String(run.step) })
         },
         ...runtimeRecords(contextState, { mode: 'execution', manifestId: () => run.manifest.id, role: () => run.role,
           ref: () => ({ executionRunId: run.executionRunId, stepId: String(run.step) }), requestPrepared: id => { run.requestId = id },
