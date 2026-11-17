@@ -87,11 +87,12 @@ test('group planning and metadata validation do not read file bodies; second obs
  try{await assert.rejects(groups.checkReadGroup(ctx.root,calls,plan,signal),/版本已变化/);assert.ok(changed)}finally{fs.lstatSync=stat}
 })
 test('a worker awaiting resource validation cannot dispatch after another worker durable failure',async()=>{
- const ctx=setup(),server=await connect(ctx,reads('a.txt','b.txt')),groups=load('src/main/engineering/read-groups.ts'),check=groups.checkReadGroup;let checks=0,injected=false;const started=[]
- groups.checkReadGroup=async(...args)=>{if(++checks===3)await pause(100);return check(...args)}
+ const ctx=setup(),server=await connect(ctx,reads('a.txt','b.txt')),groups=load('src/main/engineering/read-groups.ts'),check=groups.checkReadGroup;let checks=0,injected=false,releaseFailure,watchdog;const started=[],failureObserved=new Promise(resolve=>{releaseFailure=resolve})
+ // Let the injected failure propagate through worker microtasks before releasing validation.
+ groups.checkReadGroup=async(...args)=>{if(++checks===3){await Promise.race([failureObserved,new Promise((_,reject)=>{watchdog=setTimeout(()=>reject(new Error('expected durable failure was not observed')),5000)})]);await new Promise(resolve=>setImmediate(resolve))}return check(...args)}
  files.executeTool=async(...args)=>{started.push(args[5].path);return actualTool(...args)}
- const save=ctx.service.store.save.bind(ctx.service.store);ctx.service.store.save=()=>{if(!injected&&receipts(ctx.service).some(x=>x.status==='completed')){injected=true;throw new Error('first result storage failed')}save()}
- try{await run(ctx.service);assert.ok(injected);assert.deepEqual(started,['a.txt']);assert.equal(ctx.feature.runtimeBudget.used.tools,1);assert.equal(receipts(ctx.service).some(r=>r.args.path==='b.txt'),false);assert.equal(server.requests.length,1)}finally{groups.checkReadGroup=check;files.executeTool=actualTool;await server.close()}
+ const save=ctx.service.store.save.bind(ctx.service.store);ctx.service.store.save=()=>{if(!injected&&receipts(ctx.service).some(x=>x.status==='completed')){releaseFailure();injected=true;throw new Error('first result storage failed')}save()}
+ try{await run(ctx.service);assert.ok(injected);assert.deepEqual(started,['a.txt']);assert.equal(ctx.feature.runtimeBudget.used.tools,1);assert.equal(receipts(ctx.service).some(r=>r.args.path==='b.txt'),false);assert.equal(server.requests.length,1)}finally{clearTimeout(watchdog);releaseFailure();groups.checkReadGroup=check;files.executeTool=actualTool;await server.close()}
 })
 async function main(){for(const {name,fn} of tests)try{await fn();results.push({name,status:'passed'});console.log('PASS:',name)}catch(error){results.push({name,status:'failed',error:error.stack});console.error('FAIL:',name,error.stack)}fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(results,null,2));assert.ok(results.every(x=>x.status==='passed'))}
 main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{files.executeTool=actualTool;model.complete=actualComplete;fs.rmSync(sandbox,{recursive:true,force:true,maxRetries:3})})
