@@ -89,6 +89,7 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
           const buildIntent = (identity: ToolIdentity) => {
           const intent: ToolReceipt = { version: 1, logicalId: identity.logicalId, providerCallId: call.id, groupId: identity.groupId, manifestId: run.manifest.id,
             projectId: p.id, scopeId: f.id, agentId: agent.id, role: run.role, schemaVersion: run.ledger.get(identity.logicalId)?.schemaVersion ?? toolContractVersion, permissions: [...agent.tools],
+            executionRunId: run.executionRunId, stepId: String(step),
             args: JSON.parse(host.store.redact(JSON.stringify(args))), taskRevision: run.taskRevision, resourceVersion: host.sourceFingerprint(p), strategy: commandEffect ? 'command-v1' : fileEffect ? 'file-v1' : 'readonly-v1', file: fileEffect, command: commandEffect, tool: call.name,
             preparationAttemptId: run.role === 'preparer' ? f.verificationPreparation?.attempts.at(-1)?.id : undefined,
             status: 'prepared', at: now(), updatedAt: now(), attempts: 0, effects: [], applied: false, intentHash: '' }
@@ -137,6 +138,7 @@ export function executionTools(run: ExecutionRun, host: ExecutionToolsHost): Run
           }
           const record: ToolReceipt = { version: 1, logicalId: identity.logicalId, providerCallId: call.id, groupId: identity.groupId, manifestId: run.manifest.id,
             projectId: p.id, scopeId: f.id, agentId: agent.id, role: run.role, schemaVersion: toolContractVersion, permissions: [...agent.tools],
+            executionRunId: run.executionRunId, stepId: String(run.step),
             args: {}, skippedArguments: host.store.redact(call.arguments), taskRevision: run.taskRevision, resourceVersion: host.sourceFingerprint(p), strategy: 'not-started-v1', tool: call.name,
             status: 'cancelled', at: now(), updatedAt: now(), attempts: 0, effects: [], applied: true, intentHash: '', reason,
             result: { status: 'cancelled', output: '未启动：原工具组已取消；本调用没有执行。', changed: false } }

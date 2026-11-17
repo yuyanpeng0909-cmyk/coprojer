@@ -4,7 +4,7 @@ Coprojer 是 Windows x64 桌面「AI 工程工作台」（Electron 44 + React 19
 
 本文件面向在此仓库工作的 Claude。项目原由 Codex 开发，`AGENTS.md` 中的约定继续有效，已并入下文。交流与文档使用中文。
 
-当前 harness 进度（2026-11-16）：拆分步骤 2–6、运行标识 A0–A4 已完成。A2 保留工程执行跨续接和交接的运行标识；A3 为请求、压缩与操作记录写入运行号和检查点步号，并保留最近请求 ID；A4 为工程 records 端口产生的活动事件附上同样的关联字段。规定检查去重41个脚本通过（含11个UI脚本），原等价50/50零差异，运行标识8/8且计数40／29／59。步骤6完整 npm test 52/52 是此前基线，A4未重跑全量。A5–A8、上下文及其他后续阶段均未开始，仍须用户交办对应工作包；已接受 ADR 不代表自动开工。
+当前 harness 进度（2026-11-17）：拆分步骤 2–6、运行标识 A0–A5 已完成。A2 保留跨续接/交接的运行标识；A3 关联请求、压缩与操作记录；A4 关联工程 records 活动事件；A5 为新建工具意图和运行内未启动回执附上运行号与步号，哈希、恢复判断和界面投影不变。规定检查去重41个脚本通过（含11个UI脚本），原等价50/50零差异，运行标识8/8且计数40／29／59。步骤6完整 npm test 52/52 是此前基线，A5未重跑全量。A6–A8、上下文及其他后续阶段均未开始，仍须用户交办对应工作包；已接受 ADR 不代表自动开工。
 
 ## 常用命令
 
@@ -83,7 +83,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 **存储**。`store.ts` 的 `EngineeringStore` 把全部状态放在用户资料目录的单个 `engineering-v1.json`，每次 `save()` 全量序列化、fsync、原子改名；runtime 的请求、用量、快照记录都会触发它。模型流量另存 `model-traffic-v1.json`。
 
-**可观测性**。`shared/run-ref.ts` 的 `RunRef`、`RunRecordRef` 和 `shared/model-traffic.ts` 的 `TrafficRef` 及相关可选字段已在 A1 定义。A2 已为工程执行生成独立 `executionRunId`，写入 `ExecutionCheckpoint` 并在合法续接时读回；交接展开原检查点保留它，`AgentRunSnapshot` 关联该号但自己的 `id` 不变。旧检查点缺号时续接新发一个，旧命令证据不改写。A3 由 `ExecutionRun.step` 记住最近保存检查点的 `snapshot.steps`，请求、压缩和两处操作记录写入 `executionRunId` 与字符串 `stepId`；步号表示记录产生时检查点所处的步，格式修复为下一步，总结请求为该批步数上限。共享 `runtime-records.ts` 通过工程宿主取引用，并在创建请求记录时更新 `run.requestId`，沿用现有保存；只读入口尚不附加这些字段。A4 的 `store.event` 增加可选的 `RunRecordRef` 尾参数，只有工程 records 端口传入当前运行号和步号；缺值时不写对应键，沿用原保存。其余阶段流转、人工确认、验证汇总和 `historical-result` 调用不变，界面暂不使用新字段。回执、流量与其他入口仍待后续工作包，完整关联链尚未打通。`RuntimeSnapshot`、`ToolReceiptView` 与 runtime 核心保持不变。
+**可观测性**。`shared/run-ref.ts` 的 `RunRef`、`RunRecordRef` 和 `shared/model-traffic.ts` 的 `TrafficRef` 及相关可选字段已在 A1 定义。A2 已为工程执行生成独立 `executionRunId`，写入 `ExecutionCheckpoint` 并在合法续接时读回；交接展开原检查点保留它，`AgentRunSnapshot` 关联该号但自己的 `id` 不变。旧检查点缺号时续接新发一个，旧命令证据不改写。A3 由 `ExecutionRun.step` 记住最近保存检查点的 `snapshot.steps`，请求、压缩和两处操作记录写入 `executionRunId` 与字符串 `stepId`；步号表示记录产生时检查点所处的步，格式修复为下一步，总结请求为该批步数上限。共享 `runtime-records.ts` 通过工程宿主取引用，并在创建请求记录时更新 `run.requestId`，沿用现有保存；只读入口尚不附加这些字段。A4 的 `store.event` 增加可选的 `RunRecordRef` 尾参数，只有工程 records 端口传入当前运行号和步号；缺值时不写对应键，沿用原保存。其余阶段流转、人工确认、验证汇总和 `historical-result` 调用不变，界面暂不使用新字段。A5 在 `execution-tools.ts` 的新建意图与运行内未启动回执上写入运行号和步号：执行意图用 `execute` 的 `step`，`skip` 用当前 `run.step`。意图哈希键表、校验和恢复判断不读这些字段，已有回执不回填，交接补写取消回执不加字段，界面回执投影保持原样。流量与其他入口仍待后续工作包，完整关联链尚未打通。`RuntimeSnapshot`、`ToolReceiptView` 与 runtime 核心保持不变。
 
 ## 不能破坏的产品约束
 
@@ -111,7 +111,7 @@ docs/                        正式文档；adr/ 决策、architecture/DOMAIN.md
 
 - `docs/adr/0005-tool-pipeline-and-free-coding-entry.md`（2026-11-11 已接受，步骤5内部 hook 登记及步骤6均已完成验收；逐批记录见 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`）与 `docs/HARNESS_REFACTOR_SPLIT_PLAN.md`：harness 重构的决策与拆分阶段实施计划。工具端口、两条路径的阶段编排与9个内部 hook 分布于 `execution-tools.ts`、`tool-pipeline.ts`、`execution-hooks.ts`；步骤5验收去重83个不同脚本通过（含完整 `npm test` 52个），另有定向 `preview-forwarding` 通过，共84个不同脚本；等价50场景无差异，A0 8/8且计数40／29／59。最终汇总证据见 `.runtime/harness-refactor/split-5-final-run/final-validation/results.json` 与 `evidence-audit.json`，预览及三项测试修复的独立提交和历史失败见交接记录。步骤6也已完成：规划接入管线与 records 复用分别验证、提交，最终规定检查去重78个脚本通过（含完整 npm test 52个），证据见 `.runtime/harness-refactor/split-6/audit-records/final.json` 与步骤6回报。规则与审批、通用 shell、自由编码入口尚未实现。开工前先看 Windows 本机基线 `.runtime/harness-refactor/baseline/windows/`，失败项要先确认是已知问题（拆分计划步骤 0）。
 - `docs/adr/0006-stable-prompt-prefix-and-working-window.md`（2026-11-11 已接受，尚未实施）与 `docs/HARNESS_REFACTOR_CONTEXT_PLAN.md`：上下文与压缩的决策与修改计划（提示词分区、工作窗口上限、默认策略切换、推广门槛、续接时的冷启动处理）。上文「Harness 架构地图」描述的仍是现有实现，代码改到哪一步，对应段落才跟着改。
-- `docs/adr/0007-append-only-run-log-run-id-and-readonly-delegation.md`（2026-11-11 已接受；运行标识 A0–A4 已完成，后续关联字段及存储、委派未实施）：运行记录改追加式日志、统一的运行标识、只读的子智能体委派，共十一项。存储部分的计划是 `docs/HARNESS_REFACTOR_STORAGE_PLAN.md`，运行标识与委派部分是 `docs/HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md`，两份在存储上有出入时以前者为准。接受时确认的只有运行标识一侧的十项取值（执行说明第 10 节 A 组）；存储的待定项（S 组）和委派的形态与默认值（C 组）仍是拟定，没有经用户确认，存储搬迁和只读委派都还不能开工。
+- `docs/adr/0007-append-only-run-log-run-id-and-readonly-delegation.md`（2026-11-11 已接受；运行标识 A0–A5 已完成，后续关联字段及存储、委派未实施）：运行记录改追加式日志、统一的运行标识、只读的子智能体委派，共十一项。存储部分的计划是 `docs/HARNESS_REFACTOR_STORAGE_PLAN.md`，运行标识与委派部分是 `docs/HARNESS_REFACTOR_RUN_ID_STORAGE_DELEGATION_PLAN.md`，两份在存储上有出入时以前者为准。接受时确认的只有运行标识一侧的十项取值（执行说明第 10 节 A 组）；存储的待定项（S 组）和委派的形态与默认值（C 组）仍是拟定，没有经用户确认，存储搬迁和只读委派都还不能开工。
 - `docs/HARNESS_REFACTOR_CODEX_BRIEF.md` 与 `docs/HARNESS_REFACTOR_CODEX_HANDOFF.md`：重构的具体执行交给 Codex，Claude 负责把方案设计到可执行。前者是第一批（拆分步骤 1 的等价脚本、存储步骤 0 的落盘测量，都不改 `src/`）的通用约束与回报格式，做法在 `docs/HARNESS_REFACTOR_SPLIT_STEP1_DESIGN.md` 和 `docs/HARNESS_REFACTOR_STORAGE_STEP0_DESIGN.md`；后者管第一批之后各批的开工条件与规则，并写了运行标识阶段（A0–A8）逐提交的做法；拟定项及其确认状态汇总在它的第 10 节。交给 Codex 的提示词（四份方案的总览、第一批的范围与停点、后续各批的短提示词）在 `docs/HARNESS_REFACTOR_CODEX_PROMPT.md`。拆分步骤 1 设计第 8 节记的两个现状缺陷候选，用户 2026-11-11 决定拆分阶段不修、固定进等价基准，修复在拆分完成后单独交办。Codex 的回报放 `.scratch/harness-refactor/codex-report-*.md`。
 - `docs/research/deepseek-harness/README.md`：DeepSeek harness 源码研究，第 9、10 章是对 Coprojer 的对照与分阶段建议。
 - `.scratch/pi-architecture-research/PI-ARCHITECTURE.md`：Pi agent 研究，第 9、10、13.9 节同上。`coprojer-current.md` 基于旧提交，引用前对照现源码。
