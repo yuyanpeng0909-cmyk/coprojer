@@ -1,4 +1,5 @@
 import type { ContextRuntimeState } from '../../shared/model-profile'
+import type { RunRecordRef } from '../../shared/run-ref'
 import type { RuntimePorts } from './runtime'
 import { now, uid } from './store'
 
@@ -6,20 +7,25 @@ type RuntimeRecordsHost = {
   save(): void
   manifestId(): string
   model(): string
-} & ({ mode: 'execution'; role(): string } | { mode: 'readonly' })
+} & ({ mode: 'execution'; role(): string; ref(): RunRecordRef; requestPrepared(id: string): void } | { mode: 'readonly' })
 
 /** Snapshot persistence and business events remain with each entry's adapter. */
 export function runtimeRecords(state: ContextRuntimeState, host: RuntimeRecordsHost): Pick<RuntimePorts['records'], 'compaction' | 'budget' | 'request' | 'usage'> {
   return {
     compaction(record) {
       state.compactions = [...(state.compactions ?? []), { ...record, manifestId: host.manifestId(),
-        ...(host.mode === 'execution' ? { role: host.role() } : {}), model: host.model() }].slice(-64)
+        ...(host.mode === 'execution' ? { role: host.role(), ...host.ref() } : {}), model: host.model() }].slice(-64)
       host.save()
     },
     budget(request) { state.latestBudget = request.budget; host.save() },
     request(request, status, reply) {
       state.latestBudget = request.budget
-      if (status === 'prepared') { state.requests.push({ id: uid(), manifestId: host.manifestId(), hash: request.hash, at: now(), status, budget: request.budget }); state.requests = state.requests.slice(-200) }
+      if (status === 'prepared') {
+        const record: ContextRuntimeState['requests'][number] = { id: uid(), manifestId: host.manifestId(), hash: request.hash, at: now(), status, budget: request.budget,
+          ...(host.mode === 'execution' ? host.ref() : {}) }
+        if (host.mode === 'execution') host.requestPrepared(record.id)
+        state.requests.push(record); state.requests = state.requests.slice(-200)
+      }
       else {
         const record = state.requests.at(-1)
         if (record?.hash === request.hash && record.manifestId === host.manifestId()) {

@@ -104,6 +104,8 @@ export interface ExecutionRun {
   readonly reliable: boolean
   readonly budgetLease: RuntimeBudgetLease | undefined
   readonly executionRunId: string
+  step: number
+  requestId?: string
   readonly environmentFingerprint: string
   readonly manifest: ExecutionManifest
   readonly ledger: ReturnType<typeof featureReceiptLedger>
@@ -1626,7 +1628,7 @@ export class EngineeringService {
         (role !== 'diagnoser' || ['list_files', 'read_file', 'read_file_lines', 'search_files', 'read_context', 'read_skill'].includes(t.name)),
     ).map(tool => role === 'reviewer' && tool.name === 'run_command' ? { ...tool, description: reviewerCommandHelp } : tool)
     const run: ExecutionRun = { p, f, agent, role, preparing, phaseLabel, connection, taskRevision, contractFingerprint, reliable, budgetLease,
-      executionRunId, environmentFingerprint, manifest, ledger, artifacts, prototype, prototypeLength, prototypeVersion, offered, assertRevision,
+      executionRunId, step: progress?.resume?.steps ?? 0, environmentFingerprint, manifest, ledger, artifacts, prototype, prototypeLength, prototypeVersion, offered, assertRevision,
       prototypeReadUntil, commands }
     const reviewerEvidenceHelp = '逐项区分 status：passed（完整证据支持，passed:true）、failed（已发现代码缺陷或检查失败，passed:false）、unverified（没有已知缺陷，仅因缺少目标平台、真实界面、测量时长或权限而未能验证，passed:false）。不能把单测/mock 当作真实桌面、跨平台或长时间测量的证据；同一标准部分未验证也不能标通过。unverified 必须在 evidence 写清缺失环境、具体检查步骤和需要补充的证据。若既发现代码缺陷又缺环境，标 failed 并先修复缺陷。仅缺验证环境时不要要求重复改写代码，也不要放宽标准。'
     const roleSystem = run.role === 'diagnoser' || run.role === 'preparer' ? system.replace('你是 Coprojer 的验证智能体。', '你是 Coprojer 的' + (run.role === 'diagnoser' ? '验证缺口诊断' : '验证准备') + '智能体。') : system
@@ -1641,6 +1643,7 @@ export class EngineeringService {
       ? `接续第 ${step + 1} 步（本次第 ${step - startStep + 1} 步）` : `第 ${step + 1} 步`
     const replyKind = run.role === 'diagnoser' ? 'verification-diagnosis-report' : run.role === 'preparer' ? 'verification-preparation-report' : run.role === 'reviewer' ? 'review' : 'developer'
     const saveCheckpoint = (snapshot: RuntimeSnapshot, pending?: PendingToolGroup) => {
+      run.step = snapshot.steps
       run.assertRevision()
       const checkpoints = this.store.data.executionCheckpoints ??= {}, key = executionKey(p.id, f.id), previous = checkpoints[key]
       snapshot = structuredClone(snapshot)
@@ -1735,12 +1738,12 @@ export class EngineeringService {
       model: {
         native: responsesCompaction({ ...run.connection,
           onRequest: () => { run.budgetLease?.reserve('requests'); run.connection.onRequest?.() },
-          onOperation: operation => { contextState.operations = [...(contextState.operations ?? []).filter(o => o.id !== operation.id), operation].slice(-100); this.store.save() },
+          onOperation: operation => { contextState.operations = [...(contextState.operations ?? []).filter(o => o.id !== operation.id), { ...operation, executionRunId: run.executionRunId, stepId: String(run.step) }].slice(-100); this.store.save() },
         }, run.artifacts),
         prepare: (prompt, history, tools) => prepareModelRequest(run.connection, prompt, history, tools),
         verify: (prepared, requestSignal) => verifyModelRequest({ ...run.connection,
           onRequest: () => { run.budgetLease?.reserve('requests'); run.connection.onRequest?.() },
-          onOperation: operation => { contextState.operations = [...(contextState.operations ?? []).filter(o => o.id !== operation.id), operation].slice(-100); this.store.save() },
+          onOperation: operation => { contextState.operations = [...(contextState.operations ?? []).filter(o => o.id !== operation.id), { ...operation, executionRunId: run.executionRunId, stepId: String(run.step) }].slice(-100); this.store.save() },
         }, prepared, requestSignal),
         send: ({ prepared, prompt, messages: history, tools, onUsage }, requestSignal) => {
           const reported = new Set<string>()
@@ -1816,6 +1819,7 @@ export class EngineeringService {
           this.store.event(p, kind, message, f.id)
         },
         ...runtimeRecords(contextState, { mode: 'execution', manifestId: () => run.manifest.id, role: () => run.role,
+          ref: () => ({ executionRunId: run.executionRunId, stepId: String(run.step) }), requestPrepared: id => { run.requestId = id },
           model: () => run.connection.model, save: () => this.store.save() }),
       },
       artifacts: { write: (content, label) => run.artifacts.write(content, label) },

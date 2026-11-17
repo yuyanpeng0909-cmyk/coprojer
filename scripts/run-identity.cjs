@@ -74,8 +74,31 @@ test('R1', 'uninterrupted developer loop keeps command step and projection ident
   }
   assertProjection(requests.at(-1).projection, result.commands)
   assert.deepEqual(requests.map(request => request.step), [0, 1, 2])
+  const requestRecords = ctx.feature.contextRuntime.requests
+  assert.deepEqual(requestRecords.map(record => record.stepId), ['0', '1', '2'])
+  for (const record of requestRecords) assert.equal(record.executionRunId, ctx.feature.evidenceProjection.executionRunId)
   counters.R1 = { ...meter.counts }
-  saveArtifact('R1', { entry: 'agentLoop', requests, commands: result.commands, projection: ctx.feature.evidenceProjection, saves: counters.R1 })
+
+  // Keep the fixed R1 save count scoped to its original three-step run.
+  const limited = setup(), stepLimit = load('src/main/engineering/execution.ts').diagnosisStepLimit
+  let limitedRequests = 0
+  for (let step = 0; step < stepLimit; step++) fs.writeFileSync(path.join(limited.root, 'step-' + step + '.cjs'), 'exports.step = ' + step)
+  await scripted(async (_connection, _system, _messages, tools) => {
+    const step = limitedRequests++
+    assert.equal(snapshot(limited).steps, step)
+    if (step < stepLimit) return tool('r1-limited-' + step, 'read_file', { path: 'step-' + step + '.cjs' })
+    assert.equal(step, stepLimit); assert.deepEqual(tools, [])
+    return { text: '', calls: [] }
+  }, () => assert.rejects(limited.service.agentLoop(limited.project, limited.feature,
+    limited.service.executionAgent(limited.feature, 'reviewer', 'p'), '', new AbortController().signal, { role: 'diagnoser' }),
+    load('src/main/engineering/execution.ts').ExecutionBudgetPause))
+  assert.equal(limitedRequests, stepLimit + 1); assert.equal(limited.feature.contextRuntime.status, 'paused')
+  const conclusionRecords = limited.feature.contextRuntime.requests
+  assert.deepEqual(conclusionRecords.map(record => record.stepId), Array.from({ length: stepLimit + 1 }, (_, step) => String(step)))
+  assert.equal(conclusionRecords.at(-1).stepId, String(stepLimit))
+  for (const record of conclusionRecords) assert.equal(record.executionRunId, snapshot(limited).executionRunId)
+  saveArtifact('R1', { entry: 'agentLoop', requests, requestRecords, commands: result.commands, projection: ctx.feature.evidenceProjection,
+    saves: counters.R1, conclusion: { stepLimit, requests: conclusionRecords, checkpoint: snapshot(limited) } })
 })
 
 test('R2', 'pause and resume retains both commands and one execution identity', async () => {
